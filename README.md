@@ -55,7 +55,7 @@ See [docs/](docs/) for full documentation including:
 - [Model Routing](docs/model-routing.md) — Router decision tree and model selection
 - [Security](docs/security.md) — Threat model, auth, data protection
 - [Usage](docs/usage.md) — Getting started and common workflows
-- [Testing](docs/testing.md) — Running tests, writing tests, coverage
+- [Testing](docs/testing.md) — Running tests, writing tests, coverage, live API smoke tests
 - [Python Design](docs/python-guide.md) — Stdlib-only architecture, Python 3.9+ floor
 - [Contributing](docs/contributing.md) — Adding adapters, code style, PRs
 - [Update & Sync](docs/update-sync.md) — Install mechanism, rollback, registry updates
