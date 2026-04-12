@@ -243,8 +243,8 @@ Example registry entry:
     },
     "embed": {
       "description": "Embeddings",
-      "default_model": "text-embedding-004",
-      "v1beta": false
+      "default_model": "gemini-embedding-2-preview",
+      "v1beta": true
     }
   }
 }

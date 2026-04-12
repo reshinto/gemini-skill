@@ -590,8 +590,8 @@ Each phase commits to `feat/initial-implementation` after passing all checks. Ph
 
 ### Phase 0: Repository setup
 
-1. Rename current directory: `mv /Users/springfield/dev/unamedproject /Users/springfield/dev/gemini-skill`
-2. `cd /Users/springfield/dev/gemini-skill`
+1. Rename current directory: `mv /Users/mycomputername/dev/unamedproject /Users/mycomputername/dev/gemini-skill`
+2. `cd /Users/mycomputername/dev/gemini-skill`
 3. Copy this implementation plan to `docs/planning/implementation-plan.md`
 4. Create initial files: `README.md` (stub), `LICENSE` (MIT), `VERSION` (0.1.0), `.env.example` (`.gitignore` already exists)
 5. `git init && git add -A && git commit -m "Initial repository setup with implementation plan"`

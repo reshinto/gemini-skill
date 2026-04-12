@@ -1,6 +1,6 @@
 # file_search
 
-Manage File Search stores (hosted RAG). Create, upload documents, query, list, and delete stores. Long-running operations require polling.
+Manage File Search stores (Gemini's hosted RAG). Create stores, import files by Gemini file URI, query them, list, and delete.
 
 ## Usage
 
@@ -10,49 +10,52 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" file_search <subcommand> [ar
 
 ## Subcommands
 
-- `create` — Create a new file search store. **Mutating, requires `--execute`.**
-- `upload <store_id> <file>` — Add a file to a store. **Mutating, requires `--execute`.**
-- `query <store_id> "query"` — Search documents in a store.
+- `create <name>` — Create a new store. The positional `<name>` is the display name for the store. **Mutating, requires `--execute`.**
+- `upload <store> <file_uri>` — Import a file into a store. **The `<file_uri>` is a Gemini `files/...` resource URI**, not a local file path — you must first upload the local file via `files upload ... --execute` and use the returned URI here. **Mutating, requires `--execute`.**
+- `query <prompt> --store <store>` — Search a store with a natural-language query. The query is the positional argument; `--store <name>` identifies the store to search.
 - `list` — List all stores.
-- `delete <store_id>` — Delete a store. **Mutating, requires `--execute`.**
+- `delete <name>` — Delete a store by its resource name. **Mutating, requires `--execute`.**
 
 ## Flags
 
-- `--execute` — Confirm and execute the operation (mutating commands only).
-- `--poll-interval SECONDS` — Polling interval for long-running ops (default: 2).
-- `--max-wait SECONDS` — Maximum wait time (default: 300).
+Only the shared base flags are supported:
+
+- `--model MODEL` — Override the default model used for the `query` subcommand.
+- `--execute` — Confirm and execute the operation (required for `create`, `upload`, `delete`).
+- `--session ID` — Start or continue a named session.
+- `--continue` — Continue the most recent session.
+
+The `file_search` adapter does **not** support `--poll-interval` or `--max-wait`; those flags exist on `video_gen` and `deep_research` but not here.
 
 ## Examples
 
 ```bash
-# Create a store
-gemini_run.py file_search create --execute
+# 1. Create a store
+gemini_run.py file_search create "research-library" --execute
 
-# Upload a document to the store
-gemini_run.py file_search upload "store-id-123" research.pdf --execute
+# 2. Upload a local file via the files API first, capture the file URI
+gemini_run.py files upload ./research.pdf --execute
+# → returns something like {"name": "files/abc123xyz", ...}
 
-# Query the store
-gemini_run.py file_search query "store-id-123" "What are the key findings?"
+# 3. Import that file URI into the store
+gemini_run.py file_search upload "fileSearchStores/<store-id>" "files/abc123xyz" --execute
 
-# List all stores
+# 4. Query the store
+gemini_run.py file_search query "What are the key findings?" --store "fileSearchStores/<store-id>"
+
+# 5. List / delete
 gemini_run.py file_search list
-
-# Delete a store
-gemini_run.py file_search delete "store-id-123" --execute
+gemini_run.py file_search delete "fileSearchStores/<store-id>" --execute
 ```
 
-## Long-running operations
+## Default model
 
-File uploads and store operations are asynchronous. The command polls for completion (default: 2s interval, 300s max wait).
+`gemini-2.5-flash-lite` (set as `default_model` for the `file_search` capability in [registry/capabilities.json](../registry/capabilities.json)).
 
 ## Default behavior
 
-Without `--execute`, mutating commands print dry-run messages. Use `--execute` to confirm.
+Without `--execute`, the dispatcher prints `[DRY RUN] 'file_search' is a mutating operation. Pass --execute to actually run it.` and exits 0 — no API call is made. This applies to all `file_search` subcommands, not just `create`/`upload`/`delete`, because the capability itself is flagged `mutating` in [registry/capabilities.json](../registry/capabilities.json).
 
 ## Use case
 
-File Search is Gemini's hosted RAG. Upload documents once, then query them repeatedly without sending file content in every request.
-
-## Output
-
-Create returns store ID. Query returns matching documents. List returns all stores with metadata.
+File Search is Gemini's hosted RAG. Upload documents once, then run grounded queries against them without sending file content on every request.

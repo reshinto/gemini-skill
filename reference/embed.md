@@ -41,7 +41,7 @@ gemini_run.py embed "Text sample" --task-type SEMANTIC_SIMILARITY
 
 ## Default model
 
-`text-embedding-004` (Gemini's standard embedding model).
+`gemini-embedding-2-preview` (set as `default_model` for the `embed` capability in [registry/capabilities.json](../registry/capabilities.json); it is the only model registered in [registry/models.json](../registry/models.json) that declares the `embed` capability). To pin a different embedding model, add it to `registry/models.json` with `"capabilities": ["embed"]` and pass `--model <id>`.
 
 ## Use case
 

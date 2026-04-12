@@ -11,7 +11,10 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" token_count "prompt" [--mode
 ## Flags
 
 - `--model MODEL` — Override the default model.
-- `--system TEXT` — System instruction (included in token count).
+- `--session ID` — Start or continue a named session.
+- `--continue` — Continue the most recent session.
+
+The `token_count` adapter accepts only the flags above plus a positional `text` argument. It does **not** support `--system`, `--max-tokens`, or `--temperature` — the count is performed on the positional text as passed.
 
 ## Examples
 
@@ -19,8 +22,8 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" token_count "prompt" [--mode
 # Count tokens in a simple prompt
 gemini_run.py token_count "Explain quantum computing"
 
-# Count for a complex prompt with system instruction
-gemini_run.py token_count "Analyze this code" --system "You are a code reviewer" --model gemini-2.5-pro
+# Pin a model for the count
+gemini_run.py token_count "Analyze this code" --model gemini-2.5-pro
 
 # Budget check before sending
 gemini_run.py token_count "Write a detailed research paper on AGI"

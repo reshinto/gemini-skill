@@ -178,15 +178,15 @@ See [Google Gemini pricing](https://aistudio.google.com/pricing) for current rat
 
 **Embedding model:**
 - `embed`
-- Fixed: `text-embedding-004`
+- Default: `gemini-embedding-2-preview` (only model in [registry/models.json](../registry/models.json) declaring the `embed` capability)
 
 **Specialty models:**
-- `image_gen` → Nano Banana
-- `video_gen` → Veo
-- `music_gen` → Lyria 3
-- `computer_use` → Computer-use specialist
-- `deep_research` → Deep Research specialist
-- `search`, `maps` → Grounding-enabled variants
+- `image_gen` → `gemini-3.1-flash-image-preview` (Nano Banana 2)
+- `video_gen` → `veo-3.1-generate-preview`
+- `music_gen` → `lyria-3-clip-preview`
+- `computer_use` → `gemini-3-flash-preview` (default); `gemini-2.5-computer-use-preview-10-2025` also available
+- `deep_research` → no fixed default; set `--model` explicitly
+- `search`, `maps` → use the text default (`gemini-2.5-flash`) with grounding tools enabled
 
 ---
 
@@ -215,7 +215,7 @@ See [Google Gemini pricing](https://aistudio.google.com/pricing) for current rat
 ### Generate structured output
 
 ```bash
-/gemini structured "Extract names from the text" --schema-file schema.json
+/gemini structured "Extract names from the text" --schema schema.json
 ```
 
 ### Get embeddings for search

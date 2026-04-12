@@ -159,10 +159,10 @@ This design makes it easy to add new commands: implement a new adapter, add an e
 The `Router` class implements a two-tier decision tree:
 
 1. **Specialty tasks** route to dedicated models:
-   - `embed` → `text-embedding-004`
-   - `image_gen` → Nano Banana model
-   - `video_gen` → Veo model
-   - `music_gen` → Lyria 3 model
+   - `embed` → `gemini-embedding-2-preview`
+   - `image_gen` → `gemini-3.1-flash-image-preview` (Nano Banana 2)
+   - `video_gen` → `veo-3.1-generate-preview`
+   - `music_gen` → `lyria-3-clip-preview`
    - `computer_use` → Computer-use specialist
    - `file_search`, `maps` → specialized endpoints
 

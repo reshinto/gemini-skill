@@ -82,9 +82,9 @@ cat > schema.json << 'EOF'
 EOF
 ```
 
-Extract data:
+Extract data (the same `--schema` flag accepts either inline JSON or a file path — the adapter detects which):
 ```bash
-/gemini structured "Extract contact info from this text: ..." --schema-file schema.json
+/gemini structured "Extract contact info from this text: ..." --schema schema.json
 ```
 
 ### Embeddings for semantic search
@@ -115,17 +115,19 @@ Returns the token count (useful for budgeting).
 
 ### Ground in current information
 
+Both `search` and `maps` are privacy-sensitive — the dispatcher blocks them unless you pass `--i-understand-privacy` explicitly.
+
 Get latest news:
 ```bash
-/gemini search "Latest developments in quantum computing"
+/gemini search "Latest developments in quantum computing" --i-understand-privacy
 ```
 
 Find nearby restaurants:
 ```bash
-/gemini maps "Best coffee shops near downtown"
+/gemini maps "Best coffee shops near downtown" --i-understand-privacy
 ```
 
-**Privacy note:** These send your query to Google. Use only for non-sensitive queries.
+**Privacy note:** These send your query to Google Search / Google Maps. Use only for non-sensitive queries. Without `--i-understand-privacy` the command prints `[BLOCKED]` and exits.
 
 ### Upload and reuse a file
 
@@ -147,13 +149,33 @@ List uploaded files:
 
 ### Generate an image
 
+Uses the Nano Banana family (`gemini-3.1-flash-image-preview` — the default for the `image_gen` capability):
+
 ```bash
 /gemini image_gen "A serene mountain landscape at sunset" --execute
 ```
 
-Returns: `{"path": "/tmp/image_12345.png", "mime_type": "image/png", ...}`
+Returns: `{"path": "/tmp/image_12345.png", "mime_type": "image/png", "size_bytes": 245678}`
 
-Downloaded to your output directory (default: OS temp dir).
+The decoded image is saved to your output directory (default: OS temp dir). Raw base64 is never printed to stdout.
+
+Pin the model explicitly for reproducibility:
+
+```bash
+/gemini image_gen "A serene mountain landscape at sunset" \
+  --model gemini-3.1-flash-image-preview \
+  --execute
+```
+
+Save to a specific directory:
+
+```bash
+/gemini image_gen "Abstract geometric art in blue and gold" \
+  --output-dir ~/Pictures/gemini \
+  --execute
+```
+
+`--model` accepts any model registered in [registry/models.json](../registry/models.json) whose `capabilities` list includes `"image_gen"`. See [reference/image_gen.md](../reference/image_gen.md) for adding new image-capable models.
 
 ### Create a knowledge base (File Search)
 
@@ -250,7 +272,7 @@ Example session file:
 
 - No hard limit on message count
 - Conversations can accumulate tokens
-- Use `--max-tokens` to control response length
+- Use `--max-tokens` on the `text` command to cap response length (only `text` exposes this flag; `streaming`, `multimodal`, `structured`, and the tool commands do not)
 
 ### Clearing sessions
 

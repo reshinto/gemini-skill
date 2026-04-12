@@ -5,29 +5,30 @@ Invoke Gemini's function/tool calling capability. Model can call your defined fu
 ## Usage
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" function_calling "prompt" --tools '{"tools":[...]}' [--tools-file path.json]
+python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" function_calling "prompt" --tools '<json-or-path>'
 ```
 
 ## Flags
 
-- `--tools JSON` — Tool definitions inline (as a single quoted JSON string).
-- `--tools-file PATH` — Path to a JSON file containing tool/function definitions.
+- `--tools VALUE` — **Required.** Either an inline JSON string or a path to a JSON file containing tool declarations. The adapter detects whether the value is a file path on disk and loads it; otherwise it parses the value as inline JSON.
 - `--model MODEL` — Override the default model.
-- `--system TEXT` — System instruction.
-- `--max-tokens N` — Maximum output tokens.
-- `--temperature F` — Sampling temperature 0.0–2.0 (default: 1.0).
+- `--session ID` — Start or continue a named session.
+- `--continue` — Continue the most recent session.
+
+The `function_calling` adapter accepts only the flags above plus the `prompt` positional. It does **not** support `--system`, `--max-tokens`, `--temperature`, or a separate `--tools-file` flag — the single `--tools` flag handles both inline JSON and file paths.
 
 ## Examples
 
 ```bash
-# Define a function and let the model call it
-gemini_run.py function_calling "What's the weather?" --tools-file weather_tools.json
+# Tool definitions from a file (same --tools flag, just pass the path)
+gemini_run.py function_calling "What's the weather?" --tools weather_tools.json
 
 # Inline tool definition
-gemini_run.py function_calling "Convert 100 miles to kilometers" --tools '{"tools":[{"name":"convert_units","description":"Convert between units","inputSchema":{"type":"object","properties":{"value":{"type":"number"}}}}]}'
+gemini_run.py function_calling "Convert 100 miles to kilometers" \
+  --tools '[{"functionDeclarations":[{"name":"convert_units","description":"Convert between units","parameters":{"type":"object","properties":{"value":{"type":"number"}}}}]}]'
 
 # Multi-turn function calling session
-gemini_run.py function_calling --session tools "Get the temperature" --tools-file tools.json
+gemini_run.py function_calling "Get the temperature" --session tools --tools tools.json
 ```
 
 ## Tool definition format
@@ -50,7 +51,7 @@ Tools are defined as OpenAPI 3.0 schemas:
 
 ## Default model
 
-`gemini-2.5-pro` (best at function calling).
+`gemini-2.5-flash` (set as `default_model` for the `function_calling` capability in [registry/capabilities.json](../registry/capabilities.json)). Pin `--model gemini-2.5-pro` or `--model gemini-3.1-pro-preview` for harder tool-use reasoning.
 
 ## Note
 

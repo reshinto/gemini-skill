@@ -8,13 +8,14 @@ How gemini-skill selects models based on task type, complexity, and user prefere
 
 ```
 Is the task a specialty task?
-├─ YES: embed → text-embedding-004
-├─ YES: image_gen → Nano Banana
-├─ YES: video_gen → Veo
-├─ YES: music_gen → Lyria 3
-├─ YES: computer_use → computer-use-specialist
-├─ YES: file_search → file-search-specialist
-├─ YES: maps → maps-specialist
+├─ YES: embed → gemini-embedding-2-preview
+├─ YES: image_gen → gemini-3.1-flash-image-preview (Nano Banana 2)
+├─ YES: video_gen → veo-3.1-generate-preview
+├─ YES: music_gen → lyria-3-clip-preview
+├─ YES: computer_use → gemini-3-flash-preview (default)
+│                      or gemini-2.5-computer-use-preview-10-2025
+├─ YES: file_search → gemini-2.5-flash-lite
+├─ YES: maps → gemini-2.5-flash (with Maps grounding tool enabled)
 │
 └─ NO: General task (text, multimodal, code_exec, etc.)
     │
@@ -39,15 +40,15 @@ Is the task a specialty task?
 
 These tasks always route to a dedicated model, **regardless of complexity or preview settings**:
 
-| Task | Model | Purpose |
-|------|-------|---------|
-| `embed` | `text-embedding-004` | Vector embeddings |
-| `image_gen` | Nano Banana | Image generation |
-| `video_gen` | Veo | Video generation |
-| `music_gen` | Lyria 3 | Music generation |
-| `computer_use` | Computer-use specialist | Desktop automation |
-| `file_search` | File-search specialist | RAG / semantic search |
-| `maps` | Maps-specialist | Location grounding |
+| Task | Default model | Purpose |
+|------|---------------|---------|
+| `embed` | `gemini-embedding-2-preview` | Vector embeddings |
+| `image_gen` | `gemini-3.1-flash-image-preview` | Image generation (Nano Banana 2) |
+| `video_gen` | `veo-3.1-generate-preview` | Video generation |
+| `music_gen` | `lyria-3-clip-preview` | Music generation |
+| `computer_use` | `gemini-3-flash-preview` | Desktop automation (dedicated `gemini-2.5-computer-use-preview-10-2025` also registered) |
+| `file_search` | `gemini-2.5-flash-lite` | RAG / semantic search |
+| `maps` | `gemini-2.5-flash` | Location grounding (tool enabled on a general-purpose model) |
 
 These are determined by the model registry (`registry/models.json`). If a model is unavailable, the command fails with an error.
 
@@ -144,7 +145,7 @@ Model selection impacts cost:
 | `gemini-2.5-pro` | High | Slow | Best | ✓✓✓ |
 | `gemini-2.5-flash` | Medium | Medium | Good | ✓✓ |
 | `gemini-2.5-flash-lite` | Low | Fast | Good | ✓ |
-| `text-embedding-004` | Very Low | Fast | N/A | N/A |
+| `gemini-embedding-2-preview` | Very Low | Fast | N/A | N/A |
 | Preview models | Medium–High | Varies | Varies | Varies |
 
 **Cost optimization:**
@@ -182,7 +183,7 @@ Example registry entry:
       "default_model": "gemini-2.5-flash"
     },
     "embed": {
-      "default_model": "text-embedding-004"
+      "default_model": "gemini-embedding-2-preview"
     }
   }
 }
@@ -271,8 +272,8 @@ Routing:
 Routing:
 1. Task type: `embed` (specialty task)
 2. Specialty task → use dedicated model
-3. Capability `embed` → `default_model` = `text-embedding-004`
-4. **Selected model:** `text-embedding-004` (fixed, ignores complexity)
+3. Capability `embed` → `default_model` = `gemini-embedding-2-preview`
+4. **Selected model:** `gemini-embedding-2-preview` (fixed, ignores complexity)
 
 ## API Versions
 
