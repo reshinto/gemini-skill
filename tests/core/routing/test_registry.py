@@ -251,6 +251,59 @@ class TestCapabilityProperties:
         assert reg.get_capability("image_gen")["preview"] is True
 
 
+class TestEdgeCases:
+    """Cover edge cases found during review."""
+
+    def test_null_default_model(self, tmp_path):
+        from core.routing.registry import Registry
+        cap = _sample_capability()
+        cap["default_model"] = None
+        _write_capabilities(tmp_path, {"streaming": cap})
+        reg = Registry(root_dir=tmp_path)
+        assert reg.get_capability("streaming")["default_model"] is None
+
+    def test_get_model_returns_deep_copy(self, tmp_path):
+        from core.routing.registry import Registry
+        _write_models(tmp_path, {"test-model": _sample_model()})
+        reg = Registry(root_dir=tmp_path)
+        model = reg.get_model("test-model")
+        model["pricing"]["input_per_1m"] = 999.0
+        # Internal state should be unaffected
+        model2 = reg.get_model("test-model")
+        assert model2["pricing"]["input_per_1m"] == 0.15
+
+    def test_get_capability_returns_deep_copy(self, tmp_path):
+        from core.routing.registry import Registry
+        _write_capabilities(tmp_path, {"text": _sample_capability()})
+        reg = Registry(root_dir=tmp_path)
+        cap = reg.get_capability("text")
+        cap["command"] = "mutated"
+        cap2 = reg.get_capability("text")
+        assert cap2["command"] == "text"
+
+    def test_model_missing_pricing_raises(self, tmp_path):
+        from core.routing.registry import Registry
+        from core.infra.errors import ModelNotFoundError
+        model = _sample_model()
+        del model["pricing"]
+        _write_models(tmp_path, {"no-pricing": model})
+        reg = Registry(root_dir=tmp_path)
+        with pytest.raises(ModelNotFoundError, match="no pricing"):
+            reg.get_model_pricing("no-pricing")
+
+    def test_model_agnostic_capabilities_return_empty_models(self):
+        """files, batch, token_count are model-agnostic (no model lists them)."""
+        from core.routing.registry import Registry
+        root = Path(__file__).parent.parent.parent.parent
+        reg = Registry(root_dir=root)
+        # These capabilities exist but are handled by their adapters directly
+        for cap_name in ["files", "batch"]:
+            cap = reg.get_capability(cap_name)
+            assert cap["default_model"] is None
+            # No model advertises these — adapters handle routing
+            assert reg.models_for_capability(cap_name) == []
+
+
 class TestRegistryWithRealFiles:
     """Registry must load from the actual registry/ directory."""
 

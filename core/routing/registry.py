@@ -11,6 +11,7 @@ Dependencies: core/infra/errors.py (ModelNotFoundError, CapabilityUnavailableErr
 """
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,8 @@ class Registry:
 
     Reads JSON files once at construction. Provides lookup by ID,
     listing, filtering by capability or status, and pricing access.
+    All returned dicts are deep copies to prevent caller mutation
+    of the internal cache.
 
     Args:
         root_dir: Project root directory containing registry/ subdirectory.
@@ -58,14 +61,14 @@ class Registry:
     def get_model(self, model_id: str) -> dict[str, Any]:
         """Get full model info by ID.
 
-        Returns the model dict with an added 'id' field.
+        Returns a deep copy of the model dict with an added 'id' field.
 
         Raises:
             ModelNotFoundError: If the model ID is not in the registry.
         """
         if model_id not in self._models:
             raise ModelNotFoundError(f"Model not found in registry: {model_id}")
-        model = dict(self._models[model_id])
+        model = copy.deepcopy(self._models[model_id])
         model["id"] = model_id
         return model
 
@@ -75,9 +78,13 @@ class Registry:
         Returns dict with input_per_1m, output_per_1m, cached_per_1m.
 
         Raises:
-            ModelNotFoundError: If the model ID is not in the registry.
+            ModelNotFoundError: If the model ID or pricing is not in the registry.
         """
         model = self.get_model(model_id)
+        if "pricing" not in model:
+            raise ModelNotFoundError(
+                f"Model {model_id} has no pricing data in the registry"
+            )
         return model["pricing"]
 
     def models_for_capability(self, capability: str) -> list[str]:
@@ -103,6 +110,8 @@ class Registry:
     def get_capability(self, name: str) -> dict[str, Any]:
         """Get full capability info by name.
 
+        Returns a deep copy of the capability dict.
+
         Raises:
             CapabilityUnavailableError: If the capability is not registered.
         """
@@ -110,4 +119,4 @@ class Registry:
             raise CapabilityUnavailableError(
                 f"Capability not found in registry: {name}"
             )
-        return dict(self._capabilities[name])
+        return copy.deepcopy(self._capabilities[name])
