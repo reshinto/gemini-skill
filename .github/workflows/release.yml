@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create release with checksums
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify VERSION matches tag
+        run: |
+          FILE_VERSION=$(cat VERSION | tr -d '[:space:]')
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$FILE_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: VERSION file ($FILE_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Build release tarball (operational files only)
+        run: |
+          mkdir -p release/gemini-skill
+          cp -r SKILL.md VERSION core adapters reference registry scripts release/gemini-skill/
+          mkdir -p release/gemini-skill/setup
+          cp setup/update.py release/gemini-skill/setup/
+          cp .env.example release/gemini-skill/
+          cd release
+          tar -czf gemini-skill-${{ steps.version.outputs.version }}.tar.gz gemini-skill
+          cd ..
+
+      - name: Generate SHA-256 checksums
+        run: |
+          cd release
+          find gemini-skill -type f -exec sha256sum {} \; > checksums.txt
+          sha256sum gemini-skill-${{ steps.version.outputs.version }}.tar.gz >> checksums.txt
+          cd ..
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/gemini-skill-${{ steps.version.outputs.version }}.tar.gz
+            release/checksums.txt
+          generate_release_notes: true
+          fail_on_unmatched_files: true
