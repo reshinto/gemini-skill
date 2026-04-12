@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-"""Thin 2.7-safe launcher for the gemini-skill CLI.
+"""Health check for the gemini-skill.
 
-Checks Python version and invokes core.cli.dispatch.main().
-Uses only Python 2.7-compatible syntax so even old Pythons get
-a readable error instead of a SyntaxError.
+2.7-safe launcher.
 """
 import os
 import sys
@@ -15,12 +13,11 @@ if sys.version_info < (3, 9):
         )
     )
 
-# Add repo root to path so we can import core.*
 sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
 
-from core.cli.dispatch import main  # noqa: E402
+from core.cli.health_main import main  # noqa: E402
 
 if __name__ == "__main__":
     main(sys.argv[1:])
