@@ -10,18 +10,34 @@ A Claude Code skill for broad Gemini REST API access — text generation, multim
    cd gemini-skill
    ```
 
-2. **Set your Gemini API key** (get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey))
-   ```bash
-   export GEMINI_API_KEY=your_key_here
-   ```
-   Or edit the `.env` file created during install.
-
-3. **Install the skill**
+2. **Install the skill** (copies operational files to `~/.claude/skills/gemini/`)
    ```bash
    python3 setup/install.py
    ```
+   The installer creates `~/.claude/skills/gemini/.env` from `.env.example` on first run.
 
-4. **Use it in Claude Code**
+3. **Set your Gemini API key** (get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey))
+
+   Pick **one** of:
+
+   **Option A — edit the installed `.env` file** (recommended for persistent use):
+   ```bash
+   # Open the installed .env (NOT the repo's .env — the skill reads this file)
+   $EDITOR ~/.claude/skills/gemini/.env
+   # Set: GEMINI_API_KEY=your_key_here
+   ```
+   The skill loads this file automatically at runtime — no shell export needed. Do **not** edit the repo-root `.env`; the installed skill doesn't read it.
+
+   **Option B — shell environment variable** (overrides the `.env` file):
+   ```bash
+   export GEMINI_API_KEY=your_key_here
+   ```
+
+   Precedence: shell env wins over the `.env` file. See [docs/install.md](docs/install.md#api-key-setup) for full details.
+
+4. **Fully restart Claude Code** (⌘Q on macOS, not "Reload Window"). Skill discovery happens at IDE launch; a new in-process session won't pick up a newly installed skill.
+
+5. **Use it in Claude Code**
    ```
    /gemini text "Explain quantum computing"
    ```

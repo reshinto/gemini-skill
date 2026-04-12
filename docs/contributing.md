@@ -8,7 +8,7 @@ Guidelines for extending gemini-skill with new adapters and features.
 
 Before contributing, understand the architecture:
 
-- **SKILL.md** — Launcher metadata (declares skill, allowed-tools, help text)
+- **SKILL.md** — Skill manifest: `name`, `description`, `disable-model-invocation: true`, and the markdown body shown to the model when the user invokes `/gemini`. Note: `allowed-tools`, `argument-hint`, and `model` are slash-command-only frontmatter fields and must **not** appear in `SKILL.md` — the Claude Code skill loader silently rejects the file if they do (see [install.md](install.md) troubleshooting).
 - **dispatch.py** — Policy boundary (whitelist, argument parsing, dry-run enforcement)
 - **Adapters** — Modular command implementations (one file per command)
 - **Router** — Model selection logic

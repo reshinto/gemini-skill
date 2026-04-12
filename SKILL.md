@@ -2,8 +2,6 @@
 name: gemini
 description: Gemini API — text generation, image/video/music generation, embeddings, search grounding, maps grounding, context caching, batch processing, code execution, function calling, file search/RAG, computer use, deep research, and more.
 disable-model-invocation: true
-allowed-tools: Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/gemini_run.py *)
-argument-hint: "[command] [args]"
 ---
 
 ## Usage

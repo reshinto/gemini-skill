@@ -55,9 +55,7 @@ Threat model, authentication, data protection, and risk management.
   # UNSAFE (not used): Shell concatenation
   /gemini text $user_input  # ← DO NOT DO
   ```
-- **Skill allows Bash pre-approval:** Claude Code `allowed-tools` pre-approves the launcher script
-  - This is **not a security boundary** — `allowed-tools` doesn't restrict other tools
-  - Use Claude Code permission settings to control which tools Claude can use
+- **No `allowed-tools` pre-approval in the skill manifest:** earlier versions of `SKILL.md` declared a Claude Code `allowed-tools: Bash(python3 ...)` line to pre-approve the launcher script. That field is valid in slash commands (`.claude/commands/*.md`) but **not** in skills (`.claude/skills/*/SKILL.md`) — its presence caused the Claude Code skill loader to silently reject the manifest. It has been removed. Bash invocations of `scripts/gemini_run.py` now follow the user's normal Claude Code tool-permission flow, which is the correct behavior: policy belongs in the dispatcher and the user's permission settings, not in the skill manifest.
 
 **Assumptions:**
 - You trust Claude Code's model integrity
