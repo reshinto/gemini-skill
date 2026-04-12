@@ -484,3 +484,23 @@ class TestSslErrorHandling:
              patch("core.infra.client.resolve_key", return_value="fake-key"):
             with pytest.raises(APIError, match="certificate"):
                 api_call("models", method="GET")
+
+
+class TestMimeTypeValidation:
+    """upload_file() must reject unsafe MIME types."""
+
+    def test_rejects_crlf_in_mime_type(self, tmp_path):
+        from core.infra.client import upload_file
+
+        f = tmp_path / "test.txt"
+        f.write_text("hello")
+        with pytest.raises(ValueError, match="Unsafe MIME type"):
+            upload_file(f, mime_type="text/plain\r\nEvil-Header: injected")
+
+    def test_rejects_empty_mime_type(self, tmp_path):
+        from core.infra.client import upload_file
+
+        f = tmp_path / "test.txt"
+        f.write_text("hello")
+        with pytest.raises(ValueError, match="Unsafe MIME type"):
+            upload_file(f, mime_type="")

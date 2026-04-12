@@ -13,20 +13,17 @@ The .env parser follows deliberately simple rules:
     - Skip blank lines and lines starting with '#'
     - No inline comment support (# in value is literal)
 
-Dependencies: core/infra/errors.py (AuthError)
+Dependencies: core/infra/errors.py (AuthError), core/infra/sanitize.py
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional, Union
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from core.infra.errors import AuthError
-
-# Base URL for the Gemini API
-BASE_URL = "https://generativelanguage.googleapis.com"
+from core.infra.sanitize import sanitize
 
 
 def parse_env_content(content: str) -> dict[str, str]:
@@ -83,7 +80,7 @@ def _load_env_file(env_dir: Path) -> None:
             os.environ[key] = value
 
 
-def resolve_key(env_dir: Optional[Union[str, Path]] = None) -> str:
+def resolve_key(env_dir: str | Path | None = None) -> str:
     """Resolve the Gemini API key from environment and optional .env file.
 
     Precedence: GOOGLE_API_KEY > GEMINI_API_KEY > .env file values.
@@ -128,6 +125,9 @@ def validate_key(key: str) -> bool:
     Raises:
         AuthError: If the key is invalid (401) or the request fails.
     """
+    # Import here to avoid circular dependency (client imports auth)
+    from core.infra.client import BASE_URL
+
     url = f"{BASE_URL}/v1beta/models"
     request = Request(url)
     request.add_header("x-goog-api-key", key)
@@ -141,4 +141,6 @@ def validate_key(key: str) -> bool:
             raise AuthError("API key is invalid (401 Unauthorized)") from e
         raise AuthError(f"API key validation failed: HTTP {e.code}") from e
     except Exception as e:
-        raise AuthError(f"API key validation failed: {e}") from e
+        raise AuthError(
+            f"API key validation failed: {sanitize(str(e))}"
+        ) from e

@@ -14,12 +14,10 @@ Dependency: none (leaf module, stdlib only).
 """
 from __future__ import annotations
 
-import os
-import sys
 import signal
+import sys
 import threading
-import time
-from typing import Optional
+from types import FrameType
 
 
 class TimeoutExpired(Exception):
@@ -44,12 +42,12 @@ class TimeoutGuard:
         message: Custom message for the TimeoutExpired exception.
     """
 
-    def __init__(self, seconds: int, message: Optional[str] = None) -> None:
+    def __init__(self, seconds: int, message: str | None = None) -> None:
         self.seconds = seconds
         self.message = message or f"Operation exceeded {seconds}s limit"
         self._use_signal = False
         self._old_handler = None
-        self._watchdog: Optional[threading.Timer] = None
+        self._watchdog: threading.Timer | None = None
 
     def __enter__(self) -> TimeoutGuard:
         if self._can_use_signal():
@@ -85,7 +83,7 @@ class TimeoutGuard:
             return False
         return threading.current_thread() is threading.main_thread()
 
-    def _signal_handler(self, signum: int, frame) -> None:
+    def _signal_handler(self, signum: int, frame: FrameType | None) -> None:
         """POSIX signal handler that raises TimeoutExpired."""
         raise TimeoutExpired(f"[TIMEOUT] {self.message}")
 

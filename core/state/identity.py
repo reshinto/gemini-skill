@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -31,8 +31,8 @@ class DocumentIdentity:
 
     content_sha256: str
     mime_type: str
-    source_path: Optional[str]
-    source_uri: Optional[str]
+    source_path: str | None
+    source_uri: str | None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""
@@ -55,8 +55,8 @@ class DocumentIdentity:
 
 
 def compute_identity(
-    file_path: Union[str, Path],
-    mime_type: Optional[str] = None,
+    file_path: str | Path,
+    mime_type: str | None = None,
 ) -> DocumentIdentity:
     """Compute canonical identity for a local file.
 

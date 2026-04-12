@@ -10,19 +10,20 @@ metadata. Not guaranteed to be exact.
 
 Daily totals are stored in cost_today.json with UTC date keys.
 File locking prevents data loss from concurrent tool calls.
+The entire read-modify-write cycle runs under a single lock
+to prevent TOCTOU races.
 
-Dependencies: core/infra/filelock.py
+Dependencies: core/infra/filelock.py, core/infra/atomic_write.py
 """
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from core.infra.atomic_write import atomic_write_json
 from core.infra.filelock import FileLock
 
 _COST_FILENAME = "cost_today.json"
@@ -57,7 +58,8 @@ class CostTracker:
     """Tracks daily API cost with file-locked atomic writes.
 
     Stores the daily total in a JSON file with a UTC date key.
-    Automatically resets when the date changes.
+    Automatically resets when the date changes. The full
+    read-modify-write cycle is protected by a file lock.
 
     Args:
         state_dir: Directory for cost state and lock files.
@@ -72,8 +74,12 @@ class CostTracker:
         """Get today's UTC date as a string key."""
         return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    def _read_daily(self) -> float:
-        """Read today's cost total from disk. Returns 0.0 on any error."""
+    def _read_daily_unlocked(self) -> float:
+        """Read today's cost total from disk without locking.
+
+        Must only be called from within a lock context or when
+        an approximate read is acceptable.
+        """
         if not self._cost_file.is_file():
             return 0.0
         try:
@@ -84,8 +90,25 @@ class CostTracker:
         except (json.JSONDecodeError, OSError, ValueError):
             return 0.0
 
+    def _add_to_daily(self, delta: float) -> None:
+        """Atomically add to today's cost total under a single lock.
+
+        The entire read-modify-write runs under one lock acquisition
+        to prevent TOCTOU races from concurrent tool calls.
+        """
+        self._state_dir.mkdir(parents=True, exist_ok=True)
+        with FileLock(self._lock_path):
+            current = self._read_daily_unlocked()
+            total = current + delta
+            data = json.dumps({
+                "date": self._today_key(),
+                "total": total,
+                "updated_at": time.time(),
+            })
+            atomic_write_json(self._cost_file, data)
+
     def _write_daily(self, total: float) -> None:
-        """Atomically write today's cost total to disk."""
+        """Write a specific daily total (used for testing/direct set)."""
         self._state_dir.mkdir(parents=True, exist_ok=True)
         with FileLock(self._lock_path):
             data = json.dumps({
@@ -93,26 +116,11 @@ class CostTracker:
                 "total": total,
                 "updated_at": time.time(),
             })
-            fd, tmp_path = tempfile.mkstemp(
-                dir=str(self._state_dir), prefix=".cost-", suffix=".tmp"
-            )
-            try:
-                os.write(fd, data.encode("utf-8"))
-                os.close(fd)
-                fd = -1
-                os.replace(tmp_path, str(self._cost_file))
-            except Exception:
-                if fd >= 0:
-                    os.close(fd)
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-                raise
+            atomic_write_json(self._cost_file, data)
 
     def get_daily_total(self) -> float:
         """Get today's accumulated cost in USD."""
-        return self._read_daily()
+        return self._read_daily_unlocked()
 
     def record_actual_cost(
         self,
@@ -122,7 +130,7 @@ class CostTracker:
         """Record actual cost from API response usageMetadata.
 
         Extracts token counts from usageMetadata, computes cost,
-        and adds to the daily total.
+        and atomically adds to the daily total under a file lock.
 
         Args:
             pricing: Dict with keys input_per_1m, output_per_1m, cached_per_1m.
@@ -142,9 +150,7 @@ class CostTracker:
             cached_tokens=cached_tokens,
         )
 
-        current = self._read_daily()
-        self._write_daily(current + cost)
-
+        self._add_to_daily(cost)
         return cost
 
     def check_daily_limit(self, limit_usd: float) -> bool:
@@ -156,4 +162,4 @@ class CostTracker:
         Returns:
             True if current total is at or below the limit.
         """
-        return self._read_daily() <= limit_usd
+        return self._read_daily_unlocked() <= limit_usd

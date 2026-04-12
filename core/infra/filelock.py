@@ -17,7 +17,6 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 
 class LockTimeout(Exception):
@@ -41,7 +40,7 @@ class FileLock:
     def __init__(self, path: Path, timeout: float = 5.0) -> None:
         self.path = Path(path)
         self.timeout = timeout
-        self._fd: Optional[int] = None
+        self._fd: int | None = None
 
     def __enter__(self) -> FileLock:
         self._acquire()
@@ -53,7 +52,7 @@ class FileLock:
     def _acquire(self) -> None:
         """Acquire the lock with non-blocking retries until timeout."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._fd = os.open(str(self.path), os.O_CREAT | os.O_RDWR)
+        self._fd = os.open(str(self.path), os.O_CREAT | os.O_RDWR, 0o600)
 
         deadline = time.monotonic() + self.timeout if self.timeout >= 0 else float("inf")
         sleep_interval = 0.05

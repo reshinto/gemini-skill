@@ -8,7 +8,7 @@ Features:
     - Exponential backoff retry for transient errors (429, 5xx, network)
     - 504 timeout: one retry for idempotent GET requests only
     - SSE streaming for generateContent
-    - File upload with multipart body
+    - File upload with multipart body and MIME validation
     - macOS SSL certificate error detection with actionable message
 
 Dependencies: core/auth/auth.py (resolve_key), core/infra/errors.py (APIError)
@@ -16,11 +16,14 @@ Dependencies: core/auth/auth.py (resolve_key), core/infra/errors.py (APIError)
 from __future__ import annotations
 
 import json
+import re
+import secrets
 import socket
 import ssl
 import time
+from collections.abc import Generator
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -34,14 +37,29 @@ BASE_URL = "https://generativelanguage.googleapis.com"
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 1  # seconds — backoff sequence: 1, 2, 4
 
+# MIME type validation: RFC 2045 media-type (no CRLF injection)
+_SAFE_MIME_RE = re.compile(
+    r"^[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*/[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*$"
+)
+
+
+def _validate_mime_type(mime_type: str) -> None:
+    """Validate MIME type to prevent header injection via CRLF.
+
+    Raises:
+        ValueError: If the MIME type contains unsafe characters.
+    """
+    if not _SAFE_MIME_RE.fullmatch(mime_type):
+        raise ValueError(f"Unsafe MIME type: {mime_type!r}")
+
 
 def api_call(
     endpoint: str,
-    body: Optional[dict[str, Any]] = None,
+    body: dict[str, Any] | None = None,
     method: str = "POST",
     api_version: str = "v1beta",
     timeout: int = 30,
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
 ) -> dict[str, Any]:
     """Make an authenticated request to the Gemini API.
 
@@ -122,31 +140,37 @@ def stream_generate_content(
 def upload_file(
     file_path: Path,
     mime_type: str,
-    display_name: Optional[str] = None,
+    display_name: str | None = None,
     timeout: int = 120,
 ) -> dict[str, Any]:
     """Upload a file to the Gemini Files API.
 
     Uses the upload/v1beta/files endpoint with multipart body containing
-    JSON metadata and file content.
+    JSON metadata and file content. MIME type is validated to prevent
+    header injection.
 
     Args:
         file_path: Path to the file to upload.
-        mime_type: MIME type of the file.
+        mime_type: MIME type of the file (validated for safety).
         display_name: Optional display name for the uploaded file.
         timeout: Request timeout in seconds.
 
     Returns:
         Parsed JSON response with file metadata.
+
+    Raises:
+        ValueError: If mime_type contains unsafe characters.
     """
+    _validate_mime_type(mime_type)
+
     key = resolve_key()
     url = f"{BASE_URL}/upload/v1beta/files"
 
     file_path = Path(file_path)
     file_data = file_path.read_bytes()
 
-    # Build multipart body
-    boundary = "gemini-skill-boundary"
+    # Random boundary per upload (RFC 2046 compliance)
+    boundary = f"gemini-skill-{secrets.token_hex(16)}"
     parts: list[bytes] = []
 
     # Metadata part
@@ -193,20 +217,7 @@ def _execute_with_retry(
         - 4xx (except 429): no retry
         - Network errors (URLError, socket.timeout): retry with backoff
         - SSLCertVerificationError: no retry, actionable error message
-
-    Args:
-        request: The prepared urllib Request.
-        timeout: Timeout in seconds for each attempt.
-        method: HTTP method (used to determine 504 retry eligibility).
-
-    Returns:
-        Parsed JSON response.
-
-    Raises:
-        APIError: After exhausting retries or on non-retryable errors.
     """
-    last_error: Optional[Exception] = None
-
     for attempt in range(_MAX_RETRIES + 1):
         try:
             with urlopen(request, timeout=timeout) as response:
@@ -220,14 +231,10 @@ def _execute_with_retry(
             ) from e
 
         except HTTPError as e:
-            last_error = e
             status = e.code
-
-            # Try to extract API error message
             error_msg = _extract_error_message(e)
 
             if status == 504 and method.upper() == "GET" and attempt == 0:
-                # One retry for idempotent reads on timeout
                 time.sleep(_BACKOFF_BASE)
                 continue
 
@@ -239,7 +246,6 @@ def _execute_with_retry(
             raise APIError(error_msg, status_code=status) from e
 
         except (URLError, socket.timeout, ConnectionError) as e:
-            last_error = e
             if attempt < _MAX_RETRIES:
                 time.sleep(_BACKOFF_BASE * (2 ** attempt))
                 continue
@@ -247,17 +253,7 @@ def _execute_with_retry(
 
 
 def _extract_error_message(error: HTTPError) -> str:
-    """Extract a human-readable error message from an HTTP error response.
-
-    Tries to parse the response body as JSON and extract the error message
-    field. Falls back to the HTTP status description.
-
-    Args:
-        error: The HTTPError to extract a message from.
-
-    Returns:
-        A descriptive error string.
-    """
+    """Extract a human-readable error message from an HTTP error response."""
     try:
         body = error.read()
         data = json.loads(body)

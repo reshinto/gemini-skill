@@ -10,7 +10,6 @@ Dependency: none (leaf module — no imports from other core modules).
 """
 from __future__ import annotations
 
-from typing import Optional
 
 
 class GeminiSkillError(Exception):
@@ -55,7 +54,7 @@ class APIError(GeminiSkillError):
             if the error did not originate from an HTTP response.
     """
 
-    def __init__(self, message: str, status_code: Optional[int] = None) -> None:
+    def __init__(self, message: str, status_code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
 

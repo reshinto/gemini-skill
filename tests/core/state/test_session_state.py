@@ -173,6 +173,35 @@ class TestSessionMostRecent:
         assert state.most_recent() is None
 
 
+class TestSessionIdValidation:
+    """SessionState must reject unsafe session IDs."""
+
+    def test_rejects_path_traversal(self, tmp_path):
+        from core.state.session_state import SessionState
+        state = SessionState(sessions_dir=tmp_path)
+        with pytest.raises(ValueError, match="Invalid session_id"):
+            state.create("../../../etc/passwd")
+
+    def test_rejects_slashes(self, tmp_path):
+        from core.state.session_state import SessionState
+        state = SessionState(sessions_dir=tmp_path)
+        with pytest.raises(ValueError, match="Invalid session_id"):
+            state.create("foo/bar")
+
+    def test_rejects_empty_string(self, tmp_path):
+        from core.state.session_state import SessionState
+        state = SessionState(sessions_dir=tmp_path)
+        with pytest.raises(ValueError, match="Invalid session_id"):
+            state.create("")
+
+    def test_accepts_valid_ids(self, tmp_path):
+        from core.state.session_state import SessionState
+        state = SessionState(sessions_dir=tmp_path)
+        for sid in ["review-1", "my_session", "abc123", "A-B_C"]:
+            state.create(sid)
+            assert state.exists(sid)
+
+
 class TestSessionSaveErrors:
     """Cover error paths in _save()."""
 
