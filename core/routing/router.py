@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.infra.errors import ModelNotFoundError
+from core.infra.errors import CapabilityUnavailableError, ModelNotFoundError
 from core.routing.registry import Registry
 
 # Task types that route to a dedicated model via capability default_model.
@@ -97,7 +97,7 @@ class Router:
             default_model = cap.get("default_model")
             if default_model is not None:
                 return default_model
-        except Exception:
+        except CapabilityUnavailableError:
             pass
         return _FALLBACK_MODEL
 

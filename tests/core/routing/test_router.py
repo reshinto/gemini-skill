@@ -202,6 +202,13 @@ class TestSelectModelUserOverride:
         result = router.select_model("text", complexity="low", user_override="gemini-2.5-pro")
         assert result == "gemini-2.5-pro"
 
+    def test_user_override_wins_over_specialty(self, tmp_path):
+        from core.routing.router import Router
+        root = _make_registry(tmp_path)
+        router = Router(root_dir=root)
+        result = router.select_model("embed", user_override="gemini-2.5-pro")
+        assert result == "gemini-2.5-pro"
+
 
 class TestSelectModelPreviewPreference:
     """prefer_preview_models must route to preview variants."""
