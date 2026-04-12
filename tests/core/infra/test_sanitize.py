@@ -75,19 +75,34 @@ class TestExceptionHook:
         finally:
             sys.excepthook = original
 
-    def test_hook_scrubs_key_from_exception_message(self):
+    def test_hook_scrubs_key_from_traceback(self, capsys):
+        """Verify the installed hook actually scrubs keys from traceback output."""
         from core.infra.sanitize import install_exception_hook
+        import io
+
         original = sys.excepthook
-        output_lines = []
-
-        def capture_hook(exc_type, exc_val, exc_tb):
-            install_exception_hook()
-            # Simulate what the hook does by calling it
-            pass
-
+        original_stderr = sys.stderr
+        captured_stderr = io.StringIO()
         try:
             install_exception_hook()
-            # The hook is installed; verify it is a callable
-            assert callable(sys.excepthook)
+            hook = sys.excepthook
+
+            # Create an exception with an API key in the message
+            key = "AIzaSyA1234567890abcdefghijklmnopqrstuv"
+            try:
+                raise ValueError(f"failed with key {key}")
+            except ValueError:
+                exc_info = sys.exc_info()
+
+            # Call the hook directly, capturing stderr
+            sys.stderr = captured_stderr
+            hook(*exc_info)
+            sys.stderr = original_stderr
+
+            output = captured_stderr.getvalue()
+            assert key not in output
+            assert "[REDACTED]" in output
+            assert "ValueError" in output
         finally:
             sys.excepthook = original
+            sys.stderr = original_stderr

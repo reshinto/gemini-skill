@@ -79,9 +79,9 @@ class TimeoutGuard:
         Only works on POSIX systems and only from the main thread
         of the main interpreter.
         """
-        if sys.platform == "win32":
+        if sys.platform == "win32":  # pragma: no cover
             return False
-        if not hasattr(signal, "SIGALRM"):
+        if not hasattr(signal, "SIGALRM"):  # pragma: no cover
             return False
         return threading.current_thread() is threading.main_thread()
 

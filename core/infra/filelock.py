@@ -74,7 +74,7 @@ class FileLock:
 
     def _try_lock(self) -> None:
         """Attempt a non-blocking lock. Raises OSError if unavailable."""
-        if sys.platform == "win32":
+        if sys.platform == "win32":  # pragma: no cover
             import msvcrt
             msvcrt.locking(self._fd, msvcrt.LK_NBLCK, 1)
         else:
@@ -85,7 +85,7 @@ class FileLock:
         """Release the lock and close the file descriptor."""
         if self._fd is not None:
             try:
-                if sys.platform == "win32":
+                if sys.platform == "win32":  # pragma: no cover
                     import msvcrt
                     try:
                         msvcrt.locking(self._fd, msvcrt.LK_UNLCK, 1)

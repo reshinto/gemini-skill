@@ -140,3 +140,34 @@ class TestValidateKey:
 
         with pytest.raises(AuthError):
             validate_key("bad_key")
+
+    @patch("core.auth.auth.urlopen")
+    def test_non_401_http_error_raises_auth_error(self, mock_urlopen):
+        from core.auth.auth import validate_key
+        from core.infra.errors import AuthError
+        from urllib.error import HTTPError
+        mock_urlopen.side_effect = HTTPError("url", 500, "Server Error", {}, None)
+
+        with pytest.raises(AuthError, match="HTTP 500"):
+            validate_key("some_key")
+
+    @patch("core.auth.auth.urlopen")
+    def test_generic_exception_raises_auth_error(self, mock_urlopen):
+        from core.auth.auth import validate_key
+        from core.infra.errors import AuthError
+        mock_urlopen.side_effect = ConnectionError("network down")
+
+        with pytest.raises(AuthError, match="network down"):
+            validate_key("some_key")
+
+
+class TestLoadEnvFileMissing:
+    """_load_env_file must handle missing .env gracefully."""
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_missing_env_file_no_error(self, tmp_path):
+        from core.auth.auth import resolve_key
+        from core.infra.errors import AuthError
+        # No .env file in tmp_path, no env vars → should raise AuthError
+        with pytest.raises(AuthError):
+            resolve_key(env_dir=tmp_path)

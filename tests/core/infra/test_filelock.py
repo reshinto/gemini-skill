@@ -77,3 +77,28 @@ class TestFileLockTimeout:
             with pytest.raises(LockTimeout):
                 with FileLock(lock_path, timeout=0):
                     pass
+
+
+class TestFileLockRetryLoop:
+    """Cover the retry sleep and backoff path inside _acquire."""
+
+    def test_short_timeout_retries_then_fails(self, tmp_path):
+        """With a very short (but nonzero) timeout, should retry and then fail."""
+        from core.infra.filelock import FileLock, LockTimeout
+
+        lock_path = tmp_path / "retry.lock"
+        with FileLock(lock_path):
+            with pytest.raises(LockTimeout):
+                with FileLock(lock_path, timeout=0.15):
+                    pass
+
+
+class TestFileLockRelease:
+    """Cover the _release path when fd is None."""
+
+    def test_release_with_no_fd_is_safe(self):
+        from core.infra.filelock import FileLock
+
+        lock = FileLock(Path(tempfile.gettempdir()) / "noop.lock")
+        # _fd is None by default, calling _release should not error
+        lock._release()
