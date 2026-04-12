@@ -12,16 +12,15 @@ Dependencies: core/infra/client.py, core/adapter/helpers.py
 from __future__ import annotations
 
 import time
-from pathlib import Path
 from typing import Any
 
 from core.adapter.helpers import build_base_parser, check_dry_run, emit_output
 from core.infra.client import api_call
-from core.infra.config import load_config
+from core.infra.config import Config, load_config
 from core.infra.sanitize import safe_print
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the deep research adapter."""
     parser = build_base_parser("Run deep research via Interactions API (preview)")
     parser.add_argument("prompt", help="Research query.")
@@ -48,7 +47,11 @@ def run(
     poll_timeout = max_wait or config.deep_research_timeout_seconds
 
     if resume:
-        _poll_interaction(resume, poll_timeout)
+        # Resume also touches privacy-sensitive server-side storage;
+        # gate it behind --execute as defense-in-depth.
+        if check_dry_run(execute, f"resume interaction {resume}"):
+            return
+        _poll_interaction(resume, poll_timeout, config)
         return
 
     if check_dry_run(execute, f"start deep research: {prompt}"):
@@ -74,10 +77,10 @@ def run(
 
     safe_print(f"Research started: {interaction_id}")
 
-    _poll_interaction(interaction_id, poll_timeout)
+    _poll_interaction(interaction_id, poll_timeout, config)
 
 
-def _poll_interaction(interaction_id: str, max_wait: int) -> None:
+def _poll_interaction(interaction_id: str, max_wait: int, config: Config) -> None:
     """Poll an interaction until terminal state or timeout."""
     start = time.time()
     while time.time() - start < max_wait:
@@ -85,7 +88,7 @@ def _poll_interaction(interaction_id: str, max_wait: int) -> None:
         status = interaction.get("status", "")
 
         if status == "completed":
-            _emit_result(interaction)
+            _emit_result(interaction, config)
             return
         if status in ("failed", "cancelled"):
             safe_print(f"[{status.upper()}] Research {status}: {interaction.get('error', 'unknown')}")
@@ -99,9 +102,8 @@ def _poll_interaction(interaction_id: str, max_wait: int) -> None:
     )
 
 
-def _emit_result(interaction: dict[str, Any]) -> None:
+def _emit_result(interaction: dict[str, Any], config: Config) -> None:
     """Extract and emit the research result."""
-    config = load_config()
     outputs = interaction.get("outputs", [])
     if outputs:
         text = outputs[-1].get("text", "")

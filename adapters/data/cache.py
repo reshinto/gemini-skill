@@ -11,11 +11,12 @@ from pathlib import Path
 from typing import Any
 
 from core.adapter.helpers import build_base_parser, check_dry_run, emit_json
+from core.infra.sanitize import safe_print
 from core.infra.client import api_call
 from core.infra.config import load_config
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the cache adapter."""
     parser = build_base_parser("Manage Gemini context caches")
     sub = parser.add_subparsers(dest="action", help="Cache action")
@@ -54,7 +55,6 @@ def run(
     elif action == "delete":
         _delete_cache(name=name, execute=execute)
     else:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No action specified. Use: create, list, get, delete")
 
 
@@ -66,7 +66,6 @@ def _create(
 ) -> None:
     """Create a context cache."""
     if not content:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No content provided.")
         return
 
@@ -101,7 +100,6 @@ def _list_caches() -> None:
 def _get_cache(name: str | None) -> None:
     """Get metadata for a single cache."""
     if not name:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No cache name provided.")
         return
     response = api_call(name, method="GET")
@@ -111,11 +109,9 @@ def _get_cache(name: str | None) -> None:
 def _delete_cache(name: str | None, execute: bool) -> None:
     """Delete a context cache."""
     if not name:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No cache name provided.")
         return
     if check_dry_run(execute, f"delete cache {name}"):
         return
     api_call(name, method="DELETE")
-    from core.infra.sanitize import safe_print
     safe_print(f"Deleted cache {name}")

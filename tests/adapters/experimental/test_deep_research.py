@@ -63,6 +63,15 @@ class TestDeepResearchRun:
             run(prompt="ignored", resume="int-existing", execute=True)
         assert "Resumed result" in capsys.readouterr().out
 
+    def test_resume_dry_run_skips(self, capsys):
+        from adapters.experimental.deep_research import run
+        with patch("adapters.experimental.deep_research.api_call") as mock_api, \
+             patch("adapters.experimental.deep_research.load_config") as mock_cfg:
+            mock_cfg.return_value = MagicMock(deep_research_timeout_seconds=3600, output_dir=None)
+            run(prompt="ignored", resume="int-existing", execute=False)
+        mock_api.assert_not_called()
+        assert "[DRY RUN]" in capsys.readouterr().out
+
     def test_poll_timeout(self, capsys):
         from adapters.experimental.deep_research import run
         create_resp = {"id": "int-abc"}

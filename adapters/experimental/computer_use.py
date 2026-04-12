@@ -11,12 +11,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from core.adapter.helpers import build_base_parser, emit_json, emit_output
+from core.adapter.helpers import build_base_parser, emit_json, emit_output, extract_parts
 from core.infra.client import api_call
 from core.infra.config import load_config
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the computer use adapter."""
     parser = build_base_parser("Use Gemini for computer interaction (preview)")
     parser.add_argument("prompt", help="Task description for the model.")
@@ -48,7 +48,7 @@ def run(
         body=body,
     )
 
-    parts = response["candidates"][0]["content"]["parts"]
+    parts = extract_parts(response)
 
     # Collect actions and text
     actions = []

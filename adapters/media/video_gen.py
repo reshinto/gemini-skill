@@ -8,20 +8,23 @@ Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
 from __future__ import annotations
 
-import os
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
-from core.adapter.helpers import build_base_parser, check_dry_run, emit_json
-from core.infra.client import api_call, BASE_URL
+from core.adapter.helpers import (
+    build_base_parser,
+    check_dry_run,
+    create_media_output_file,
+    emit_json,
+)
+from core.infra.client import api_call
 from core.infra.config import load_config
 from core.infra.sanitize import safe_print
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the video generation adapter."""
     parser = build_base_parser("Generate videos using Veo")
     parser.add_argument("prompt", help="Video generation prompt.")
@@ -96,11 +99,11 @@ def run(
 
     video_bytes = _download(video_uri)
     out_dir = output_dir or config.output_dir
-    output_path = _create_output_file(".mp4", out_dir)
+    output_path = create_media_output_file(".mp4", out_dir)
     Path(output_path).write_bytes(video_bytes)
 
     emit_json({
-        "path": str(Path(output_path).resolve()),
+        "path": output_path,
         "mime_type": "video/mp4",
         "size_bytes": len(video_bytes),
         "operation": operation_name,
@@ -124,12 +127,3 @@ def _download(uri: str) -> bytes:
     request = Request(uri)
     with urlopen(request, timeout=300) as response:
         return response.read()
-
-
-def _create_output_file(suffix: str, output_dir: str | None = None) -> str:
-    """Create a unique output file path."""
-    directory = Path(output_dir) if output_dir else Path(tempfile.gettempdir())
-    directory.mkdir(parents=True, exist_ok=True)
-    fd, path = tempfile.mkstemp(prefix="gemini-skill-", suffix=suffix, dir=str(directory))
-    os.close(fd)
-    return str(Path(path).resolve())

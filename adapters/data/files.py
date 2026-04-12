@@ -1,27 +1,25 @@
 """File API adapter — upload, list, get, and delete files.
 
 Uses the Gemini Files API (upload/v1beta/files) for managing uploaded
-files. Tracks upload state via core/state/file_state.py to avoid
-redundant uploads of identical content.
+files. Mutating operations (upload, delete) are gated at the dispatch
+policy boundary via registry metadata (mutating: true).
 
-Mutating operations (upload, delete) require --execute flag.
-
-Dependencies: core/infra/client.py, core/state/file_state.py,
-    core/state/identity.py, core/adapter/helpers.py
+Dependencies: core/infra/client.py, core/adapter/helpers.py,
+    core/infra/sanitize.py
 """
 from __future__ import annotations
 
-from pathlib import Path
+import argparse
 from typing import Any
 
 from core.adapter.helpers import build_base_parser, check_dry_run, emit_json
 from core.infra.client import api_call, upload_file
-from core.infra.config import load_config
 from core.infra.mime import guess_mime_for_path
-from core.state.identity import compute_identity
+from core.infra.sanitize import safe_print
+from pathlib import Path
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the files adapter."""
     parser = build_base_parser("Manage files in the Gemini Files API")
     sub = parser.add_subparsers(dest="action", help="File action")
@@ -51,7 +49,11 @@ def run(
     execute: bool = False,
     **kwargs: Any,
 ) -> None:
-    """Execute file management operations."""
+    """Execute file management operations.
+
+    Dispatch enforces the mutating policy gate; per-adapter check_dry_run
+    remains as defense-in-depth when adapters are called directly.
+    """
     if action == "upload":
         _upload(path=path, mime=mime, display_name=display_name, execute=execute)
     elif action == "list":
@@ -61,7 +63,6 @@ def run(
     elif action == "delete":
         _delete_file(name=name, execute=execute)
     else:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No action specified. Use: upload, list, get, delete")
 
 
@@ -73,10 +74,8 @@ def _upload(
 ) -> None:
     """Upload a file to the Gemini Files API."""
     if not path:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No file path provided.")
         return
-
     if check_dry_run(execute, f"upload {path}"):
         return
 
@@ -116,7 +115,6 @@ def _list_files() -> None:
 def _get_file(name: str | None) -> None:
     """Get metadata for a single file."""
     if not name:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No file name provided.")
         return
     response = api_call(name, method="GET")
@@ -126,11 +124,9 @@ def _get_file(name: str | None) -> None:
 def _delete_file(name: str | None, execute: bool) -> None:
     """Delete a file."""
     if not name:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No file name provided.")
         return
     if check_dry_run(execute, f"delete {name}"):
         return
     api_call(name, method="DELETE")
-    from core.infra.sanitize import safe_print
     safe_print(f"Deleted {name}")

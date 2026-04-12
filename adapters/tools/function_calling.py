@@ -13,13 +13,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from core.adapter.helpers import build_base_parser, emit_json, emit_output
+from core.adapter.helpers import build_base_parser, emit_json, emit_output, extract_parts
 from core.infra.client import api_call
 from core.infra.config import load_config
 from core.routing.tool_state import extract_tool_state
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the function calling adapter."""
     parser = build_base_parser("Execute function/tool calling")
     parser.add_argument("prompt", help="The text prompt.")
@@ -61,7 +61,7 @@ def run(
     response = api_call(f"models/{resolved_model}:generateContent", body=body)
 
     # Extract response parts
-    parts = response["candidates"][0]["content"]["parts"]
+    parts = extract_parts(response)
 
     # Check for function calls
     tool_parts = extract_tool_state(parts)

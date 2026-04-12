@@ -16,12 +16,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-from core.adapter.helpers import build_base_parser, check_dry_run, emit_json, emit_output
+from core.adapter.helpers import build_base_parser, check_dry_run, emit_json, emit_output, extract_text
+from core.infra.sanitize import safe_print
 from core.infra.client import api_call
 from core.infra.config import load_config
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the file search adapter."""
     parser = build_base_parser("Manage File Search stores and query them")
     sub = parser.add_subparsers(dest="action", help="File Search action")
@@ -67,14 +68,12 @@ def run(
     elif action == "delete":
         _delete_store(name=name, execute=execute)
     else:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No action specified. Use: create, upload, query, list, delete")
 
 
 def _create_store(name: str | None, execute: bool) -> None:
     """Create a new File Search store."""
     if not name:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No store name provided.")
         return
     if check_dry_run(execute, f"create File Search store '{name}'"):
@@ -92,7 +91,6 @@ def _upload_to_store(
 ) -> None:
     """Upload a file to a File Search store."""
     if not store or not file_uri:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] Both store and file_uri are required.")
         return
     if check_dry_run(execute, f"upload {file_uri} to store {store}"):
@@ -104,7 +102,6 @@ def _upload_to_store(
     # Long-running operation — poll for completion
     op_name = response.get("name")
     if op_name:
-        from core.infra.sanitize import safe_print
         safe_print(f"Upload started: {op_name}")
         _poll_operation(op_name)
     else:
@@ -118,7 +115,6 @@ def _query_store(
 ) -> None:
     """Query a File Search store."""
     if not prompt or not store:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] Both prompt and --store are required.")
         return
 
@@ -136,7 +132,7 @@ def _query_store(
     }
 
     response = api_call(f"models/{resolved_model}:generateContent", body=body)
-    text = response["candidates"][0]["content"]["parts"][0]["text"]
+    text = extract_text(response)
     emit_output(text, output_dir=config.output_dir)
 
 
@@ -150,13 +146,11 @@ def _list_stores() -> None:
 def _delete_store(name: str | None, execute: bool) -> None:
     """Delete a File Search store."""
     if not name:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No store name provided.")
         return
     if check_dry_run(execute, f"delete store {name}"):
         return
     api_call(name, method="DELETE")
-    from core.infra.sanitize import safe_print
     safe_print(f"Deleted store {name}")
 
 
@@ -170,7 +164,6 @@ def _poll_operation(op_name: str, max_wait: int = 1800) -> None:
             return
         time.sleep(10)
 
-    from core.infra.sanitize import safe_print
     safe_print(
         f"[POLL TIMEOUT] Operation not complete after {max_wait}s. "
         f"Operation: {op_name}. You can resume polling later."

@@ -69,12 +69,14 @@ class TestMusicGenRun:
         assert "Cannot generate" in capsys.readouterr().out
 
 
-class TestMusicMimeToExt:
-    def test_known_types(self):
-        from adapters.media.music_gen import _mime_to_ext
-        assert _mime_to_ext("audio/wav") == ".wav"
-        assert _mime_to_ext("audio/mpeg") == ".mp3"
+class TestAudioMimeMap:
+    def test_audio_mime_map_known(self):
+        from adapters.media.music_gen import _AUDIO_MIME_MAP
+        from core.adapter.helpers import mime_to_ext
+        assert mime_to_ext("audio/wav", _AUDIO_MIME_MAP, ".wav") == ".wav"
+        assert mime_to_ext("audio/mpeg", _AUDIO_MIME_MAP, ".wav") == ".mp3"
 
-    def test_unknown_defaults_to_wav(self):
-        from adapters.media.music_gen import _mime_to_ext
-        assert _mime_to_ext("audio/unknown") == ".wav"
+    def test_audio_mime_map_fallback(self):
+        from adapters.media.music_gen import _AUDIO_MIME_MAP
+        from core.adapter.helpers import mime_to_ext
+        assert mime_to_ext("audio/unknown", _AUDIO_MIME_MAP, ".wav") == ".wav"

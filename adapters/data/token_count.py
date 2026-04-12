@@ -15,7 +15,7 @@ from core.infra.client import api_call
 from core.infra.config import load_config
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the token count adapter."""
     parser = build_base_parser("Count tokens in a prompt")
     parser.add_argument("text", help="The text to count tokens for.")

@@ -83,19 +83,23 @@ class TestDownload:
         assert data == b"video-bytes"
 
 
-class TestCreateOutputFile:
-    def test_creates_file_in_dir(self, tmp_path):
-        from adapters.media.video_gen import _create_output_file
-        path = _create_output_file(".mp4", str(tmp_path))
-        assert path.endswith(".mp4")
-        assert str(tmp_path) in path
-
-    def test_creates_file_in_tempdir(self):
-        from adapters.media.video_gen import _create_output_file
-        import os
-        path = _create_output_file(".mp4")
-        assert os.path.exists(path)
-        os.unlink(path)
+class TestVideoGenOutputDir:
+    def test_output_dir_used_for_download_path(self, tmp_path, capsys):
+        """Ensure videos are saved to the requested output_dir via the shared helper."""
+        from adapters.media.video_gen import run
+        op = {"name": "operations/veo-x"}
+        done = {
+            "done": True,
+            "response": {"generatedVideos": [{"video": {"uri": "https://ex/v.mp4"}}]},
+        }
+        with patch("adapters.media.video_gen.api_call", side_effect=[op, done]), \
+             patch("adapters.media.video_gen._download", return_value=b"bytes"), \
+             patch("adapters.media.video_gen.load_config") as mock_cfg, \
+             patch("adapters.media.video_gen.time.sleep"), \
+             patch("adapters.media.video_gen.time.time", side_effect=[0, 0, 0]):
+            mock_cfg.return_value = MagicMock(prefer_preview_models=False, output_dir=None)
+            run(prompt="sunset", execute=True, output_dir=str(tmp_path))
+        assert str(tmp_path) in capsys.readouterr().out
 
 
 class TestExtractVideoUri:

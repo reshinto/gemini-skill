@@ -94,13 +94,15 @@ class TestImageGenRun:
         assert body["generationConfig"]["responseModalities"] == ["IMAGE", "TEXT"]
 
 
-class TestMimeToExt:
-    def test_known_types(self):
-        from adapters.media.image_gen import _mime_to_ext
-        assert _mime_to_ext("image/png") == ".png"
-        assert _mime_to_ext("image/jpeg") == ".jpg"
-        assert _mime_to_ext("image/webp") == ".webp"
+class TestImageMimeMap:
+    def test_image_mime_map_known(self):
+        from adapters.media.image_gen import _IMAGE_MIME_MAP
+        from core.adapter.helpers import mime_to_ext
+        assert mime_to_ext("image/png", _IMAGE_MIME_MAP, ".png") == ".png"
+        assert mime_to_ext("image/jpeg", _IMAGE_MIME_MAP, ".png") == ".jpg"
+        assert mime_to_ext("image/webp", _IMAGE_MIME_MAP, ".png") == ".webp"
 
-    def test_unknown_defaults_to_png(self):
-        from adapters.media.image_gen import _mime_to_ext
-        assert _mime_to_ext("image/bmp") == ".png"
+    def test_image_mime_map_fallback(self):
+        from adapters.media.image_gen import _IMAGE_MIME_MAP
+        from core.adapter.helpers import mime_to_ext
+        assert mime_to_ext("image/bmp", _IMAGE_MIME_MAP, ".png") == ".png"

@@ -82,6 +82,33 @@ class TestUpdateMain:
         assert "[ERROR]" in capsys.readouterr().out
 
 
+class TestParseVersion:
+    def test_basic_version(self):
+        from core.cli.update_main import _parse_version
+        assert _parse_version("1.2.3") == (1, 2, 3)
+
+    def test_strips_v_prefix(self):
+        from core.cli.update_main import _parse_version
+        assert _parse_version("v1.2.3") == (1, 2, 3)
+
+    def test_strips_prerelease_suffix(self):
+        from core.cli.update_main import _parse_version
+        assert _parse_version("1.2.3-beta") == (1, 2, 3)
+
+    def test_strips_build_metadata(self):
+        from core.cli.update_main import _parse_version
+        assert _parse_version("1.2.3+build123") == (1, 2, 3)
+
+    def test_non_numeric_segment_becomes_zero(self):
+        from core.cli.update_main import _parse_version
+        assert _parse_version("1.x.3") == (1, 0, 3)
+
+    def test_lexicographic_bug_fix(self):
+        """Ensure 1.10.0 > 1.9.0 (the bug the fix resolves)."""
+        from core.cli.update_main import _parse_version
+        assert _parse_version("1.10.0") > _parse_version("1.9.0")
+
+
 class TestFetchLatestRelease:
     def test_fetches_release_info(self):
         import json as _json

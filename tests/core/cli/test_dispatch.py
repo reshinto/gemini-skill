@@ -15,10 +15,10 @@ class TestDispatchMain:
 
     def test_unknown_command_fails_closed(self, capsys):
         from core.cli.dispatch import main
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exc_info:
             main(["nonexistent"])
-        err = capsys.readouterr().out + capsys.readouterr().err
-        # Should exit with error
+        assert exc_info.value.code == 1
+        assert "Unknown command" in capsys.readouterr().out
 
     def test_text_command_routes_to_text_adapter(self):
         from core.cli.dispatch import main
@@ -53,6 +53,94 @@ class TestDispatchMain:
         main(["models"])
         output = capsys.readouterr().out
         assert "gemini-2.5-flash" in output
+
+
+class TestDispatchPolicyEnforcement:
+    """Dispatch must enforce mutating and privacy-sensitive rules from registry."""
+
+    def test_mutating_command_blocked_without_execute(self, capsys):
+        from core.cli.dispatch import main
+        with patch("adapters.media.image_gen.run") as mock_run:
+            with pytest.raises(SystemExit) as exc_info:
+                main(["image_gen", "a cat"])
+        assert exc_info.value.code == 0
+        output = capsys.readouterr().out
+        assert "[DRY RUN]" in output
+        assert "image_gen" in output
+        mock_run.assert_not_called()
+
+    def test_mutating_command_allowed_with_execute(self):
+        from core.cli.dispatch import main
+        with patch("adapters.media.image_gen.run") as mock_run:
+            main(["image_gen", "a cat", "--execute"])
+        mock_run.assert_called_once()
+
+    def test_privacy_sensitive_blocked_without_opt_in(self, capsys):
+        from core.cli.dispatch import main
+        with patch("adapters.tools.search.run") as mock_run:
+            with pytest.raises(SystemExit) as exc_info:
+                main(["search", "weather today"])
+        assert exc_info.value.code == 1
+        output = capsys.readouterr().out
+        assert "[BLOCKED]" in output
+        assert "privacy-sensitive" in output
+        mock_run.assert_not_called()
+
+    def test_privacy_sensitive_allowed_with_opt_in(self):
+        from core.cli.dispatch import main
+        with patch("adapters.tools.search.run") as mock_run:
+            main(["search", "weather today", "--i-understand-privacy"])
+        mock_run.assert_called_once()
+
+    def test_mutating_privacy_sensitive_needs_both_flags(self, capsys):
+        from core.cli.dispatch import main
+        with patch("adapters.experimental.deep_research.run") as mock_run:
+            # Missing both flags — privacy block fires first
+            with pytest.raises(SystemExit):
+                main(["deep_research", "research topic"])
+        assert "[BLOCKED]" in capsys.readouterr().out
+        mock_run.assert_not_called()
+
+    def test_non_policy_command_runs_freely(self):
+        from core.cli.dispatch import main
+        with patch("adapters.generation.text.run") as mock_run:
+            main(["text", "hello"])
+        mock_run.assert_called_once()
+
+
+class TestDispatchProtocolValidation:
+    """Dispatch must validate AdapterProtocol conformance."""
+
+    def test_malformed_adapter_rejected(self, capsys):
+        from core.cli import dispatch
+
+        # Inject a fake command that maps to a broken module
+        original = dispatch.ALLOWED_COMMANDS.copy()
+        try:
+            dispatch.ALLOWED_COMMANDS["broken"] = "os"  # os has no get_parser/run
+            with pytest.raises(SystemExit) as exc_info:
+                dispatch.main(["broken"])
+            assert exc_info.value.code == 1
+            output = capsys.readouterr().out
+            assert "AdapterProtocol" in output
+        finally:
+            dispatch.ALLOWED_COMMANDS.clear()
+            dispatch.ALLOWED_COMMANDS.update(original)
+
+
+class TestDispatchPolicyUnknownCapability:
+    """Dispatch must not crash when command is not in the capability registry."""
+
+    def test_unknown_capability_passes_through(self):
+        from core.cli import dispatch
+        from core.infra.errors import CapabilityUnavailableError
+
+        # Mock Registry.get_capability to raise CapabilityUnavailableError
+        with patch("core.routing.registry.Registry.get_capability",
+                   side_effect=CapabilityUnavailableError("not found")), \
+             patch("adapters.generation.text.run") as mock_run:
+            dispatch.main(["text", "hello"])
+        mock_run.assert_called_once()
 
 
 class TestDispatchAllAdapters:

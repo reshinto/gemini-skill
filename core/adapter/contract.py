@@ -11,9 +11,7 @@ Dependency: none (leaf module, stdlib only).
 from __future__ import annotations
 
 import argparse
-from typing import Any, runtime_checkable
-
-from typing import Protocol
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable

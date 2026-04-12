@@ -16,7 +16,7 @@ from core.infra.config import load_config
 from core.infra.sanitize import safe_print, sanitize
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the streaming adapter."""
     parser = build_base_parser("Stream text generation via SSE")
     parser.add_argument("prompt", help="The text prompt.")

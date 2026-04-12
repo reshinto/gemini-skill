@@ -11,12 +11,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from core.adapter.helpers import build_base_parser, emit_output
+from core.adapter.helpers import build_base_parser, emit_output, extract_parts
 from core.infra.client import api_call
 from core.infra.config import load_config
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the search adapter."""
     parser = build_base_parser("Generate text with Google Search grounding")
     parser.add_argument("prompt", help="The text prompt.")
@@ -45,7 +45,7 @@ def run(
 
     response = api_call(f"models/{resolved_model}:generateContent", body=body)
 
-    parts = response["candidates"][0]["content"]["parts"]
+    parts = extract_parts(response)
     text_parts = [p["text"] for p in parts if "text" in p]
     text = "\n".join(text_parts)
 

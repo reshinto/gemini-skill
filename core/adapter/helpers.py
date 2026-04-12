@@ -132,3 +132,94 @@ def emit_json(data: dict[str, Any]) -> None:
         data: Dictionary to serialize as JSON.
     """
     safe_print(json.dumps(data, indent=2))
+
+
+def extract_text(response: dict[str, Any]) -> str:
+    """Extract text from a Gemini generateContent response.
+
+    Handles safety blocks and missing candidates gracefully by raising
+    a clear ValueError instead of an unhelpful KeyError/IndexError.
+
+    Args:
+        response: The parsed JSON response from generateContent.
+
+    Returns:
+        The text content of the first candidate's first text part.
+
+    Raises:
+        ValueError: If the response has no candidates (safety block, quota, etc.).
+    """
+    candidates = response.get("candidates")
+    if not candidates:
+        feedback = response.get("promptFeedback", {})
+        reason = feedback.get("blockReason", "unknown")
+        raise ValueError(
+            f"Gemini API returned no candidates (blockReason={reason}). "
+            "This may be a safety filter, quota, or content policy block."
+        )
+    parts = candidates[0].get("content", {}).get("parts", [])
+    for part in parts:
+        if "text" in part:
+            return part["text"]
+    return ""
+
+
+def extract_parts(response: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract content parts from a Gemini response.
+
+    Returns the full parts list (text, inlineData, functionCall, etc.)
+    so adapters can handle multi-modal or tool responses.
+
+    Args:
+        response: The parsed JSON response from generateContent.
+
+    Returns:
+        List of content parts. Empty list if no candidates.
+
+    Raises:
+        ValueError: If the response has no candidates.
+    """
+    candidates = response.get("candidates")
+    if not candidates:
+        feedback = response.get("promptFeedback", {})
+        reason = feedback.get("blockReason", "unknown")
+        raise ValueError(
+            f"Gemini API returned no candidates (blockReason={reason})."
+        )
+    return candidates[0].get("content", {}).get("parts", [])
+
+
+def create_media_output_file(suffix: str, output_dir: str | None = None) -> str:
+    """Create a unique output file path for media generation adapters.
+
+    Uses secure tempfile.mkstemp to avoid race conditions, then closes
+    the fd (callers write to the path, not the fd).
+
+    Args:
+        suffix: File extension including leading dot (e.g., ".png").
+        output_dir: Target directory, or None for OS temp dir.
+
+    Returns:
+        Absolute path to a new empty file.
+    """
+    directory = Path(output_dir) if output_dir else Path(tempfile.gettempdir())
+    directory.mkdir(parents=True, exist_ok=True)
+    fd, path = tempfile.mkstemp(
+        prefix="gemini-skill-", suffix=suffix, dir=str(directory)
+    )
+    os.close(fd)
+    return str(Path(path).resolve())
+
+
+def mime_to_ext(mime_type: str, mapping: dict[str, str], default: str) -> str:
+    """Convert a MIME type to a file extension using a caller-provided table.
+
+    Args:
+        mime_type: The MIME type string (e.g., "image/png").
+        mapping: Dict mapping MIME types to extensions (with leading dot).
+        default: Fallback extension if mime_type is not in mapping.
+
+    Returns:
+        File extension with leading dot.
+    """
+    return mapping.get(mime_type, default)

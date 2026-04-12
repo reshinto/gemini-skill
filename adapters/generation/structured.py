@@ -11,12 +11,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from core.adapter.helpers import build_base_parser, emit_json, emit_output
+from core.adapter.helpers import build_base_parser, emit_output, extract_text
 from core.infra.client import api_call
 from core.infra.config import load_config
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the structured adapter."""
     parser = build_base_parser("Generate structured JSON output")
     parser.add_argument("prompt", help="The text prompt.")
@@ -59,5 +59,5 @@ def run(
     }
 
     response = api_call(f"models/{resolved_model}:generateContent", body=body)
-    text = response["candidates"][0]["content"]["parts"][0]["text"]
+    text = extract_text(response)
     emit_output(text, output_dir=config.output_dir)

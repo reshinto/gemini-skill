@@ -12,12 +12,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from core.adapter.helpers import build_base_parser, check_dry_run, emit_output
+from core.adapter.helpers import build_base_parser, emit_output, extract_text
 from core.infra.client import api_call
 from core.infra.config import load_config
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the text adapter."""
     parser = build_base_parser("Generate text using Gemini models")
     parser.add_argument("prompt", help="The text prompt to send.")
@@ -93,8 +93,8 @@ def run(
         body=body,
     )
 
-    # Extract text from response
-    text = response["candidates"][0]["content"]["parts"][0]["text"]
+    # Extract text from response (raises ValueError on safety blocks)
+    text = extract_text(response)
 
     # Save session if active
     if session or continue_session:

@@ -121,3 +121,109 @@ class TestEmitJson:
         import json
         data = json.loads(captured.out)
         assert data["path"] == "/tmp/out.png"
+
+
+class TestExtractText:
+    """extract_text() must return text or raise on safety blocks."""
+
+    def test_returns_text_from_valid_response(self):
+        from core.adapter.helpers import extract_text
+        response = {
+            "candidates": [{"content": {"parts": [{"text": "Hello world"}]}}]
+        }
+        assert extract_text(response) == "Hello world"
+
+    def test_skips_non_text_parts(self):
+        from core.adapter.helpers import extract_text
+        response = {
+            "candidates": [{
+                "content": {"parts": [
+                    {"inlineData": {"data": "x"}},
+                    {"text": "after"},
+                ]}
+            }]
+        }
+        assert extract_text(response) == "after"
+
+    def test_raises_on_no_candidates(self):
+        from core.adapter.helpers import extract_text
+        import pytest
+        with pytest.raises(ValueError, match="no candidates"):
+            extract_text({"candidates": []})
+
+    def test_raises_with_block_reason(self):
+        from core.adapter.helpers import extract_text
+        import pytest
+        with pytest.raises(ValueError, match="SAFETY"):
+            extract_text({"promptFeedback": {"blockReason": "SAFETY"}})
+
+    def test_raises_on_unknown_block(self):
+        from core.adapter.helpers import extract_text
+        import pytest
+        with pytest.raises(ValueError, match="unknown"):
+            extract_text({})
+
+    def test_returns_empty_string_if_no_text_part(self):
+        from core.adapter.helpers import extract_text
+        response = {"candidates": [{"content": {"parts": [{"inlineData": {}}]}}]}
+        assert extract_text(response) == ""
+
+
+class TestExtractParts:
+    """extract_parts() must return parts list or raise."""
+
+    def test_returns_parts(self):
+        from core.adapter.helpers import extract_parts
+        parts = [{"text": "hi"}, {"functionCall": {"name": "f"}}]
+        response = {"candidates": [{"content": {"parts": parts}}]}
+        assert extract_parts(response) == parts
+
+    def test_raises_on_no_candidates(self):
+        from core.adapter.helpers import extract_parts
+        import pytest
+        with pytest.raises(ValueError, match="no candidates"):
+            extract_parts({"promptFeedback": {"blockReason": "OTHER"}})
+
+    def test_returns_empty_when_no_parts(self):
+        from core.adapter.helpers import extract_parts
+        response = {"candidates": [{"content": {}}]}
+        assert extract_parts(response) == []
+
+
+class TestCreateMediaOutputFile:
+    """create_media_output_file() must return a unique writable path."""
+
+    def test_creates_file_in_dir(self, tmp_path):
+        from core.adapter.helpers import create_media_output_file
+        import os
+        path = create_media_output_file(".png", str(tmp_path))
+        assert path.endswith(".png")
+        assert os.path.exists(path)
+        assert str(tmp_path) in path
+
+    def test_creates_file_in_tempdir_by_default(self):
+        from core.adapter.helpers import create_media_output_file
+        import os
+        path = create_media_output_file(".wav")
+        assert os.path.exists(path)
+        os.unlink(path)
+
+    def test_unique_paths(self, tmp_path):
+        from core.adapter.helpers import create_media_output_file
+        p1 = create_media_output_file(".png", str(tmp_path))
+        p2 = create_media_output_file(".png", str(tmp_path))
+        assert p1 != p2
+
+
+class TestMimeToExt:
+    """mime_to_ext() must map MIME types to extensions with a default."""
+
+    def test_known_mime(self):
+        from core.adapter.helpers import mime_to_ext
+        mapping = {"image/png": ".png", "image/jpeg": ".jpg"}
+        assert mime_to_ext("image/png", mapping, ".bin") == ".png"
+
+    def test_unknown_uses_default(self):
+        from core.adapter.helpers import mime_to_ext
+        mapping = {"image/png": ".png"}
+        assert mime_to_ext("image/gif", mapping, ".bin") == ".bin"

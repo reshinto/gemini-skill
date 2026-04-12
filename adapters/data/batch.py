@@ -10,10 +10,11 @@ from __future__ import annotations
 from typing import Any
 
 from core.adapter.helpers import build_base_parser, check_dry_run, emit_json
+from core.infra.sanitize import safe_print
 from core.infra.client import api_call
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the batch adapter."""
     parser = build_base_parser("Manage Gemini batch processing jobs")
     sub = parser.add_subparsers(dest="action", help="Batch action")
@@ -52,7 +53,6 @@ def run(
     elif action == "cancel":
         _cancel_batch(name=name, execute=execute)
     else:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No action specified. Use: create, list, get, cancel")
 
 
@@ -64,7 +64,6 @@ def _create(
 ) -> None:
     """Create a batch processing job."""
     if not src or not dest:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] Both --src and --dest are required.")
         return
 
@@ -92,7 +91,6 @@ def _list_batches() -> None:
 def _get_batch(name: str | None) -> None:
     """Get status of a batch job."""
     if not name:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No batch job name provided.")
         return
     response = api_call(name, method="GET")
@@ -102,11 +100,9 @@ def _get_batch(name: str | None) -> None:
 def _cancel_batch(name: str | None, execute: bool) -> None:
     """Cancel a running batch job."""
     if not name:
-        from core.infra.sanitize import safe_print
         safe_print("[ERROR] No batch job name provided.")
         return
     if check_dry_run(execute, f"cancel batch {name}"):
         return
     api_call(f"{name}:cancel", body={})
-    from core.infra.sanitize import safe_print
     safe_print(f"Cancelled batch {name}")
