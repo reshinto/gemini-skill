@@ -47,12 +47,21 @@ A Claude Code skill for broad Gemini REST API access — text generation, multim
 ## Documentation
 
 See [docs/](docs/) for full documentation including:
-- [Architecture](docs/architecture.md)
-- [How It Works](docs/how-it-works.md)
-- [Installation](docs/install.md)
-- [Commands](docs/commands.md)
-- [Capabilities](docs/capabilities.md)
-- [Security](docs/security.md)
+- [Architecture](docs/architecture.md) — System design and module layout
+- [How It Works](docs/how-it-works.md) — End-to-end execution trace
+- [Installation](docs/install.md) — Setup, troubleshooting, API key configuration
+- [Commands](docs/commands.md) — Command index by capability family
+- [Capabilities](docs/capabilities.md) — Feature overview with status and limitations
+- [Model Routing](docs/model-routing.md) — Router decision tree and model selection
+- [Security](docs/security.md) — Threat model, auth, data protection
+- [Usage](docs/usage.md) — Getting started and common workflows
+- [Testing](docs/testing.md) — Running tests, writing tests, coverage
+- [Python Design](docs/python-guide.md) — Stdlib-only architecture, Python 3.9+ floor
+- [Contributing](docs/contributing.md) — Adding adapters, code style, PRs
+- [Update & Sync](docs/update-sync.md) — Install mechanism, rollback, registry updates
+
+See also:
+- [Per-command reference](reference/index.md) — Detailed docs for all 19 commands
 
 ## License
 
