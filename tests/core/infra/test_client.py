@@ -456,6 +456,57 @@ class TestApiCallWithKey:
         req = mock_urlopen.call_args[0][0]
         assert req.get_header("X-goog-api-key") == "test-api-key-value"
 
+    def test_passes_skill_root_to_resolve_key(self):
+        """Regression: client must pass env_dir=_SKILL_ROOT so the installed
+        skill's .env file is actually loaded. Previously it called resolve_key()
+        with no arguments, which silently ignored ~/.claude/skills/gemini/.env.
+        """
+        from core.infra.client import api_call, _SKILL_ROOT
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{}'
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("core.infra.client.urlopen", return_value=mock_response), \
+             patch("core.infra.client.resolve_key", return_value="key") as mock_resolve:
+            api_call("models", method="GET")
+
+        mock_resolve.assert_called_once_with(env_dir=_SKILL_ROOT)
+
+    def test_stream_generate_content_passes_skill_root_to_resolve_key(self):
+        """Regression: stream_generate_content must also load the skill .env."""
+        from core.infra.client import stream_generate_content, _SKILL_ROOT
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = b""
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("core.infra.client.urlopen", return_value=mock_response), \
+             patch("core.infra.client.resolve_key", return_value="key") as mock_resolve:
+            list(stream_generate_content("gemini-2.5-flash", {"contents": []}))
+
+        mock_resolve.assert_called_once_with(env_dir=_SKILL_ROOT)
+
+    def test_upload_file_passes_skill_root_to_resolve_key(self, tmp_path):
+        """Regression: upload_file must also load the skill .env."""
+        from core.infra.client import upload_file, _SKILL_ROOT
+
+        f = tmp_path / "tiny.txt"
+        f.write_text("hi")
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"name": "files/abc"}'
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("core.infra.client.urlopen", return_value=mock_response), \
+             patch("core.infra.client.resolve_key", return_value="key") as mock_resolve:
+            upload_file(str(f), "text/plain")
+
+        mock_resolve.assert_called_once_with(env_dir=_SKILL_ROOT)
+
     def test_accepts_explicit_api_key(self):
         from core.infra.client import api_call
 

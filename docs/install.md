@@ -70,17 +70,23 @@ export GEMINI_API_KEY="your_key_here"
 
 ### Option B: `.env` file (convenience)
 
-After installation, edit `~/.claude/skills/gemini/.env`:
+After installation, edit **the installed copy** at `~/.claude/skills/gemini/.env` (the installer creates it from `.env.example` on first run):
 
 ```bash
-GEMINI_API_KEY=your_key_here
+$EDITOR ~/.claude/skills/gemini/.env
+# Set:
+# GEMINI_API_KEY=your_key_here
 ```
 
-The skill reads this file if the environment variable is not set. Make sure permissions are restrictive:
+The installer automatically sets `chmod 0600` on the file so only your user can read it. If you copied it manually, set it yourself:
 
 ```bash
 chmod 600 ~/.claude/skills/gemini/.env
 ```
+
+**Do not edit the repo-root `.env`.** Only the installed copy at `~/.claude/skills/gemini/.env` is read by the skill at runtime. Editing the repo's `.env` has no effect on the installed skill — the repo's `.env` is only used when you run the skill directly from a checkout (e.g., during development or when running the integration test suite).
+
+The skill reads this file if neither `GOOGLE_API_KEY` nor `GEMINI_API_KEY` is set in your shell environment.
 
 ### Priority order (first-match wins)
 
@@ -157,6 +163,38 @@ choco install python      # Windows
 # Update your PATH or use explicit version
 python3.11 setup/install.py
 ```
+
+### `Unknown skill: gemini` after install
+
+Symptom: `setup/install.py` finished successfully, `~/.claude/skills/gemini/SKILL.md` exists on disk, but typing `/gemini` in Claude Code still returns `Unknown skill: gemini`.
+
+Causes, in order of likelihood:
+
+1. **Claude Code caches skill discovery at IDE launch.** Opening a new Claude Code session inside the same IDE process does **not** re-scan `~/.claude/skills/`. You need to fully quit VSCode (⌘Q on macOS) and relaunch it. "Reload Window" is not enough.
+
+2. **Invalid frontmatter fields in `SKILL.md`.** Claude Code skills (`.claude/skills/<name>/SKILL.md`) and slash commands (`.claude/commands/*.md`) use **different** frontmatter fields. Mixing them causes the skill loader to silently reject the file:
+   - ✅ Valid skill fields: `name`, `description`, `disable-model-invocation`, `user-invocable`
+   - ❌ Slash-command-only fields that break a SKILL.md: `allowed-tools`, `argument-hint`, `model`
+
+   The minimal recommended `SKILL.md` frontmatter for this skill is:
+   ```yaml
+   ---
+   name: gemini
+   description: Gemini API — ...
+   disable-model-invocation: true
+   ---
+   ```
+
+   `user-invocable` defaults to `true`, so leave it unset unless you specifically want to hide the skill from the `/` menu. `disable-model-invocation: true` is set intentionally so Claude doesn't auto-invoke the billable Gemini API on its own — the user must explicitly type `/gemini`.
+
+3. **`SKILL.md` is missing from the install directory.** Verify:
+   ```bash
+   ls ~/.claude/skills/gemini/SKILL.md
+   head -10 ~/.claude/skills/gemini/SKILL.md
+   ```
+   If missing, re-run `python3 setup/install.py`.
+
+4. **Skill loader errors in the extension output pane.** In VSCode, open `View → Output` and select `Claude Code` from the dropdown. Skill-discovery errors are logged there. Look for lines mentioning `gemini` or `SKILL.md`.
 
 ### API key not found
 

@@ -30,6 +30,12 @@ from urllib.request import Request, urlopen
 from core.auth.auth import resolve_key
 from core.infra.errors import APIError
 
+# Skill install root (e.g. ~/.claude/skills/gemini/). Passed to
+# resolve_key() so the skill's own .env file is loaded when no shell
+# env var is set. client.py lives at <root>/core/infra/client.py, so
+# the root is three levels up.
+_SKILL_ROOT = Path(__file__).resolve().parent.parent.parent
+
 # Gemini API base URL — all requests are relative to this
 BASE_URL = "https://generativelanguage.googleapis.com"
 
@@ -77,7 +83,7 @@ def api_call(
     Raises:
         APIError: On HTTP errors, network failures, or SSL issues.
     """
-    key = api_key if api_key is not None else resolve_key()
+    key = api_key if api_key is not None else resolve_key(env_dir=_SKILL_ROOT)
     url = f"{BASE_URL}/{api_version}/{endpoint}"
 
     headers = {"x-goog-api-key": key}
@@ -111,7 +117,7 @@ def stream_generate_content(
     Yields:
         Parsed JSON response chunks.
     """
-    key = resolve_key()
+    key = resolve_key(env_dir=_SKILL_ROOT)
     url = (
         f"{BASE_URL}/{api_version}/models/{model}:streamGenerateContent?alt=sse"
     )
@@ -163,7 +169,7 @@ def upload_file(
     """
     _validate_mime_type(mime_type)
 
-    key = resolve_key()
+    key = resolve_key(env_dir=_SKILL_ROOT)
     url = f"{BASE_URL}/upload/v1beta/files"
 
     file_path = Path(file_path)
