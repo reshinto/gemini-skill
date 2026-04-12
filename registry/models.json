@@ -1,0 +1,124 @@
+{
+  "models": {
+    "gemini-2.5-flash": {
+      "display_name": "Gemini 2.5 Flash",
+      "description": "Fast, efficient model for most tasks",
+      "status": "stable",
+      "api_version": "v1beta",
+      "capabilities": ["text", "multimodal", "structured", "streaming", "function_calling", "code_exec", "search", "cache", "token_count"],
+      "pricing": {
+        "input_per_1m": 0.15,
+        "output_per_1m": 0.60,
+        "cached_per_1m": 0.0375
+      }
+    },
+    "gemini-2.5-pro": {
+      "display_name": "Gemini 2.5 Pro",
+      "description": "High-capability model for complex reasoning",
+      "status": "stable",
+      "api_version": "v1beta",
+      "capabilities": ["text", "multimodal", "structured", "streaming", "function_calling", "code_exec", "search", "cache", "token_count"],
+      "pricing": {
+        "input_per_1m": 1.25,
+        "output_per_1m": 10.00,
+        "cached_per_1m": 0.3125
+      }
+    },
+    "gemini-2.5-flash-lite": {
+      "display_name": "Gemini 2.5 Flash Lite",
+      "description": "Lightweight model for simple tasks and file search",
+      "status": "stable",
+      "api_version": "v1beta",
+      "capabilities": ["text", "multimodal", "streaming", "file_search", "token_count"],
+      "pricing": {
+        "input_per_1m": 0.075,
+        "output_per_1m": 0.30,
+        "cached_per_1m": 0.01875
+      }
+    },
+    "gemini-embedding-2-preview": {
+      "display_name": "Gemini Embedding 2 Preview",
+      "description": "Text embedding model",
+      "status": "preview",
+      "api_version": "v1beta",
+      "capabilities": ["embed"],
+      "pricing": {
+        "input_per_1m": 0.0,
+        "output_per_1m": 0.0,
+        "cached_per_1m": 0.0
+      }
+    },
+    "gemini-3-flash-preview": {
+      "display_name": "Gemini 3 Flash Preview",
+      "description": "Preview model with advanced tool combination support",
+      "status": "preview",
+      "api_version": "v1beta",
+      "capabilities": ["text", "multimodal", "structured", "streaming", "function_calling", "code_exec", "search", "maps", "file_search", "computer_use", "token_count"],
+      "pricing": {
+        "input_per_1m": 0.15,
+        "output_per_1m": 0.60,
+        "cached_per_1m": 0.0375
+      }
+    },
+    "gemini-3.1-flash-image-preview": {
+      "display_name": "Gemini 3.1 Flash Image Preview",
+      "description": "Image generation model (Nano Banana family)",
+      "status": "preview",
+      "api_version": "v1beta",
+      "capabilities": ["image_gen"],
+      "pricing": {
+        "input_per_1m": 0.15,
+        "output_per_1m": 0.60,
+        "cached_per_1m": 0.0375
+      }
+    },
+    "gemini-3.1-pro-preview": {
+      "display_name": "Gemini 3.1 Pro Preview",
+      "description": "Preview pro model for complex tasks",
+      "status": "preview",
+      "api_version": "v1beta",
+      "capabilities": ["text", "multimodal", "structured", "streaming", "function_calling", "code_exec", "search", "token_count"],
+      "pricing": {
+        "input_per_1m": 1.25,
+        "output_per_1m": 10.00,
+        "cached_per_1m": 0.3125
+      }
+    },
+    "veo-3.1-generate-preview": {
+      "display_name": "Veo 3.1 Generate Preview",
+      "description": "Video generation model",
+      "status": "preview",
+      "api_version": "v1beta",
+      "capabilities": ["video_gen"],
+      "pricing": {
+        "input_per_1m": 0.0,
+        "output_per_1m": 0.0,
+        "cached_per_1m": 0.0
+      }
+    },
+    "lyria-3-clip-preview": {
+      "display_name": "Lyria 3 Clip Preview",
+      "description": "Music generation model (30s clips, SynthID)",
+      "status": "preview",
+      "api_version": "v1beta",
+      "capabilities": ["music_gen"],
+      "pricing": {
+        "input_per_1m": 0.0,
+        "output_per_1m": 0.0,
+        "cached_per_1m": 0.0
+      }
+    },
+    "gemini-2.5-computer-use-preview-10-2025": {
+      "display_name": "Gemini 2.5 Computer Use Preview",
+      "description": "Fallback model for computer use",
+      "status": "preview",
+      "api_version": "v1beta",
+      "capabilities": ["computer_use"],
+      "pricing": {
+        "input_per_1m": 1.25,
+        "output_per_1m": 10.00,
+        "cached_per_1m": 0.3125
+      }
+    }
+  }
+}
