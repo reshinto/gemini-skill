@@ -52,9 +52,16 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, cast
 
-from core.transport.base import FileMetadata, GeminiResponse, StreamChunk
+from core.transport.base import (
+    BackendUnavailableError,
+    FileMetadata,
+    GeminiResponse,
+    StreamChunk,
+)
+from core.transport.normalize import sdk_response_to_rest_envelope
+from core.transport.sdk.client_factory import get_client
 
 
 class SdkTransport:
@@ -107,13 +114,14 @@ class SdkTransport:
             "files",
             "cache",
             "batch",
-            # --- Long-running ---
-            "deep_research",
             # NOT included (route to raw HTTP via coordinator deterministic fallback):
             #   "maps"          — no GoogleMaps tool class in 1.33.0
             #   "music_gen"     — no Lyria surface in 1.33.0
             #   "computer_use"  — no ComputerUse tool class in 1.33.0
             #   "file_search"   — no client.file_search_stores in 1.33.0
+            #   "deep_research" — no client.interactions namespace in 1.33.0
+            #     (the canonical plan's parity audit was wrong about this;
+            #     verified directly against the installed pinned SDK)
         }
     )
 
@@ -161,8 +169,361 @@ class SdkTransport:
         api_version: str = "v1beta",
         timeout: int = 30,
     ) -> GeminiResponse:
-        """Dispatch a REST-shaped endpoint call into the SDK. (slice 2b)"""
-        raise NotImplementedError("SdkTransport.api_call lands in Phase 2 slice 2b")
+        """Translate a legacy REST endpoint string into a google-genai SDK call.
+
+        This is the dispatch core. The ``endpoint`` string follows the same
+        shape adapters pass to the raw HTTP backend, so the same call sites
+        work with either transport behind the coordinator. Three shape
+        families are recognized:
+
+        1. **Action endpoints** containing a colon, e.g.
+           ``models/gemini-2.5-flash:generateContent`` or
+           ``batchJobs/{name}:cancel``. The substring after the colon names
+           the SDK method to dispatch to.
+        2. **Collection endpoints** with no slash, e.g. ``files`` or
+           ``cachedContents`` — POST means create, GET means list.
+        3. **Resource endpoints** with one or more slashes, e.g.
+           ``files/abc`` or ``operations/foo/bar`` — GET means get,
+           DELETE means delete.
+
+        Anything that doesn't match a known shape raises
+        ``BackendUnavailableError`` so the coordinator routes the call to
+        the raw HTTP fallback. We deliberately do NOT catch the SDK's own
+        exceptions in this slice — that's slice 2d's job.
+
+        Args:
+            endpoint: The REST-shaped endpoint string (no leading slash,
+                no api_version prefix — same as the raw HTTP backend
+                accepts). Examples: ``"models/gemini:generateContent"``,
+                ``"files"``, ``"files/abc"``, ``"batchJobs/abc:cancel"``.
+            body: Request body dict in the legacy REST shape (camelCase
+                top-level keys). May be ``None`` for GET / DELETE.
+            method: HTTP method. Used only to disambiguate
+                collection-vs-resource POST/GET/DELETE.
+            api_version: Ignored — the SDK manages its own API version.
+                Accepted for Transport-protocol shape compatibility.
+            timeout: Ignored in this slice — see slice 2d for the SDK
+                request_options timeout wiring.
+
+        Returns:
+            A GeminiResponse dict with camelCase keys, normalized via
+            ``core.transport.normalize.sdk_response_to_rest_envelope``.
+
+        Raises:
+            BackendUnavailableError: If the endpoint shape is unrecognized,
+                so the coordinator can fall back to raw HTTP.
+        """
+        client = get_client()
+        method_upper = method.upper()
+        body_dict: dict[str, object] = dict(body) if body is not None else {}
+
+        # 1. Action endpoints (contain ':')
+        if ":" in endpoint:
+            return self._dispatch_action(client, endpoint, body_dict)
+
+        # 2/3. CRUD endpoints — split into [collection, *path_tail]
+        parts = endpoint.split("/")
+        return self._dispatch_crud(client, parts, method_upper, body_dict)
+
+    # ------------------------------------------------------------------
+    # Dispatch helpers (private)
+    # ------------------------------------------------------------------
+
+    def _dispatch_action(
+        self,
+        client: object,
+        endpoint: str,
+        body: dict[str, object],
+    ) -> GeminiResponse:
+        """Handle endpoints that contain ':' — typically ``X:action``."""
+        path, _, action = endpoint.partition(":")
+
+        # models/{model}:{action} — generation family
+        if path.startswith("models/"):
+            model = path[len("models/") :]
+            return self._dispatch_model_action(client, model, action, body)
+
+        # batchJobs/{name}:cancel — note that ``str.partition(":")`` returns
+        # the substring BEFORE the separator, so ``path == "batchJobs/abc"``
+        # already excludes the ":cancel" suffix and is the correct value to
+        # pass as the SDK ``name=`` argument. A future refactor that switches
+        # to ``endpoint.split(":", 1)[0]`` would also be correct, but a
+        # naive ``endpoint.split(":")[0]`` would silently drop additional
+        # colons in the resource ID — preserved by partition().
+        if action == "cancel" and path.startswith("batchJobs/"):
+            client.batches.cancel(name=path)  # type: ignore[attr-defined]
+            return cast(GeminiResponse, {})
+
+        raise BackendUnavailableError(
+            f"SdkTransport: unknown action endpoint '{endpoint}'"
+        )
+
+    def _dispatch_model_action(
+        self,
+        client: object,
+        model: str,
+        action: str,
+        body: dict[str, object],
+    ) -> GeminiResponse:
+        """Handle ``models/{m}:{action}`` calls — the generate family.
+
+        Each branch builds the right kwargs dict for the corresponding
+        ``client.models.X`` method and normalizes the response.
+        """
+        if action == "generateContent":
+            contents, config = self._build_generate_content_kwargs(body)
+            sdk_resp = client.models.generate_content(  # type: ignore[attr-defined]
+                model=model, contents=contents, config=config
+            )
+            return sdk_response_to_rest_envelope(sdk_resp)
+
+        if action == "countTokens":
+            sdk_resp = client.models.count_tokens(  # type: ignore[attr-defined]
+                model=model, contents=body.get("contents", [])
+            )
+            return sdk_response_to_rest_envelope(sdk_resp)
+
+        if action == "embedContent":
+            # Legacy body uses singular ``content``; SDK takes plural ``contents``.
+            contents = body.get("content") or body.get("contents")
+            config = self._build_embed_content_config(body)
+            sdk_resp = client.models.embed_content(  # type: ignore[attr-defined]
+                model=model, contents=contents, config=config
+            )
+            return sdk_response_to_rest_envelope(sdk_resp)
+
+        if action == "predictLongRunning":
+            # Veo video generation — body uses the vertex-style ``instances``
+            # + ``parameters`` shape; SDK takes prompt + config separately.
+            prompt = self._extract_video_prompt(body)
+            sdk_resp = client.models.generate_videos(  # type: ignore[attr-defined]
+                model=model, prompt=prompt
+            )
+            return sdk_response_to_rest_envelope(sdk_resp)
+
+        raise BackendUnavailableError(
+            f"SdkTransport: unknown model action '{action}' for model '{model}'"
+        )
+
+    def _dispatch_crud(
+        self,
+        client: object,
+        parts: list[str],
+        method: str,
+        body: dict[str, object],
+    ) -> GeminiResponse:
+        """Handle CRUD-style endpoints (no colon).
+
+        ``parts[0]`` is the collection name. ``len(parts) > 1`` indicates
+        the call targets a specific resource (the full endpoint string is
+        used as the SDK ``name=`` argument because the SDK's resource
+        identifiers include the collection prefix).
+        """
+        collection = parts[0]
+        has_id = len(parts) > 1
+        full_name = "/".join(parts)
+
+        if collection == "files":
+            return self._dispatch_files(client, has_id, full_name, method)
+        if collection == "cachedContents":
+            return self._dispatch_caches(client, has_id, full_name, method, body)
+        if collection == "batchJobs":
+            return self._dispatch_batches(client, has_id, full_name, method, body)
+        if collection == "operations":
+            if has_id and method == "GET":
+                sdk_resp = client.operations.get(operation=full_name)  # type: ignore[attr-defined]
+                return sdk_response_to_rest_envelope(sdk_resp)
+            # Operations IS in the table — only the method/shape combo is
+            # unsupported. Use a precise message so coordinator logs and
+            # reviewers immediately see what's wrong instead of chasing a
+            # misleading "collection not in dispatch table" string.
+            raise BackendUnavailableError(
+                f"SdkTransport: operations only supports GET on a resource id, "
+                f"got {method} '{full_name}'"
+            )
+
+        raise BackendUnavailableError(
+            f"SdkTransport: unknown {method} endpoint '{full_name}' "
+            f"(collection '{collection}' not in dispatch table)"
+        )
+
+    def _dispatch_files(
+        self,
+        client: object,
+        has_id: bool,
+        full_name: str,
+        method: str,
+    ) -> GeminiResponse:
+        if not has_id and method == "GET":
+            items = client.files.list()  # type: ignore[attr-defined]
+            return self._wrap_collection("files", items)
+        if has_id and method == "GET":
+            sdk_resp = client.files.get(name=full_name)  # type: ignore[attr-defined]
+            return sdk_response_to_rest_envelope(sdk_resp)
+        if has_id and method == "DELETE":
+            client.files.delete(name=full_name)  # type: ignore[attr-defined]
+            return cast(GeminiResponse, {})
+        raise BackendUnavailableError(
+            f"SdkTransport: unsupported files {method} on '{full_name}'"
+        )
+
+    def _dispatch_caches(
+        self,
+        client: object,
+        has_id: bool,
+        full_name: str,
+        method: str,
+        body: dict[str, object],
+    ) -> GeminiResponse:
+        if not has_id and method == "POST":
+            # caches.create takes model + config separately. Build a
+            # CreateCachedContentConfig from the rest of the body so
+            # camelCase aliases (ttl, contents, systemInstruction, …) are
+            # accepted directly. The body's ``model`` key is consumed
+            # separately and removed from the config dict.
+            from google.genai import types
+
+            cfg_dict = {k: v for k, v in body.items() if k != "model"}
+            cfg = types.CreateCachedContentConfig.model_validate(cfg_dict)
+            sdk_resp = client.caches.create(  # type: ignore[attr-defined]
+                model=body.get("model"), config=cfg
+            )
+            return sdk_response_to_rest_envelope(sdk_resp)
+        if not has_id and method == "GET":
+            items = client.caches.list()  # type: ignore[attr-defined]
+            return self._wrap_collection("cachedContents", items)
+        if has_id and method == "GET":
+            sdk_resp = client.caches.get(name=full_name)  # type: ignore[attr-defined]
+            return sdk_response_to_rest_envelope(sdk_resp)
+        if has_id and method == "DELETE":
+            client.caches.delete(name=full_name)  # type: ignore[attr-defined]
+            return cast(GeminiResponse, {})
+        raise BackendUnavailableError(
+            f"SdkTransport: unsupported cachedContents {method} on '{full_name}'"
+        )
+
+    def _dispatch_batches(
+        self,
+        client: object,
+        has_id: bool,
+        full_name: str,
+        method: str,
+        body: dict[str, object],
+    ) -> GeminiResponse:
+        if not has_id and method == "POST":
+            sdk_resp = client.batches.create(  # type: ignore[attr-defined]
+                model=body.get("model"), src=body.get("src")
+            )
+            return sdk_response_to_rest_envelope(sdk_resp)
+        if not has_id and method == "GET":
+            items = client.batches.list()  # type: ignore[attr-defined]
+            return self._wrap_collection("batchJobs", items)
+        if has_id and method == "GET":
+            sdk_resp = client.batches.get(name=full_name)  # type: ignore[attr-defined]
+            return sdk_response_to_rest_envelope(sdk_resp)
+        raise BackendUnavailableError(
+            f"SdkTransport: unsupported batchJobs {method} on '{full_name}'"
+        )
+
+    # ------------------------------------------------------------------
+    # Body translation helpers
+    # ------------------------------------------------------------------
+
+    def _build_generate_content_kwargs(
+        self, body: dict[str, object]
+    ) -> tuple[object, object | None]:
+        """Translate a legacy generateContent body into (contents, config).
+
+        The legacy body uses camelCase top-level keys. google-genai's
+        ``GenerateContentConfig`` declares aliases for every camelCase
+        REST field (verified at the pinned 1.33.0 version), so we can
+        ``model_validate(camelCase_dict)`` directly — pydantic accepts
+        either form because the model has ``populate_by_name=True``.
+
+        The four top-level *sibling* keys (``systemInstruction``, ``tools``,
+        ``safetySettings``, ``cachedContent``) plus the nested
+        ``generationConfig`` dict are folded into a single dict before
+        validation because the SDK puts them all on ``GenerateContentConfig``.
+        """
+        contents = body.get("contents", [])
+
+        # Start from the nested generationConfig dict (if present) and
+        # fold in the four sibling keys the SDK expects on the same config.
+        cfg_dict: dict[str, object] = {}
+        gen_cfg = body.get("generationConfig")
+        if isinstance(gen_cfg, dict):
+            cfg_dict.update(gen_cfg)
+        for sibling in ("systemInstruction", "tools", "safetySettings", "cachedContent"):
+            if sibling in body:
+                cfg_dict[sibling] = body[sibling]
+
+        if not cfg_dict:
+            return contents, None
+
+        # Lazy import — keeps the module importable without google-genai.
+        from google.genai import types
+
+        config = types.GenerateContentConfig.model_validate(cfg_dict)
+        return contents, config
+
+    def _build_embed_content_config(self, body: dict[str, object]) -> object | None:
+        """Build an EmbedContentConfig from legacy body fields."""
+        cfg_dict: dict[str, object] = {}
+        if "outputDimensionality" in body:
+            cfg_dict["outputDimensionality"] = body["outputDimensionality"]
+        if "taskType" in body:
+            cfg_dict["taskType"] = body["taskType"]
+        if not cfg_dict:
+            return None
+        from google.genai import types
+
+        return types.EmbedContentConfig.model_validate(cfg_dict)
+
+    def _extract_video_prompt(self, body: dict[str, object]) -> str:
+        """Extract the prompt string from a Veo predictLongRunning body.
+
+        The vertex-style body shape is ``{"instances": [{"prompt": "..."}]}``,
+        which the legacy adapter passes through unchanged.
+        """
+        instances = body.get("instances")
+        if isinstance(instances, list) and instances:
+            first = instances[0]
+            if isinstance(first, dict):
+                prompt = first.get("prompt")
+                if isinstance(prompt, str):
+                    return prompt
+        # Fallback: top-level prompt key
+        prompt = body.get("prompt")
+        if isinstance(prompt, str):
+            return prompt
+        return ""
+
+    def _wrap_collection(self, key: str, items: object) -> GeminiResponse:
+        """Normalize a list-returning SDK call into ``{<key>: [<items>]}``.
+
+        ``client.files.list()`` and friends return an iterable of pydantic
+        File objects; the legacy raw HTTP backend returns
+        ``{"files": [<dict>, ...]}``. This helper bridges the two shapes.
+        """
+        result: list[dict[str, object]] = []
+        # Use hasattr() to check iterability instead of try/except TypeError
+        # so a TypeError raised for ANOTHER reason (e.g. a future SDK signature
+        # change inside the items object) propagates naturally instead of being
+        # silently swallowed and returned as an empty list. The hasattr check
+        # is exactly the contract Python uses internally to decide if iter()
+        # will succeed for a non-builtin type.
+        if not hasattr(items, "__iter__"):
+            return cast(GeminiResponse, {key: []})
+        # ``items`` is typed ``object`` for the lazy-import-friendliness
+        # discussed at module top, but the hasattr() guard above proves
+        # to the human reader that ``iter()`` will not raise here. mypy
+        # cannot narrow object→Iterable from hasattr, so the call-overload
+        # ignore below stays.
+        iterator = iter(items)
+        for item in iterator:
+            envelope = sdk_response_to_rest_envelope(item)
+            result.append(cast(dict[str, object], envelope))
+        return cast(GeminiResponse, {key: result})
 
     def stream_generate_content(
         self,
@@ -172,7 +533,9 @@ class SdkTransport:
         timeout: int = 30,
     ) -> Iterator[StreamChunk]:
         """Stream chunks from generate_content_stream. (slice 2c)"""
-        raise NotImplementedError("SdkTransport.stream_generate_content lands in Phase 2 slice 2c")
+        raise NotImplementedError(  # pragma: no cover
+            "SdkTransport.stream_generate_content lands in Phase 2 slice 2c"
+        )
 
     def upload_file(
         self,
@@ -182,4 +545,6 @@ class SdkTransport:
         timeout: int = 120,
     ) -> FileMetadata:
         """Upload a file via client.files.upload. (slice 2c)"""
-        raise NotImplementedError("SdkTransport.upload_file lands in Phase 2 slice 2c")
+        raise NotImplementedError(  # pragma: no cover
+            "SdkTransport.upload_file lands in Phase 2 slice 2c"
+        )
