@@ -56,8 +56,6 @@ python3 setup/install.py
 
 ```bash
 export GEMINI_API_KEY="your_key_here"
-# Or
-export GOOGLE_API_KEY="your_key_here"
 ```
 
 This is the most secure option. The skill reads the environment variable first.
@@ -86,16 +84,17 @@ chmod 600 ~/.claude/skills/gemini/.env
 
 **Do not edit the repo-root `.env`.** Only the installed copy at `~/.claude/skills/gemini/.env` is read by the skill at runtime. Editing the repo's `.env` has no effect on the installed skill — the repo's `.env` is only used when you run the skill directly from a checkout (e.g., during development or when running the integration test suite).
 
-The skill reads this file if neither `GOOGLE_API_KEY` nor `GEMINI_API_KEY` is set in your shell environment.
+The skill reads this file if `GEMINI_API_KEY` is not set in your shell environment.
 
 ### Priority order (first-match wins)
 
-1. `GOOGLE_API_KEY` environment variable
-2. `GEMINI_API_KEY` environment variable
-3. `GEMINI_API_KEY` from `.env` file
-4. Error if none found
+1. `GEMINI_API_KEY` shell environment variable
+2. `GEMINI_API_KEY` from `.env` file (local-development only)
+3. Error if neither found
 
-**Important:** Environment variables always take precedence over `.env`. This allows you to override the file for testing or multi-account scenarios.
+**Note:** The skill **does not honor `GOOGLE_API_KEY`** — `GEMINI_API_KEY` is the one canonical name to avoid confusion about which key is in use. If you have `GOOGLE_API_KEY` set from another tool, set `GEMINI_API_KEY` separately (they may have the same value).
+
+**Important:** Shell environment variables always take precedence over `.env`. This allows you to override the file for testing or multi-account scenarios.
 
 ## Verify installation
 
@@ -200,7 +199,7 @@ Causes, in order of likelihood:
 
 Error:
 ```
-[ERROR] API key not found. Set GEMINI_API_KEY or GOOGLE_API_KEY environment variable.
+[ERROR] No GEMINI_API_KEY found.
 ```
 
 Solution:

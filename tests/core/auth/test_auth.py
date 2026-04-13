@@ -1,8 +1,9 @@
 """Tests for core/auth/auth.py — API key resolution and .env parsing.
 
-Verifies env var precedence (GOOGLE_API_KEY > GEMINI_API_KEY > .env),
+Verifies env var precedence (GEMINI_API_KEY env > GEMINI_API_KEY in .env),
 .env file parsing (split on first =, strip matching quotes, skip comments),
-and key validation via the models endpoint.
+and key validation via the models endpoint. The skill deliberately does NOT
+honor GOOGLE_API_KEY; tests assert that setting it alone yields AuthError.
 """
 from __future__ import annotations
 
@@ -76,16 +77,27 @@ class TestParseEnvContent:
 class TestResolveKey:
     """resolve_key() must follow the documented precedence order."""
 
-    @patch.dict(os.environ, {"GOOGLE_API_KEY": "google_key", "GEMINI_API_KEY": "gemini_key"}, clear=False)
-    def test_google_api_key_takes_precedence(self):
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "gemini_key"}, clear=True)
+    def test_gemini_api_key_resolved_from_process_env(self):
         from core.auth.auth import resolve_key
-        assert resolve_key() == "google_key"
+        assert resolve_key() == "gemini_key"
 
-    @patch.dict(os.environ, {"GEMINI_API_KEY": "gemini_key"}, clear=False)
-    def test_gemini_api_key_as_fallback(self):
+    @patch.dict(os.environ, {"GOOGLE_API_KEY": "google_key"}, clear=True)
+    def test_google_api_key_alone_yields_auth_error(self):
+        """The skill deliberately does NOT honor GOOGLE_API_KEY.
+
+        Setting only GOOGLE_API_KEY (no GEMINI_API_KEY) must raise AuthError,
+        proving the legacy precedence has been removed.
+        """
         from core.auth.auth import resolve_key
-        # Remove GOOGLE_API_KEY if present
-        os.environ.pop("GOOGLE_API_KEY", None)
+        from core.infra.errors import AuthError
+        with pytest.raises(AuthError):
+            resolve_key()
+
+    @patch.dict(os.environ, {"GOOGLE_API_KEY": "google_key", "GEMINI_API_KEY": "gemini_key"}, clear=True)
+    def test_google_api_key_ignored_when_gemini_api_key_set(self):
+        """Even when both are set, only GEMINI_API_KEY is used."""
+        from core.auth.auth import resolve_key
         assert resolve_key() == "gemini_key"
 
     @patch.dict(os.environ, {}, clear=True)
@@ -95,13 +107,22 @@ class TestResolveKey:
         env_file.write_text("GEMINI_API_KEY=file_key\n")
         assert resolve_key(env_dir=tmp_path) == "file_key"
 
-    @patch.dict(os.environ, {"GEMINI_API_KEY": "shell_key"}, clear=False)
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "shell_key"}, clear=True)
     def test_shell_env_overrides_env_file(self, tmp_path):
         from core.auth.auth import resolve_key
-        os.environ.pop("GOOGLE_API_KEY", None)
         env_file = tmp_path / ".env"
         env_file.write_text("GEMINI_API_KEY=file_key\n")
         assert resolve_key(env_dir=tmp_path) == "shell_key"
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_env_file_with_only_google_api_key_yields_auth_error(self, tmp_path):
+        """A .env file containing only GOOGLE_API_KEY must NOT satisfy the resolver."""
+        from core.auth.auth import resolve_key
+        from core.infra.errors import AuthError
+        env_file = tmp_path / ".env"
+        env_file.write_text("GOOGLE_API_KEY=file_key\n")
+        with pytest.raises(AuthError):
+            resolve_key(env_dir=tmp_path)
 
     @patch.dict(os.environ, {}, clear=True)
     def test_missing_key_raises_auth_error(self):

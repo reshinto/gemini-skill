@@ -182,30 +182,25 @@ Threat model, authentication, data protection, and risk management.
 
 The skill uses an **ordered lookup chain**:
 
-1. **Shell environment variable:** `GOOGLE_API_KEY` or `GEMINI_API_KEY`
-2. **`.env` file:** `~/.claude/skills/gemini/.env`
+1. **`GEMINI_API_KEY` shell environment variable** (set by Claude Code from
+   `~/.claude/settings.json` or by your shell)
+2. **`.env` file** at the repo root (local-development only — see
+   [docs/install.md](install.md) for setup)
 3. **Error:** If neither found
 
+The skill **does NOT honor `GOOGLE_API_KEY`**. `GEMINI_API_KEY` is the one
+canonical name to avoid confusion about which key the skill is using.
+
 ```python
-def resolve_key():
-    # First: shell env var (always wins)
-    key = os.environ.get("GOOGLE_API_KEY")
-    if key:
-        return key
-    
+def resolve_key(env_dir=None):
+    # Optional: load .env file (local-dev only). Does not override existing env.
+    if env_dir is not None:
+        _load_env_file(Path(env_dir))
+
     key = os.environ.get("GEMINI_API_KEY")
-    if key:
-        return key
-    
-    # Second: .env file
-    env_path = Path.home() / ".claude" / "skills" / "gemini" / ".env"
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            if line.startswith("GEMINI_API_KEY="):
-                return line.split("=", 1)[1].strip()
-    
-    # Error: no key found
-    raise AuthError("API key not found. Set GEMINI_API_KEY env var or .env file.")
+    if not key:
+        raise AuthError("No GEMINI_API_KEY found.")
+    return key
 ```
 
 ### HTTP Authentication

@@ -165,7 +165,7 @@ def api_call(
     api_key: str | None = None
 ) -> dict:
     # Resolve API key
-    key = api_key or resolve_key()  # From GOOGLE_API_KEY or GEMINI_API_KEY env var
+    key = api_key or resolve_key()  # From GEMINI_API_KEY env var
     
     # Construct URL
     url = f"{BASE_URL}/{api_version}/{endpoint}"

@@ -203,7 +203,7 @@ Cost tracking is per-day, stored in `~/.config/gemini-skill/cost_today.json` (re
 
 API key resolution chain (first-match wins):
 
-1. Shell environment variable: `GOOGLE_API_KEY` or `GEMINI_API_KEY`
+1. Shell environment variable: `GEMINI_API_KEY` (the skill does **not** honor `GOOGLE_API_KEY`)
 2. `.env` file in the installed skill directory: `~/.claude/skills/gemini/.env`
 3. Error if not found
 
