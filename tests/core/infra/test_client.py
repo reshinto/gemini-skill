@@ -1,8 +1,16 @@
-"""Tests for core/infra/client.py — REST client with retry logic.
+"""Tests for core/transport/raw_http/client.py — REST client with retry logic.
 
 Verifies API call construction, header auth, retry classification,
 exponential backoff, streaming SSE, and error handling.
 All tests mock urllib to avoid network calls.
+
+Test imports were retargeted from ``core.infra.client`` (the legacy shim)
+to ``core.transport.raw_http.client`` (the canonical location) when the
+Phase 3 dual-backend refactor turned the shim into a forwarder over the
+TransportCoordinator. The raw HTTP client mechanics are still exactly
+the same — these tests pin the urllib-side behavior and would route
+through the SDK transport (not the urlopen mock) if they imported via
+the shim.
 """
 
 from __future__ import annotations
@@ -19,7 +27,7 @@ class TestApiCall:
     """api_call() must build correct requests and handle responses."""
 
     def test_get_request_returns_parsed_json(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
 
         response_data = {"models": [{"name": "gemini-2.5-flash"}]}
         mock_response = MagicMock()
@@ -41,7 +49,7 @@ class TestApiCall:
         assert req.get_method() == "GET"
 
     def test_post_request_sends_json_body(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
 
         mock_response = MagicMock()
         mock_response.read.return_value = b'{"candidates": []}'
@@ -62,7 +70,7 @@ class TestApiCall:
         assert req.get_header("Content-type") == "application/json"
 
     def test_uses_v1beta_by_default(self):
-        from core.infra.client import api_call, BASE_URL
+        from core.transport.raw_http.client import api_call, BASE_URL
 
         mock_response = MagicMock()
         mock_response.read.return_value = b"{}"
@@ -81,7 +89,7 @@ class TestApiCall:
         assert "/v1beta/" in req.full_url
 
     def test_respects_custom_api_version(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
 
         mock_response = MagicMock()
         mock_response.read.return_value = b"{}"
@@ -100,7 +108,7 @@ class TestApiCall:
         assert "/v1/" in req.full_url
 
     def test_uses_provided_timeout(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
 
         mock_response = MagicMock()
         mock_response.read.return_value = b"{}"
@@ -119,7 +127,7 @@ class TestApiCall:
         assert kwargs["timeout"] == 60
 
     def test_never_puts_key_in_url(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
 
         mock_response = MagicMock()
         mock_response.read.return_value = b"{}"
@@ -145,7 +153,7 @@ class TestApiCall:
         """When a caller bypasses resolve_key() and passes api_key directly,
         the key must still travel via the x-goog-api-key header — never via
         the URL query string. This pins the explicit-key path of api_call."""
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
 
         mock_response = MagicMock()
         mock_response.read.return_value = b"{}"
@@ -171,7 +179,7 @@ class TestApiCallErrors:
     """api_call() must handle HTTP errors with correct retry behavior."""
 
     def test_400_raises_api_error_no_retry(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
@@ -187,7 +195,7 @@ class TestApiCallErrors:
             assert exc_info.value.status_code == 400
 
     def test_401_raises_api_error_no_retry(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
@@ -201,7 +209,7 @@ class TestApiCallErrors:
             assert exc_info.value.status_code == 401
 
     def test_429_retries_then_raises(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
@@ -216,7 +224,7 @@ class TestApiCallErrors:
             assert exc_info.value.status_code == 429
 
     def test_429_retries_up_to_max(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
@@ -232,7 +240,7 @@ class TestApiCallErrors:
             assert mock_urlopen.call_count == 4
 
     def test_503_retries_then_raises(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
@@ -247,7 +255,7 @@ class TestApiCallErrors:
             assert mock_urlopen.call_count == 4
 
     def test_504_retries_once_for_get(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
@@ -263,7 +271,7 @@ class TestApiCallErrors:
             assert mock_urlopen.call_count == 2
 
     def test_504_no_retry_for_post(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
@@ -278,7 +286,7 @@ class TestApiCallErrors:
             assert mock_urlopen.call_count == 1
 
     def test_retry_succeeds_on_second_attempt(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from urllib.error import HTTPError
 
         err = HTTPError("http://x", 429, "Too Many Requests", {}, io.BytesIO(b"{}"))
@@ -296,7 +304,7 @@ class TestApiCallErrors:
         assert result == {"ok": True}
 
     def test_connection_error_retries(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         from urllib.error import URLError
 
@@ -311,7 +319,7 @@ class TestApiCallErrors:
             assert mock_urlopen.call_count == 4
 
     def test_timeout_error_retries(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         import socket
 
@@ -326,7 +334,7 @@ class TestApiCallErrors:
             assert mock_urlopen.call_count == 4
 
     def test_backoff_sleep_intervals(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
@@ -343,7 +351,7 @@ class TestApiCallErrors:
         assert sleep_calls == [1, 2, 4]
 
     def test_http_error_extracts_api_message(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
@@ -357,7 +365,7 @@ class TestApiCallErrors:
                 api_call("models/nonexistent", method="GET")
 
     def test_http_error_with_non_json_body(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
@@ -375,7 +383,7 @@ class TestStreamGenerateContent:
     """stream_generate_content() must yield SSE chunks correctly."""
 
     def test_yields_parsed_json_chunks(self):
-        from core.infra.client import stream_generate_content
+        from core.transport.raw_http.client import stream_generate_content
 
         chunk1 = json.dumps({"candidates": [{"content": {"parts": [{"text": "Hello"}]}}]})
         chunk2 = json.dumps({"candidates": [{"content": {"parts": [{"text": " world"}]}}]})
@@ -396,7 +404,7 @@ class TestStreamGenerateContent:
         assert chunks[0]["candidates"][0]["content"]["parts"][0]["text"] == "Hello"
 
     def test_uses_alt_sse_in_url(self):
-        from core.infra.client import stream_generate_content
+        from core.transport.raw_http.client import stream_generate_content
 
         mock_response = MagicMock()
         mock_response.read.return_value = b""
@@ -416,7 +424,7 @@ class TestStreamGenerateContent:
         assert "streamGenerateContent" in req.full_url
 
     def test_skips_non_data_lines(self):
-        from core.infra.client import stream_generate_content
+        from core.transport.raw_http.client import stream_generate_content
 
         chunk = json.dumps({"candidates": [{"content": {"parts": [{"text": "ok"}]}}]})
         sse_data = f": comment\nevent: message\ndata: {chunk}\n\n".encode()
@@ -435,7 +443,7 @@ class TestStreamGenerateContent:
         assert len(chunks) == 1
 
     def test_skips_malformed_json_lines(self):
-        from core.infra.client import stream_generate_content
+        from core.transport.raw_http.client import stream_generate_content
 
         sse_data = b'data: not-json\n\ndata: {"ok": true}\n\n'
 
@@ -454,7 +462,7 @@ class TestStreamGenerateContent:
         assert chunks[0] == {"ok": True}
 
     def test_respects_api_version(self):
-        from core.infra.client import stream_generate_content
+        from core.transport.raw_http.client import stream_generate_content
 
         mock_response = MagicMock()
         mock_response.read.return_value = b""
@@ -477,7 +485,7 @@ class TestUploadFile:
     """upload_file() must construct multipart upload requests correctly."""
 
     def test_upload_sends_file_content(self, tmp_path):
-        from core.infra.client import upload_file
+        from core.transport.raw_http.client import upload_file
 
         test_file = tmp_path / "test.pdf"
         test_file.write_bytes(b"PDF content here")
@@ -497,7 +505,7 @@ class TestUploadFile:
         assert result == response_data
 
     def test_upload_uses_correct_endpoint(self, tmp_path):
-        from core.infra.client import upload_file, BASE_URL
+        from core.transport.raw_http.client import upload_file, BASE_URL
 
         test_file = tmp_path / "test.txt"
         test_file.write_text("hello")
@@ -519,7 +527,7 @@ class TestUploadFile:
         assert "upload/v1beta/files" in req.full_url
 
     def test_upload_sets_display_name(self, tmp_path):
-        from core.infra.client import upload_file
+        from core.transport.raw_http.client import upload_file
 
         test_file = tmp_path / "report.pdf"
         test_file.write_bytes(b"data")
@@ -547,7 +555,7 @@ class TestApiCallWithKey:
     """Verify api_call passes the API key via resolve_key."""
 
     def test_uses_resolve_key_result(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
 
         mock_response = MagicMock()
         mock_response.read.return_value = b"{}"
@@ -571,7 +579,7 @@ class TestApiCallWithKey:
         client must therefore call resolve_key() with NO arguments — the old
         ``env_dir=_SKILL_ROOT`` path was deleted in the dual-backend refactor.
         """
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
 
         mock_response = MagicMock()
         mock_response.read.return_value = b"{}"
@@ -588,7 +596,7 @@ class TestApiCallWithKey:
 
     def test_stream_generate_content_invokes_resolve_key_with_no_arguments(self):
         """stream_generate_content must follow the same no-arg auth contract."""
-        from core.infra.client import stream_generate_content
+        from core.transport.raw_http.client import stream_generate_content
 
         mock_response = MagicMock()
         mock_response.read.return_value = b""
@@ -605,7 +613,7 @@ class TestApiCallWithKey:
 
     def test_upload_file_invokes_resolve_key_with_no_arguments(self, tmp_path):
         """upload_file must follow the same no-arg auth contract."""
-        from core.infra.client import upload_file
+        from core.transport.raw_http.client import upload_file
 
         f = tmp_path / "tiny.txt"
         f.write_text("hi")
@@ -624,7 +632,7 @@ class TestApiCallWithKey:
         mock_resolve.assert_called_once_with()
 
     def test_accepts_explicit_api_key(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
 
         mock_response = MagicMock()
         mock_response.read.return_value = b"{}"
@@ -644,7 +652,7 @@ class TestSslErrorHandling:
     """Cover the macOS SSL certificate error path."""
 
     def test_ssl_error_includes_fix_message(self):
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
         import ssl
 
@@ -674,7 +682,7 @@ class TestErrorMessageSanitization:
         call inside _extract_error_message's structured-JSON branch."""
         import io
         from urllib.error import HTTPError
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
 
         body = (
@@ -699,7 +707,7 @@ class TestErrorMessageSanitization:
         ``reason`` string so the fallback branch has something to redact."""
         import io
         from urllib.error import HTTPError
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
 
         err = HTTPError(
@@ -725,7 +733,7 @@ class TestErrorMessageSanitization:
         that an attacker controls. Pins the sanitize() call on the SSL
         branch in _execute_with_retry."""
         import ssl
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
 
         err = ssl.SSLCertVerificationError(
@@ -746,7 +754,7 @@ class TestErrorMessageSanitization:
         """A ConnectionError whose ``str()`` representation contains a key
         (e.g. from a custom transport wrapper) must be sanitized. Pins the
         sanitize() call on the network-error branch."""
-        from core.infra.client import api_call
+        from core.transport.raw_http.client import api_call
         from core.infra.errors import APIError
 
         err = ConnectionError(f"connection reset, attempted url with {self._FAKE_KEY}")
@@ -767,7 +775,7 @@ class TestMimeTypeValidation:
     """upload_file() must reject unsafe MIME types."""
 
     def test_rejects_crlf_in_mime_type(self, tmp_path):
-        from core.infra.client import upload_file
+        from core.transport.raw_http.client import upload_file
 
         f = tmp_path / "test.txt"
         f.write_text("hello")
@@ -775,7 +783,7 @@ class TestMimeTypeValidation:
             upload_file(f, mime_type="text/plain\r\nEvil-Header: injected")
 
     def test_rejects_empty_mime_type(self, tmp_path):
-        from core.infra.client import upload_file
+        from core.transport.raw_http.client import upload_file
 
         f = tmp_path / "test.txt"
         f.write_text("hello")

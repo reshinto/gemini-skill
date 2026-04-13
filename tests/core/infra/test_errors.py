@@ -56,6 +56,101 @@ class TestErrorSubclasses:
         assert err.limit == 5.00
 
 
+class TestAPIErrorMultiBackendContext:
+    """The dual-backend coordinator raises APIError with both backends'
+    error context attached when both fail. These tests pin the four
+    optional fields and the structured ``__str__`` rendering."""
+
+    def test_default_multi_backend_fields_are_none(self):
+        from core.infra.errors import APIError
+
+        err = APIError("simple", status_code=500)
+        assert err.primary_backend is None
+        assert err.fallback_backend is None
+        assert err.primary_error is None
+        assert err.fallback_error is None
+
+    def test_primary_only_context_is_carried(self):
+        """When the primary fails AND no fallback is configured, the
+        error carries only the primary context. Fallback fields stay None."""
+        from core.infra.errors import APIError
+
+        err = APIError(
+            "primary backend sdk failed",
+            status_code=500,
+            primary_backend="sdk",
+            primary_error="ServerError 500: upstream blew up",
+        )
+        assert err.primary_backend == "sdk"
+        assert err.primary_error == "ServerError 500: upstream blew up"
+        assert err.fallback_backend is None
+        assert err.fallback_error is None
+
+    def test_both_backends_context_is_carried(self):
+        from core.infra.errors import APIError
+
+        err = APIError(
+            "Both backends failed",
+            status_code=500,
+            primary_backend="sdk",
+            fallback_backend="raw_http",
+            primary_error="sdk timeout",
+            fallback_error="raw_http 503",
+        )
+        assert err.primary_backend == "sdk"
+        assert err.fallback_backend == "raw_http"
+        assert err.primary_error == "sdk timeout"
+        assert err.fallback_error == "raw_http 503"
+
+    def test_str_includes_both_backend_messages_when_both_present(self):
+        """Renders a structured combined message so log lines and
+        traceback printers carry the actionable detail without callers
+        having to inspect attributes."""
+        from core.infra.errors import APIError
+
+        err = APIError(
+            "transport failure",
+            primary_backend="sdk",
+            fallback_backend="raw_http",
+            primary_error="sdk: timeout after 30s",
+            fallback_error="raw_http: 503 Service Unavailable",
+        )
+        text = str(err)
+        assert "sdk" in text
+        assert "raw_http" in text
+        assert "timeout after 30s" in text
+        assert "503 Service Unavailable" in text
+
+    def test_str_falls_back_to_message_when_no_context(self):
+        """A bare APIError must still render its message — no behavior
+        change for the legacy single-backend call sites."""
+        from core.infra.errors import APIError
+
+        err = APIError("plain", status_code=400)
+        assert str(err) == "plain"
+
+    def test_str_with_only_primary_context(self):
+        from core.infra.errors import APIError
+
+        err = APIError(
+            "primary blew up",
+            primary_backend="sdk",
+            primary_error="sdk: validation failed",
+        )
+        text = str(err)
+        assert "sdk" in text
+        assert "validation failed" in text
+
+    def test_backward_compat_positional_constructor(self):
+        """Existing call sites pass ``APIError(message, status_code=N)``
+        — that signature must keep working byte-identical."""
+        from core.infra.errors import APIError
+
+        err = APIError("legacy", 404)
+        assert err.status_code == 404
+        assert "legacy" in str(err)
+
+
 class TestRetryClassification:
     """classify_retry() must return the correct action for each HTTP status."""
 

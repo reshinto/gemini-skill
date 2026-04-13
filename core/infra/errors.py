@@ -47,16 +47,101 @@ class CostLimitError(GeminiSkillError):
 
 
 class APIError(GeminiSkillError):
-    """Raised when the Gemini API returns an error response.
+    """Raised when the Gemini API (or one of the dual-backend transports) errors.
+
+    The four dual-backend context fields are populated by
+    ``core/transport/coordinator.py::TransportCoordinator`` when both
+    backends fail or when the coordinator wants to surface which backend
+    actually handled a primary-only error. Bare construction
+    (``APIError("msg", status_code=N)``) keeps the legacy single-backend
+    semantics — the new fields default to ``None`` and the ``__str__``
+    rendering falls back to the message-only form.
 
     Attributes:
         status_code: The HTTP status code from the API response, or None
             if the error did not originate from an HTTP response.
+        primary_backend: When set (e.g. ``"sdk"``), names which backend
+            ran first. The coordinator populates this when reporting any
+            multi-backend failure so log readers can tell where the
+            error originated without parsing the message.
+        fallback_backend: When set (e.g. ``"raw_http"``), names the
+            backend the coordinator escalated to after the primary
+            failed. ``None`` when no fallback was tried (because the
+            primary's error was not fallback-eligible, or because no
+            fallback was configured for this dispatch).
+        primary_error: The ``str()`` of the primary backend's exception,
+            captured by the coordinator. Mirrors ``fallback_error``.
+        fallback_error: The ``str()`` of the fallback backend's exception
+            when both backends failed.
     """
 
-    def __init__(self, message: str, status_code: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        *,
+        primary_backend: str | None = None,
+        fallback_backend: str | None = None,
+        primary_error: str | None = None,
+        fallback_error: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.primary_backend = primary_backend
+        self.fallback_backend = fallback_backend
+        # Sanitize error-string fields at the constructor boundary.
+        # Defense in depth: the coordinator already pre-sanitizes when
+        # it populates these from upstream exceptions, but ``APIError``
+        # is a public class — any future caller (or Phase 4 adapter
+        # code, or third-party callers via the shim) that constructs
+        # an APIError directly with an unsanitized error string would
+        # otherwise leak it through ``__str__`` / ``format_user_error``.
+        # Sanitizing here closes that gap structurally instead of
+        # relying on every call site to remember.
+        from core.infra.sanitize import sanitize as _sanitize
+
+        self.primary_error = _sanitize(primary_error) if primary_error is not None else None
+        self.fallback_error = (
+            _sanitize(fallback_error) if fallback_error is not None else None
+        )
+
+    def __str__(self) -> str:
+        """Render a structured combined message when multi-backend context is set.
+
+        Three rendering modes, selected explicitly so partial / unusual
+        attribute combinations don't silently render misleading text:
+
+        1. **Both backends present** → two-line backend breakdown.
+        2. **Primary only** (primary_backend set, fallback_backend None) →
+           one-line primary appendix. Used when the coordinator had no
+           fallback configured and the primary failed.
+        3. **Anything else** → bare message (legacy single-line form).
+           This includes the symmetric "fallback only" case (no
+           primary_backend); rather than render ``primary [None]: None``,
+           we drop the structured form and surface only the message.
+
+        Callers do not pass a mode flag — the four possible
+        ``primary_backend``/``fallback_backend`` Truth combinations
+        determine the rendering deterministically.
+        """
+        base = super().__str__()
+        # Mode 1: both backends — render the full two-line breakdown.
+        if self.primary_backend is not None and self.fallback_backend is not None:
+            return (
+                f"{base}\n"
+                f"  primary [{self.primary_backend}]: {self.primary_error}\n"
+                f"  fallback [{self.fallback_backend}]: {self.fallback_error}"
+            )
+        # Mode 2: primary only — explicit guard so the symmetric
+        # fallback-only case falls through to mode 3 instead of
+        # rendering ``primary [None]: None``.
+        if self.primary_backend is not None and self.fallback_backend is None:
+            return f"{base}\n  primary [{self.primary_backend}]: {self.primary_error}"
+        # Mode 3: bare error or fallback-only — preserve the legacy
+        # single-line rendering. The fallback-only case is unreachable
+        # from the coordinator today but the mode-3 fallthrough is the
+        # safe rendering if it ever happens.
+        return base
 
 
 def classify_retry(status_code: int) -> str:
