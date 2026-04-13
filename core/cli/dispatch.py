@@ -10,6 +10,7 @@ concatenate user text into shell commands.
 
 Dependencies: all adapter modules, core/routing/registry.py
 """
+
 from __future__ import annotations
 
 import importlib
@@ -94,6 +95,19 @@ def main(argv: list[str]) -> None:
 
     parser = adapter_module.get_parser()
     args = parser.parse_args(adapter_args)
+
+    # Phase 6: adapters may opt in to async dispatch by declaring
+    # ``IS_ASYNC = True`` at module level and implementing ``async def
+    # run_async(**kwargs)`` instead of (or alongside) the sync ``run``.
+    # Async adapters are used for the Live API and any future ``--parallel``
+    # feature. The 19 existing sync adapters don't carry this attribute,
+    # so the default ``getattr(..., False)`` preserves the sync path.
+    if getattr(adapter_module, "IS_ASYNC", False):
+        import asyncio
+
+        asyncio.run(adapter_module.run_async(**vars(args)))
+        return
+
     adapter_module.run(**vars(args))
 
 
@@ -127,8 +141,7 @@ def _enforce_policy(command: str, args: list[str]) -> None:
 
     if cap.get("mutating") and "--execute" not in args:
         safe_print(
-            f"[DRY RUN] '{command}' is a mutating operation. "
-            "Pass --execute to actually run it."
+            f"[DRY RUN] '{command}' is a mutating operation. " "Pass --execute to actually run it."
         )
         sys.exit(0)
 
@@ -172,6 +185,7 @@ def _print_help() -> None:
 def _list_models() -> None:
     """List all models from the registry."""
     from core.routing.registry import Registry
+
     reg = Registry(root_dir=_get_repo_root())
     for model_id in sorted(reg.list_models()):
         model = reg.get_model(model_id)

@@ -68,7 +68,7 @@ core/infra/errors.py (APIError), core/infra/config.py (Config).
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator, Mapping
+from collections.abc import AsyncIterator, Iterator, Mapping
 from pathlib import Path
 from typing import Callable, TypeVar, cast
 
@@ -76,6 +76,7 @@ from core.infra.config import Config
 from core.infra.errors import APIError
 from core.infra.sanitize import sanitize
 from core.transport.base import (
+    AsyncTransport,
     BackendUnavailableError,
     FileMetadata,
     GeminiResponse,
@@ -115,6 +116,7 @@ class TransportCoordinator:
         self,
         primary: Transport,
         fallback: Transport | None,
+        async_primary: AsyncTransport | None = None,
     ) -> None:
         # Same-backend construction is almost certainly a bug — the whole
         # point of the coordinator is to dispatch across two distinct
@@ -122,11 +124,16 @@ class TransportCoordinator:
         # configuration error surfaces at startup, not on the first
         # fallback attempt during a real outage.
         if fallback is not None and primary is fallback:
-            raise ValueError(
-                "TransportCoordinator: primary and fallback must differ"
-            )
+            raise ValueError("TransportCoordinator: primary and fallback must differ")
         self.primary = primary
         self.fallback = fallback
+        # Async primary is optional and has NO fallback partner. Raw HTTP
+        # is sync-only (no urllib async story + the refactor deliberately
+        # avoids an httpx dependency), and the Live API is SDK-only by
+        # design. When the async primary is None, async dispatch raises
+        # BackendUnavailableError — the caller either wired an async
+        # primary at construction time or async methods can't run.
+        self.async_primary = async_primary
 
     # ------------------------------------------------------------------
     # Factory
@@ -152,7 +159,13 @@ class TransportCoordinator:
         primary = _build_backend(config.primary_backend)
         fallback_name = config.fallback_backend
         fallback = _build_backend(fallback_name) if fallback_name is not None else None
-        return cls(primary=primary, fallback=fallback)
+        # Build an async primary ONLY when the SDK is the sync primary.
+        # If raw HTTP is primary, no async path exists (sync-only backend);
+        # if SDK is primary, the async path targets client.aio.*.
+        async_primary: AsyncTransport | None = None
+        if config.primary_backend == "sdk":
+            async_primary = _build_async_backend()
+        return cls(primary=primary, fallback=fallback, async_primary=async_primary)
 
     # ------------------------------------------------------------------
     # Public dispatch methods (mirror the Transport surface)
@@ -267,14 +280,43 @@ class TransportCoordinator:
         *,
         capability: str | None = None,
     ) -> GeminiResponse:
-        """Async dispatch — stubbed until Phase 6 lands the SdkAsyncTransport.
+        """Async dispatch of an ``api_call`` through the async primary.
 
-        Signature mirrors ``execute_api_call`` so callers that switch to
-        async in Phase 6 only have to add ``await``. mypy will catch
-        wrong-arity callers TODAY rather than waiting until Phase 6.
+        The async path has no fallback partner (raw HTTP is sync-only),
+        so the decision matrix is simpler than the sync dispatch:
+
+        1. No async primary configured → BackendUnavailableError.
+        2. Capability gate: ``supports(capability)`` False →
+           BackendUnavailableError (no fallback to route to).
+        3. Otherwise: await the async primary's api_call and return.
+           Any exception propagates unchanged — the caller handles retry.
+
+        Args:
+            endpoint: REST-shaped endpoint string.
+            body: Request body or None.
+            method: HTTP method.
+            api_version: API version segment (ignored by SDK; accepted
+                for symmetry with the sync API).
+            timeout: Request timeout in seconds.
+            capability: Optional capability name for the gate check.
+
+        Returns:
+            The normalized GeminiResponse envelope from the async primary.
+
+        Raises:
+            BackendUnavailableError: When no async primary is configured,
+                or when the capability gate refuses the capability.
+            BaseException: Any exception from the async primary propagates
+                unchanged — there's no fallback to swallow it.
         """
-        raise NotImplementedError(
-            "Async dispatch is not implemented until Phase 6 (Live API + async transport)."
+        async_primary = self._require_async_primary(op_name="api_call")
+        self._async_capability_gate(async_primary, op_name="api_call", capability=capability)
+        return await async_primary.api_call(
+            endpoint=endpoint,
+            body=body,
+            method=method,
+            api_version=api_version,
+            timeout=timeout,
         )
 
     async def execute_stream_async(
@@ -285,11 +327,35 @@ class TransportCoordinator:
         timeout: int,
         *,
         capability: str | None = None,
-    ) -> Iterator[StreamChunk]:
-        """Async stream dispatch — stubbed until Phase 6."""
-        raise NotImplementedError(
-            "Async dispatch is not implemented until Phase 6 (Live API + async transport)."
+    ) -> AsyncIterator[StreamChunk]:
+        """Async stream dispatch. Yields normalized chunks from the async primary.
+
+        Implemented as an async generator so callers use ``async for`` to
+        drain. Raises BackendUnavailableError BEFORE yielding if no async
+        primary is configured or if the capability gate refuses.
+
+        Args:
+            model: Gemini model identifier.
+            body: REST-shaped request body.
+            api_version: API version segment.
+            timeout: Per-chunk-read timeout.
+            capability: Optional capability name.
+
+        Yields:
+            StreamChunk envelopes from the async primary's stream.
+
+        Raises:
+            BackendUnavailableError: When no async primary is configured,
+                or when the capability gate refuses.
+        """
+        async_primary = self._require_async_primary(op_name="stream_generate_content")
+        self._async_capability_gate(
+            async_primary, op_name="stream_generate_content", capability=capability
         )
+        async for chunk in async_primary.stream_generate_content(
+            model=model, body=body, api_version=api_version, timeout=timeout
+        ):
+            yield chunk
 
     async def execute_upload_async(
         self,
@@ -300,9 +366,81 @@ class TransportCoordinator:
         *,
         capability: str | None = None,
     ) -> FileMetadata:
-        """Async upload dispatch — stubbed until Phase 6."""
-        raise NotImplementedError(
-            "Async dispatch is not implemented until Phase 6 (Live API + async transport)."
+        """Async upload dispatch through the async primary.
+
+        Args:
+            file_path: Path to file to upload.
+            mime_type: MIME type.
+            display_name: Optional display name.
+            timeout: Upload timeout.
+            capability: Optional capability name for the gate.
+
+        Returns:
+            FileMetadata envelope.
+
+        Raises:
+            BackendUnavailableError: When no async primary is configured
+                or when the capability gate refuses.
+        """
+        async_primary = self._require_async_primary(op_name="upload_file")
+        self._async_capability_gate(async_primary, op_name="upload_file", capability=capability)
+        return await async_primary.upload_file(
+            file_path=file_path,
+            mime_type=mime_type,
+            display_name=display_name,
+            timeout=timeout,
+        )
+
+    def _require_async_primary(self, *, op_name: str) -> AsyncTransport:
+        """Return self.async_primary or raise BackendUnavailableError.
+
+        Extracted so the three public async methods share one error
+        message instead of diverging over time.
+        """
+        if self.async_primary is None:
+            raise BackendUnavailableError(
+                sanitize(
+                    f"TransportCoordinator: async dispatch requires an async "
+                    f"primary backend, but none is configured (op='{op_name}'). "
+                    f"Async-only capabilities (Live API) need GEMINI_IS_SDK_PRIORITY=true."
+                )
+            )
+        return self.async_primary
+
+    def _async_capability_gate(
+        self,
+        async_primary: AsyncTransport,
+        *,
+        op_name: str,
+        capability: str | None,
+    ) -> None:
+        """Raise if the async primary refuses ``capability``.
+
+        Async path has no fallback, so an unsupported capability is a
+        hard error. Logs at WARNING the same way the sync capability
+        gate does so log aggregators see a consistent reason string.
+        """
+        if capability is None:
+            return
+        if async_primary.supports(capability):
+            return
+        logger.warning(
+            "transport_async_gate primary=%s capability=%s op=%s reason=capability_gate",
+            async_primary.name,
+            capability,
+            op_name,
+            extra={
+                "primary": async_primary.name,
+                "capability": capability,
+                "op": op_name,
+                "reason": "capability_gate_async",
+            },
+        )
+        raise BackendUnavailableError(
+            sanitize(
+                f"Capability '{capability}' is not supported by async primary "
+                f"backend '{async_primary.name}' (async path has no fallback)."
+            )
         )
 
     # ------------------------------------------------------------------
@@ -471,9 +609,7 @@ class TransportCoordinator:
             # constructor, so the raw exception strings are safe to
             # forward here without an explicit sanitize() wrap.
             raise APIError(
-                sanitize(
-                    f"Both backends failed for op '{op_name}'."
-                ),
+                sanitize(f"Both backends failed for op '{op_name}'."),
                 status_code=getattr(fallback_exc, "status_code", None),
                 primary_backend=self.primary.name,
                 fallback_backend=self.fallback.name,
@@ -521,3 +657,21 @@ def _build_backend(name: str) -> Transport:
 
         return cast(Transport, RawHttpTransport())
     raise ValueError(f"Unknown transport backend: {name!r}")
+
+
+def _build_async_backend() -> AsyncTransport:
+    """Construct the async SDK backend.
+
+    Separate from ``_build_backend`` because there's only one async
+    implementation (SDK) — raw HTTP has no async twin. A free function
+    (not a static method) so tests can mock it without reaching for a
+    class attribute. Lazy-imports the module so a coordinator built
+    with raw HTTP primary never loads google.genai.
+
+    Returns:
+        A fresh SdkAsyncTransport instance, cast to the AsyncTransport
+        Protocol for the same Literal-variance reason as _build_backend.
+    """
+    from core.transport.sdk.async_transport import SdkAsyncTransport
+
+    return cast(AsyncTransport, SdkAsyncTransport())

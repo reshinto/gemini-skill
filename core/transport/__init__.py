@@ -51,7 +51,7 @@ core/infra/config.py (Config), core/transport/raw_http/client.py
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import AsyncIterator, Iterator, Mapping
 from pathlib import Path
 
 from core.transport.base import FileMetadata, GeminiResponse, StreamChunk
@@ -63,6 +63,9 @@ __all__ = [
     "api_call",
     "stream_generate_content",
     "upload_file",
+    "async_api_call",
+    "async_stream_generate_content",
+    "async_upload_file",
     "get_coordinator",
     "reset_coordinator",
 ]
@@ -203,6 +206,87 @@ def upload_file(
         A ``FileMetadata`` dict with camelCase keys.
     """
     return _get_coordinator().execute_upload(
+        file_path=file_path,
+        mime_type=mime_type,
+        display_name=display_name,
+        timeout=timeout,
+        capability=None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Async facade (Phase 6)
+# ---------------------------------------------------------------------------
+#
+# Async mirrors of the three sync methods. The coordinator's async surface
+# only runs when an async primary (SDK) is wired; raw HTTP has no async
+# twin so the facade does NOT accept an ``api_key=`` bypass here either —
+# explicit-key auth stays on the sync shim.
+
+
+async def async_api_call(
+    endpoint: str,
+    body: Mapping[str, object] | None = None,
+    method: str = "POST",
+    api_version: str = "v1beta",
+    timeout: int = 30,
+) -> GeminiResponse:
+    """Async twin of :func:`api_call`.
+
+    Forwards to ``TransportCoordinator.execute_api_call_async``. Raises
+    ``BackendUnavailableError`` when no async primary is configured
+    (i.e. when ``GEMINI_IS_SDK_PRIORITY=false`` and the coordinator only
+    has a raw HTTP primary — raw HTTP is sync-only).
+
+    Args:
+        endpoint: REST-shaped endpoint string.
+        body: JSON request body or None.
+        method: HTTP method.
+        api_version: API version segment.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        The normalized ``GeminiResponse`` from the async primary.
+    """
+    return await _get_coordinator().execute_api_call_async(
+        endpoint=endpoint,
+        body=body,
+        method=method,
+        api_version=api_version,
+        timeout=timeout,
+        capability=None,
+    )
+
+
+async def async_stream_generate_content(
+    model: str,
+    body: Mapping[str, object],
+    api_version: str = "v1beta",
+    timeout: int = 30,
+) -> AsyncIterator[StreamChunk]:
+    """Async twin of :func:`stream_generate_content`.
+
+    Implemented as an async generator so callers use ``async for`` to
+    drain chunks. Forwards to the coordinator's async stream dispatch.
+    """
+    async for chunk in _get_coordinator().execute_stream_async(
+        model=model,
+        body=body,
+        api_version=api_version,
+        timeout=timeout,
+        capability=None,
+    ):
+        yield chunk
+
+
+async def async_upload_file(
+    file_path: Path | str,
+    mime_type: str,
+    display_name: str | None = None,
+    timeout: int = 120,
+) -> FileMetadata:
+    """Async twin of :func:`upload_file`. Forwards to the coordinator."""
+    return await _get_coordinator().execute_upload_async(
         file_path=file_path,
         mime_type=mime_type,
         display_name=display_name,

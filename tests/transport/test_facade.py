@@ -170,6 +170,86 @@ class TestUploadDelegation:
         )
 
 
+class TestAsyncFacade:
+    """Async facade mirrors — ``async_api_call`` / ``async_stream_generate_content``
+    / ``async_upload_file`` forward to the coordinator's async methods the
+    same way the sync facade forwards to the sync methods.
+    """
+
+    def test_exports_three_async_functions(self) -> None:
+        import core.transport as facade
+
+        assert callable(facade.async_api_call)
+        assert callable(facade.async_stream_generate_content)
+        assert callable(facade.async_upload_file)
+
+    @pytest.mark.asyncio
+    async def test_async_api_call_forwards_to_coordinator(self) -> None:
+        import core.transport as facade
+
+        fake_coord = mock.Mock()
+        fake_coord.execute_api_call_async = mock.AsyncMock(
+            return_value={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+        )
+        with mock.patch.object(facade, "_get_coordinator", return_value=fake_coord):
+            result = await facade.async_api_call(
+                endpoint="models/gemini:generateContent",
+                body={"contents": []},
+                method="POST",
+                api_version="v1beta",
+                timeout=30,
+            )
+        assert result["candidates"][0]["content"]["parts"][0]["text"] == "ok"
+        fake_coord.execute_api_call_async.assert_awaited_once_with(
+            endpoint="models/gemini:generateContent",
+            body={"contents": []},
+            method="POST",
+            api_version="v1beta",
+            timeout=30,
+            capability=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_stream_forwards_to_coordinator(self) -> None:
+        import core.transport as facade
+
+        async def _fake_stream(**_: Any) -> Any:
+            yield {"chunk": 1}
+            yield {"chunk": 2}
+
+        fake_coord = mock.Mock()
+        fake_coord.execute_stream_async = mock.Mock(side_effect=lambda **kw: _fake_stream(**kw))
+        with mock.patch.object(facade, "_get_coordinator", return_value=fake_coord):
+            chunks = [
+                c
+                async for c in facade.async_stream_generate_content(
+                    model="gemini",
+                    body={"contents": []},
+                    api_version="v1beta",
+                    timeout=30,
+                )
+            ]
+        assert chunks == [{"chunk": 1}, {"chunk": 2}]
+
+    @pytest.mark.asyncio
+    async def test_async_upload_forwards_to_coordinator(self, tmp_path: Any) -> None:
+        import core.transport as facade
+
+        f = tmp_path / "x.bin"
+        f.write_bytes(b"hi")
+        fake_coord = mock.Mock()
+        fake_coord.execute_upload_async = mock.AsyncMock(return_value={"name": "files/abc"})
+        with mock.patch.object(facade, "_get_coordinator", return_value=fake_coord):
+            result = await facade.async_upload_file(
+                file_path=f,
+                mime_type="application/octet-stream",
+                display_name=None,
+                timeout=120,
+            )
+        assert result == {"name": "files/abc"}
+        fake_coord.execute_upload_async.assert_awaited_once()
+
+
 class TestBaseUrlReExport:
     """``BASE_URL`` is re-exported because ``core/infra/client.py`` already
     re-exports it and adapter tests have asserted on it for years."""

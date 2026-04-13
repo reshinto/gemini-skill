@@ -112,9 +112,7 @@ class TestCapabilityGate:
         from core.transport.coordinator import TransportCoordinator
 
         primary = _make_backend("sdk", supports=False)
-        fallback = _make_backend(
-            "raw_http", api_call_return={"candidates": [{"index": 0}]}
-        )
+        fallback = _make_backend("raw_http", api_call_return={"candidates": [{"index": 0}]})
         coord = TransportCoordinator(primary=primary, fallback=fallback)
 
         result = coord.execute_api_call(
@@ -404,9 +402,7 @@ class TestUploadDispatch:
 
 
 class TestFallbackLogging:
-    def test_eligible_fallback_emits_warning_log(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_eligible_fallback_emits_warning_log(self, caplog: pytest.LogCaptureFixture) -> None:
         """Per CR-3 in the canonical plan, every fallback invocation
         emits one structured WARNING line so silent SDK→raw_http
         degradation is visible in production logs."""
@@ -476,14 +472,50 @@ class TestFallbackLogging:
 # ---------------------------------------------------------------------------
 
 
-class TestAsyncStub:
-    """Phase 6 will land the async path; for now the stubs raise a clear
-    NotImplementedError so callers see exactly which phase to wait for
-    instead of a confusing AttributeError. All three operation types
-    have stubs for symmetry — adding the real impl in Phase 6 means
-    swapping bodies, not adding methods."""
+def _make_async_backend(
+    name: str = "sdk",
+    *,
+    supports: bool = True,
+    api_call_return: Any = None,
+    api_call_side_effect: Any = None,
+    upload_return: Any = None,
+) -> mock.Mock:
+    """Build a Mock that satisfies the AsyncTransport Protocol shape.
 
-    def test_execute_api_call_async_raises_not_implemented(self) -> None:
+    ``AsyncMock`` gives coroutine returns for awaited methods.
+    ``stream_generate_content`` is a regular Mock that returns an async
+    iterator (the async-gen call site returns the iterator synchronously).
+    """
+    from core.transport.base import AsyncTransport
+
+    backend = mock.Mock(spec=AsyncTransport)
+    backend.name = name
+    backend.supports = mock.Mock(return_value=supports)
+    backend.api_call = mock.AsyncMock(
+        return_value=api_call_return if api_call_return is not None else {"candidates": []},
+        side_effect=api_call_side_effect,
+    )
+
+    async def _empty_stream() -> Any:
+        if False:  # pragma: no cover
+            yield  # type: ignore[unreachable]
+
+    backend.stream_generate_content = mock.Mock(return_value=_empty_stream())
+    backend.upload_file = mock.AsyncMock(
+        return_value=upload_return if upload_return is not None else {}
+    )
+    return backend
+
+
+class TestAsyncDispatch:
+    """Phase 6: execute_*_async mirrors the sync dispatch but has no
+    fallback partner — raw HTTP is sync-only and the Live API is SDK-only.
+
+    The async coordinator either runs the configured async primary or
+    raises BackendUnavailableError when one wasn't configured.
+    """
+
+    def test_execute_api_call_async_raises_when_no_async_primary(self) -> None:
         import asyncio
 
         from core.transport.coordinator import TransportCoordinator
@@ -491,7 +523,7 @@ class TestAsyncStub:
         primary = _make_backend("sdk")
         coord = TransportCoordinator(primary=primary, fallback=None)
 
-        with pytest.raises(NotImplementedError, match="Phase 6"):
+        with pytest.raises(BackendUnavailableError, match="async"):
             asyncio.run(
                 coord.execute_api_call_async(
                     endpoint="x",
@@ -502,7 +534,7 @@ class TestAsyncStub:
                 )
             )
 
-    def test_execute_stream_async_raises_not_implemented(self) -> None:
+    def test_execute_stream_async_raises_when_no_async_primary(self) -> None:
         import asyncio
 
         from core.transport.coordinator import TransportCoordinator
@@ -510,19 +542,19 @@ class TestAsyncStub:
         primary = _make_backend("sdk")
         coord = TransportCoordinator(primary=primary, fallback=None)
 
-        with pytest.raises(NotImplementedError, match="Phase 6"):
-            asyncio.run(
-                coord.execute_stream_async(
-                    model="gemini",
-                    body={"contents": []},
-                    api_version="v1beta",
-                    timeout=30,
-                )
+        async def drain() -> list[Any]:
+            gen = coord.execute_stream_async(
+                model="gemini",
+                body={"contents": []},
+                api_version="v1beta",
+                timeout=30,
             )
+            return [chunk async for chunk in gen]
 
-    def test_execute_upload_async_raises_not_implemented(
-        self, tmp_path: Any
-    ) -> None:
+        with pytest.raises(BackendUnavailableError, match="async"):
+            asyncio.run(drain())
+
+    def test_execute_upload_async_raises_when_no_async_primary(self, tmp_path: Any) -> None:
         import asyncio
 
         from core.transport.coordinator import TransportCoordinator
@@ -530,7 +562,7 @@ class TestAsyncStub:
         primary = _make_backend("sdk")
         coord = TransportCoordinator(primary=primary, fallback=None)
 
-        with pytest.raises(NotImplementedError, match="Phase 6"):
+        with pytest.raises(BackendUnavailableError, match="async"):
             asyncio.run(
                 coord.execute_upload_async(
                     file_path=tmp_path / "x.bin",
@@ -538,6 +570,198 @@ class TestAsyncStub:
                     display_name=None,
                     timeout=120,
                 )
+            )
+
+    @pytest.mark.asyncio
+    async def test_execute_api_call_async_routes_to_async_primary(self) -> None:
+        from core.transport.coordinator import TransportCoordinator
+
+        primary = _make_backend("sdk")
+        async_primary = _make_async_backend(
+            "sdk", api_call_return={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+        )
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
+
+        result = await coord.execute_api_call_async(
+            endpoint="models/gemini:generateContent",
+            body={"contents": []},
+            method="POST",
+            api_version="v1beta",
+            timeout=30,
+        )
+        assert result["candidates"][0]["content"]["parts"][0]["text"] == "ok"
+        async_primary.api_call.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_api_call_async_capability_gate_passes(self) -> None:
+        """A capability the async primary supports flows through the
+        gate silently — the call is awaited and the return is forwarded."""
+        from core.transport.coordinator import TransportCoordinator
+
+        primary = _make_backend("sdk")
+        async_primary = _make_async_backend(
+            "sdk",
+            supports=True,
+            api_call_return={"candidates": []},
+        )
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
+
+        result = await coord.execute_api_call_async(
+            endpoint="models/gemini:generateContent",
+            body={"contents": []},
+            method="POST",
+            api_version="v1beta",
+            timeout=30,
+            capability="text",
+        )
+        assert result == {"candidates": []}
+        async_primary.api_call.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_api_call_async_capability_gate_raises(self) -> None:
+        from core.transport.coordinator import TransportCoordinator
+
+        primary = _make_backend("sdk")
+        async_primary = _make_async_backend("sdk", supports=False)
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
+
+        with pytest.raises(BackendUnavailableError, match="maps"):
+            await coord.execute_api_call_async(
+                endpoint="x",
+                body=None,
+                method="POST",
+                api_version="v1beta",
+                timeout=30,
+                capability="maps",
+            )
+        async_primary.api_call.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_execute_api_call_async_propagates_auth_error(self) -> None:
+        from core.transport.coordinator import TransportCoordinator
+
+        primary = _make_backend("sdk")
+        async_primary = _make_async_backend("sdk", api_call_side_effect=AuthError("bad key"))
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
+
+        with pytest.raises(AuthError):
+            await coord.execute_api_call_async(
+                endpoint="models/gemini:generateContent",
+                body={"contents": []},
+                method="POST",
+                api_version="v1beta",
+                timeout=30,
+            )
+
+    @pytest.mark.asyncio
+    async def test_execute_api_call_async_propagates_api_error_unwrapped(
+        self,
+    ) -> None:
+        """Async path has no fallback so eligible errors propagate as-is.
+        The sync path wraps them in an APIError carrying primary context
+        because it can cleanly surface a "no fallback configured" message;
+        async path's contract is simpler — errors reach the caller
+        unchanged and the caller handles retry logic."""
+        from core.transport.coordinator import TransportCoordinator
+
+        primary = _make_backend("sdk")
+        err = APIError("503 boom", status_code=503)
+        async_primary = _make_async_backend("sdk", api_call_side_effect=err)
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
+
+        with pytest.raises(APIError) as excinfo:
+            await coord.execute_api_call_async(
+                endpoint="models/gemini:generateContent",
+                body={"contents": []},
+                method="POST",
+                api_version="v1beta",
+                timeout=30,
+            )
+        assert excinfo.value.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_execute_stream_async_yields_chunks(self) -> None:
+        from core.transport.coordinator import TransportCoordinator
+
+        primary = _make_backend("sdk")
+
+        async def _stream() -> Any:
+            yield {"candidates": [{"content": {"parts": [{"text": "a"}]}}]}
+            yield {"candidates": [{"content": {"parts": [{"text": "b"}]}}]}
+
+        async_primary = _make_async_backend("sdk")
+        async_primary.stream_generate_content = mock.Mock(return_value=_stream())
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
+
+        collected: list[str] = []
+        async for chunk in coord.execute_stream_async(
+            model="gemini",
+            body={"contents": []},
+            api_version="v1beta",
+            timeout=30,
+        ):
+            collected.append(chunk["candidates"][0]["content"]["parts"][0]["text"])
+        assert collected == ["a", "b"]
+
+    @pytest.mark.asyncio
+    async def test_execute_stream_async_capability_gate_raises(self) -> None:
+        from core.transport.coordinator import TransportCoordinator
+
+        primary = _make_backend("sdk")
+        async_primary = _make_async_backend("sdk", supports=False)
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
+
+        async def drain() -> list[Any]:
+            return [
+                c
+                async for c in coord.execute_stream_async(
+                    model="gemini",
+                    body={"contents": []},
+                    api_version="v1beta",
+                    timeout=30,
+                    capability="live",
+                )
+            ]
+
+        with pytest.raises(BackendUnavailableError, match="live"):
+            await drain()
+
+    @pytest.mark.asyncio
+    async def test_execute_upload_async_routes_to_async_primary(self, tmp_path: Any) -> None:
+        from core.transport.coordinator import TransportCoordinator
+
+        primary = _make_backend("sdk")
+        async_primary = _make_async_backend("sdk", upload_return={"name": "files/abc"})
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
+
+        src = tmp_path / "x.txt"
+        src.write_text("hi")
+        result = await coord.execute_upload_async(
+            file_path=src,
+            mime_type="text/plain",
+            display_name=None,
+            timeout=120,
+        )
+        assert result["name"] == "files/abc"
+        async_primary.upload_file.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_upload_async_capability_gate_raises(self, tmp_path: Any) -> None:
+        from core.transport.coordinator import TransportCoordinator
+
+        primary = _make_backend("sdk")
+        async_primary = _make_async_backend("sdk", supports=False)
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
+
+        src = tmp_path / "x.txt"
+        src.write_text("hi")
+        with pytest.raises(BackendUnavailableError, match="files"):
+            await coord.execute_upload_async(
+                file_path=src,
+                mime_type="text/plain",
+                display_name=None,
+                timeout=120,
+                capability="files",
             )
 
 

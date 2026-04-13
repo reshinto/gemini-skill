@@ -303,6 +303,14 @@ class AsyncTransport(Protocol):
 
     name: Literal["sdk"]
 
+    def supports(self, capability: str) -> bool:
+        """Return True iff this async backend handles ``capability``.
+
+        Mirrors the sync ``Transport.supports`` contract so the
+        coordinator's async capability gate can consult the async
+        primary polymorphically.
+        """
+
     async def api_call(
         self,
         endpoint: str,
@@ -312,12 +320,14 @@ class AsyncTransport(Protocol):
         timeout: int,
     ) -> GeminiResponse: ...
 
-    # NOTE: declared as an ``async def`` returning ``AsyncIterator`` (rather
-    # than a plain ``def`` returning the same) so ``isinstance`` Protocol
-    # conformance enforces an async-callable shape — a sync generator that
-    # happens to satisfy ``AsyncIterator`` typing would be a contract bug
-    # and we want the structural check to catch it.
-    async def stream_generate_content(
+    # NOTE: declared as a plain ``def`` returning ``AsyncIterator`` (NOT
+    # ``async def``). An async generator function (``async def`` body with
+    # ``yield``) is typed as a regular ``def`` that returns an
+    # ``AsyncIterator`` — calling it returns the generator synchronously;
+    # only iteration awaits. An ``async def`` Protocol would force
+    # implementations to return ``Coroutine[..., AsyncIterator[...]]``,
+    # which is the wrong shape.
+    def stream_generate_content(
         self,
         model: str,
         body: Mapping[str, object],
