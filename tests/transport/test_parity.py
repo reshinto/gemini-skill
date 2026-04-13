@@ -457,6 +457,42 @@ class TestGenerateContentParity:
 
 
 class TestCountTokensParity:
+    def test_count_tokens_total_tokens_key(self, patched_sdk_client: mock.Mock) -> None:
+        """The SDK emits top-level ``total_tokens`` (not ``total_token_count``).
+
+        Both backends must surface this as ``totalTokens`` so adapters
+        reading ``response["totalTokens"]`` work under either backend.
+        Pin the mapping table entry that makes this true.
+        """
+        snake = {"total_tokens": 17}
+        camel = _derive_camel(snake)
+        assert camel == {"totalTokens": 17}
+
+        from core.transport.raw_http.transport import RawHttpTransport
+        from core.transport.sdk.transport import SdkTransport
+
+        with mock.patch(
+            "core.transport.raw_http.transport._client_api_call", return_value=camel
+        ):
+            raw_result = RawHttpTransport().api_call(
+                endpoint="models/gemini-2.5-flash:countTokens",
+                body={"contents": [{"role": "user", "parts": [{"text": "hi"}]}]},
+                method="POST",
+                api_version="v1beta",
+                timeout=30,
+            )
+
+        patched_sdk_client.models.count_tokens.return_value = _make_sdk_obj(snake)
+        sdk_result = SdkTransport().api_call(
+            endpoint="models/gemini-2.5-flash:countTokens",
+            body={"contents": [{"role": "user", "parts": [{"text": "hi"}]}]},
+            method="POST",
+            api_version="v1beta",
+            timeout=30,
+        )
+
+        _assert_parity(raw_result, sdk_result)
+
     def test_count_tokens_envelope(self, patched_sdk_client: mock.Mock) -> None:
         snake = {
             "total_token_count": 42,

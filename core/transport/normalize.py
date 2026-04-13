@@ -77,6 +77,12 @@ _SNAKE_TO_CAMEL: Mapping[str, str] = {
     "candidates_token_count": "candidatesTokenCount",
     "prompt_token_count": "promptTokenCount",
     "total_token_count": "totalTokenCount",
+    # countTokens response: the SDK returns ``total_tokens`` at the top
+    # level (not ``total_token_count``), but the raw HTTP backend echoes
+    # the REST envelope key ``totalTokens``. Both must end up at the same
+    # camelCase key so adapters reading ``response["totalTokens"]`` work
+    # under either backend.
+    "total_tokens": "totalTokens",
     "usage_metadata": "usageMetadata",
     # --- Prompt feedback (top-level safety verdict on the user prompt) ---
     "block_reason": "blockReason",

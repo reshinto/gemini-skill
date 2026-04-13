@@ -131,9 +131,15 @@ def get_client() -> Any:
     try:
         return genai.Client(api_key=key)
     except Exception as exc:
+        # ``from None`` deliberately suppresses __cause__ so traceback
+        # serializers (Sentry, logging.exception, traceback.format_exception)
+        # can't walk the chain and print the original unsanitized exception
+        # — its str() would include the raw ``api_key=<key>`` kwarg that
+        # construction was called with. The sanitized message above already
+        # carries the actionable detail.
         raise BackendUnavailableError(
             f"Failed to construct google.genai.Client: {sanitize(str(exc))}"
-        ) from exc
+        ) from None
 
 
 def get_async_client() -> Any:

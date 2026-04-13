@@ -33,6 +33,47 @@ class TestRawHttpTransportName:
         assert RawHttpTransport.name == "raw_http"
 
 
+class TestRawHttpTransportSupports:
+    """RawHttpTransport claims every capability — urllib can issue any REST
+    call, so the deterministic-fallback contract requires a True for all
+    capability names (including unknown ones the dispatch table will catch
+    later)."""
+
+    @pytest.mark.parametrize(
+        "capability",
+        [
+            "text",
+            "structured",
+            "multimodal",
+            "streaming",
+            "embed",
+            "token_count",
+            "function_calling",
+            "code_exec",
+            "search",
+            "image_gen",
+            "video_gen",
+            "files",
+            "cache",
+            "batch",
+            # Capabilities the SDK does NOT support — raw HTTP must say yes
+            # so the coordinator can route them here.
+            "maps",
+            "music_gen",
+            "computer_use",
+            "file_search",
+            "deep_research",
+            # Unknown name — still True (dispatch layer's problem, not ours).
+            "totally-made-up",
+            "",
+        ],
+    )
+    def test_supports_returns_true_for_every_capability(self, capability: str) -> None:
+        from core.transport.raw_http.transport import RawHttpTransport
+
+        assert RawHttpTransport().supports(capability) is True
+
+
 class TestApiCallDelegation:
     """api_call must forward every argument to the underlying client function."""
 

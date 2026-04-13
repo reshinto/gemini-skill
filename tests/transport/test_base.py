@@ -49,6 +49,9 @@ class TestTransportProtocol:
         class _Stub:
             name = "stub"
 
+            def supports(self, capability):
+                return True
+
             def api_call(self, endpoint, body, method, api_version, timeout):
                 return {}
 

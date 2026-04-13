@@ -118,6 +118,28 @@ class TestClientConstructionErrorSanitized:
         assert leaked_key not in message
         assert "[REDACTED]" in message
 
+    def test_constructor_error_cause_chain_is_suppressed(self):
+        """``raise ... from None`` deliberately drops __cause__ so traceback
+        serializers (Sentry, logging.exception) cannot walk the chain and
+        print the original unsanitized exception's str() — which would
+        echo the api_key argument the constructor was called with."""
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk import client_factory
+
+        leaked_key = "AIzaSyTestKey12345678901234567890123456"
+        fake_genai = mock.Mock()
+        fake_genai.Client.side_effect = ValueError(f"raw {leaked_key}")
+
+        with mock.patch.dict(
+            sys.modules, {"google.genai": fake_genai, "google": mock.Mock(genai=fake_genai)}
+        ):
+            with mock.patch.object(client_factory, "resolve_key", return_value=leaked_key):
+                with pytest.raises(BackendUnavailableError) as exc_info:
+                    client_factory.get_client()
+
+        # __cause__ must be None — the chain is intentionally suppressed.
+        assert exc_info.value.__cause__ is None
+
 
 class TestGetAsyncClient:
     """``get_async_client()`` returns the parent client's ``.aio`` attribute."""

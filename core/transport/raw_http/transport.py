@@ -59,6 +59,24 @@ class RawHttpTransport:
 
     name: Literal["raw_http"] = "raw_http"
 
+    def supports(self, capability: str) -> bool:
+        """Return True for every capability — urllib can issue any REST call.
+
+        The raw HTTP backend is a fully-featured thin wrapper over the
+        Gemini REST API, so every capability in the skill's dispatch
+        table (``text``, ``maps``, ``file_search``, …) is reachable. This
+        is the deterministic-fallback contract the coordinator relies on:
+        the SDK backend may report ``supports("maps") is False``, and the
+        coordinator routes ``maps`` here knowing raw HTTP will handle it.
+
+        Unknown capability names still return True because the underlying
+        ``client.api_call`` will forward the endpoint unchanged; an
+        unknown capability is a dispatch-layer bug, not a transport-layer
+        concern, and the coordinator's upstream gate catches it before
+        the call reaches us.
+        """
+        return True
+
     def api_call(
         self,
         endpoint: str,

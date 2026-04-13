@@ -138,6 +138,18 @@ def _wrap_sdk_errors() -> Iterator[None]:
 
     try:
         yield
+    except ImportError as exc:
+        # A lazy ``from google.genai import types`` (or any submodule) inside
+        # the wrapped body that fails surfaces here. ``get_client()`` already
+        # translates the top-level ``import google.genai`` failure to
+        # BackendUnavailableError before any wrapped call runs, so reaching
+        # this branch means google.genai loaded but a sub-module did not —
+        # a partial install. Translate to BackendUnavailableError so the
+        # coordinator's fallback policy treats it the same as a missing
+        # SDK and routes deterministically to the raw HTTP backend.
+        raise BackendUnavailableError(
+            sanitize(f"google.genai submodule import failed: {exc}")
+        ) from None
     except genai_errors.ClientError as exc:
         code = int(getattr(exc, "code", 0) or 0)
         message = sanitize(str(exc))
@@ -303,8 +315,10 @@ class SdkTransport:
 
         Anything that doesn't match a known shape raises
         ``BackendUnavailableError`` so the coordinator routes the call to
-        the raw HTTP fallback. We deliberately do NOT catch the SDK's own
-        exceptions in this slice — that's slice 2d's job.
+        the raw HTTP fallback. SDK exceptions raised by the dispatched
+        call site are translated by ``_wrap_sdk_errors`` into
+        ``AuthError`` / ``APIError`` / ``BackendUnavailableError``
+        before they reach the coordinator.
 
         Args:
             endpoint: The REST-shaped endpoint string (no leading slash,
@@ -317,8 +331,12 @@ class SdkTransport:
                 collection-vs-resource POST/GET/DELETE.
             api_version: Ignored — the SDK manages its own API version.
                 Accepted for Transport-protocol shape compatibility.
-            timeout: Ignored in this slice — see slice 2d for the SDK
-                request_options timeout wiring.
+            timeout: Currently unused. The google-genai SDK has its own
+                default timeout policy and Phase 2 deliberately did not
+                wire ``http_options``/``request_options`` through. The
+                Phase 3 coordinator's deadline-tracking work is the right
+                place to bridge this — until then the parameter is
+                accepted for Transport-protocol shape compatibility only.
 
         Returns:
             A GeminiResponse dict with camelCase keys, normalized via
@@ -374,7 +392,7 @@ class SdkTransport:
             return cast(GeminiResponse, {})
 
         raise BackendUnavailableError(
-            f"SdkTransport: unknown action endpoint '{endpoint}'"
+            sanitize(f"SdkTransport: unknown action endpoint '{endpoint}'")
         )
 
     def _dispatch_model_action(
@@ -421,7 +439,7 @@ class SdkTransport:
             return sdk_response_to_rest_envelope(sdk_resp)
 
         raise BackendUnavailableError(
-            f"SdkTransport: unknown model action '{action}' for model '{model}'"
+            sanitize(f"SdkTransport: unknown model action '{action}' for model '{model}'")
         )
 
     def _dispatch_crud(
@@ -457,13 +475,17 @@ class SdkTransport:
             # reviewers immediately see what's wrong instead of chasing a
             # misleading "collection not in dispatch table" string.
             raise BackendUnavailableError(
-                f"SdkTransport: operations only supports GET on a resource id, "
-                f"got {method} '{full_name}'"
+                sanitize(
+                    f"SdkTransport: operations only supports GET on a resource id, "
+                    f"got {method} '{full_name}'"
+                )
             )
 
         raise BackendUnavailableError(
-            f"SdkTransport: unknown {method} endpoint '{full_name}' "
-            f"(collection '{collection}' not in dispatch table)"
+            sanitize(
+                f"SdkTransport: unknown {method} endpoint '{full_name}' "
+                f"(collection '{collection}' not in dispatch table)"
+            )
         )
 
     def _dispatch_files(
@@ -483,7 +505,7 @@ class SdkTransport:
             client.files.delete(name=full_name)  # type: ignore[attr-defined]
             return cast(GeminiResponse, {})
         raise BackendUnavailableError(
-            f"SdkTransport: unsupported files {method} on '{full_name}'"
+            sanitize(f"SdkTransport: unsupported files {method} on '{full_name}'")
         )
 
     def _dispatch_caches(
@@ -518,7 +540,7 @@ class SdkTransport:
             client.caches.delete(name=full_name)  # type: ignore[attr-defined]
             return cast(GeminiResponse, {})
         raise BackendUnavailableError(
-            f"SdkTransport: unsupported cachedContents {method} on '{full_name}'"
+            sanitize(f"SdkTransport: unsupported cachedContents {method} on '{full_name}'")
         )
 
     def _dispatch_batches(
@@ -541,7 +563,7 @@ class SdkTransport:
             sdk_resp = client.batches.get(name=full_name)  # type: ignore[attr-defined]
             return sdk_response_to_rest_envelope(sdk_resp)
         raise BackendUnavailableError(
-            f"SdkTransport: unsupported batchJobs {method} on '{full_name}'"
+            sanitize(f"SdkTransport: unsupported batchJobs {method} on '{full_name}'")
         )
 
     # ------------------------------------------------------------------
@@ -668,8 +690,12 @@ class SdkTransport:
                 ``api_call`` body for ``generateContent``.
             api_version: Ignored — the SDK manages its own versioning.
                 Accepted for Transport-protocol shape compatibility.
-            timeout: Ignored in this slice — see slice 2d for the SDK
-                request_options timeout wiring.
+            timeout: Currently unused. The google-genai SDK has its own
+                default timeout policy and Phase 2 deliberately did not
+                wire ``http_options``/``request_options`` through. The
+                Phase 3 coordinator's deadline-tracking work is the right
+                place to bridge this — until then the parameter is
+                accepted for Transport-protocol shape compatibility only.
 
         Yields:
             ``StreamChunk`` dicts (one per SDK chunk) with camelCase keys.
@@ -737,11 +763,15 @@ class SdkTransport:
                 expects a string so we coerce.
             mime_type: MIME type of the upload. Validated against the
                 same RFC 2045 regex the raw HTTP backend uses
-                (``_SAFE_MIME_RE`` in ``core/transport/raw_http/client.py``).
+                (``_SAFE_MIME_RE`` in ``core/transport/_validation.py``).
             display_name: Optional human-readable display name. ``None``
                 tells the SDK to fall back to the filename.
-            timeout: Ignored in this slice — see slice 2d for the SDK
-                request_options timeout wiring.
+            timeout: Currently unused. The google-genai SDK has its own
+                default timeout policy and Phase 2 deliberately did not
+                wire ``http_options``/``request_options`` through. The
+                Phase 3 coordinator's deadline-tracking work is the right
+                place to bridge this — until then the parameter is
+                accepted for Transport-protocol shape compatibility only.
 
         Returns:
             A ``FileMetadata`` dict with camelCase keys (``name``,
@@ -750,7 +780,16 @@ class SdkTransport:
 
         Raises:
             ValueError: If ``mime_type`` contains unsafe characters
-                (CRLF or anything outside the RFC 2045 media-type regex).
+                (CRLF or anything outside the RFC 2045 media-type regex)
+                OR ``display_name`` contains CR/LF. Bare ``ValueError`` is
+                deliberate: ``core/transport/policy.py::_NEVER_FALLBACK``
+                lists ``ValueError`` so the coordinator refuses to retry
+                a malformed input on the other backend — a bad mime is bad
+                on both backends and a fallback would just re-fail at the
+                same guard. If a future refactor narrows this to a more
+                specific subclass, ``policy.py`` must learn the new class
+                or the coordinator will silently fall back on validation
+                failures.
             BackendUnavailableError: Propagated from ``get_client()`` if
                 google-genai is not importable.
         """

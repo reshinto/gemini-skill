@@ -254,11 +254,13 @@ class TestApiCallCountTokens:
         call = patched_get_client.models.count_tokens.call_args
         assert call.kwargs["model"] == "gemini-2.5-flash"
         assert call.kwargs["contents"] == body["contents"]
-        # totalTokens has no entry in _SNAKE_TO_CAMEL → translated by raw walker
-        # (key passes through unchanged because it's outside the table). The
-        # legacy raw HTTP backend returns the camelCase key here, so we record
-        # the SDK's snake_case form and let the adapter handle it.
-        assert "total_tokens" in result or "totalTokens" in result
+        # ``total_tokens`` is mapped to the camelCase ``totalTokens`` key by
+        # ``_SNAKE_TO_CAMEL`` so adapters reading ``response["totalTokens"]``
+        # work identically under either backend. The earlier comment here
+        # acknowledged this as a parity gap; the Phase 2 squash review fixed
+        # the gap by adding the entry to the mapping table and pinning it
+        # in tests/transport/test_parity.py::TestCountTokensParity.
+        assert result == {"totalTokens": 17}
 
 
 class TestApiCallEmbedContent:
@@ -503,6 +505,139 @@ class TestApiCallUnsupportedEndpoint:
 
         with pytest.raises(BackendUnavailableError, match="unsupported batchJobs"):
             SdkTransport().api_call("batchJobs/abc", method="DELETE")
+
+
+class TestUnsupportedEndpointMessageSanitized:
+    """The Phase 2 squash review found that BackendUnavailableError messages
+    interpolated caller-controlled endpoint / model / method strings without
+    sanitize(). These tests pin the fix: every dispatch-error string must
+    flow through ``core.infra.sanitize.sanitize`` so a key fragment in the
+    endpoint can never reach a coordinator log line."""
+
+    _LEAKED_KEY = "AIzaSyTestKey12345678901234567890123456"
+
+    def test_unknown_action_endpoint_redacts_key(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk.transport import SdkTransport
+
+        # Caller-controlled endpoint embedding what looks like a real key.
+        endpoint = f"models/gemini-2.5-flash-{self._LEAKED_KEY}:bogusAction"
+        with pytest.raises(BackendUnavailableError) as exc_info:
+            SdkTransport().api_call(endpoint, body={})
+        assert self._LEAKED_KEY not in str(exc_info.value)
+
+    def test_unknown_action_path_redacts_key(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk.transport import SdkTransport
+
+        endpoint = f"randomThing/{self._LEAKED_KEY}:operate"
+        with pytest.raises(BackendUnavailableError) as exc_info:
+            SdkTransport().api_call(endpoint, body={})
+        assert self._LEAKED_KEY not in str(exc_info.value)
+
+    def test_unknown_collection_redacts_key(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk.transport import SdkTransport
+
+        endpoint = f"fileSearchStores/{self._LEAKED_KEY}"
+        with pytest.raises(BackendUnavailableError) as exc_info:
+            SdkTransport().api_call(endpoint, method="GET")
+        assert self._LEAKED_KEY not in str(exc_info.value)
+
+    def test_files_unsupported_method_redacts_key(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk.transport import SdkTransport
+
+        endpoint = f"files/{self._LEAKED_KEY}"
+        with pytest.raises(BackendUnavailableError) as exc_info:
+            SdkTransport().api_call(endpoint, method="PUT")
+        assert self._LEAKED_KEY not in str(exc_info.value)
+
+    def test_caches_unsupported_method_redacts_key(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk.transport import SdkTransport
+
+        endpoint = f"cachedContents/{self._LEAKED_KEY}"
+        with pytest.raises(BackendUnavailableError) as exc_info:
+            SdkTransport().api_call(endpoint, method="PUT")
+        assert self._LEAKED_KEY not in str(exc_info.value)
+
+    def test_batches_unsupported_method_redacts_key(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk.transport import SdkTransport
+
+        endpoint = f"batchJobs/{self._LEAKED_KEY}"
+        with pytest.raises(BackendUnavailableError) as exc_info:
+            SdkTransport().api_call(endpoint, method="DELETE")
+        assert self._LEAKED_KEY not in str(exc_info.value)
+
+    def test_operations_unsupported_method_redacts_key(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk.transport import SdkTransport
+
+        endpoint = f"operations/{self._LEAKED_KEY}"
+        with pytest.raises(BackendUnavailableError) as exc_info:
+            SdkTransport().api_call(endpoint, method="DELETE")
+        assert self._LEAKED_KEY not in str(exc_info.value)
+
+    def test_unknown_model_action_redacts_key(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        """The model-action raise interpolates both action and model."""
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk.transport import SdkTransport
+
+        endpoint = f"models/gemini-{self._LEAKED_KEY}:bogusAction"
+        with pytest.raises(BackendUnavailableError) as exc_info:
+            SdkTransport().api_call(endpoint, body={})
+        assert self._LEAKED_KEY not in str(exc_info.value)
+
+
+class TestWrapSdkErrorsImportError:
+    """The Phase 2 squash review added an ImportError catch arm to
+    ``_wrap_sdk_errors``. A lazy ``from google.genai import types`` inside
+    a wrapped body that fails (partial install) must surface as a
+    BackendUnavailableError with a sanitized message and a suppressed
+    __cause__ chain — same contract as every other arm in the wrapper."""
+
+    def test_lazy_submodule_import_error_becomes_backend_unavailable(self) -> None:
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(BackendUnavailableError, match="submodule import failed"):
+            with _wrap_sdk_errors():
+                raise ImportError("No module named 'google.genai.types'")
+
+    def test_import_error_cause_chain_is_suppressed(self) -> None:
+        """``raise ... from None`` must hide the original ImportError so
+        traceback serializers can't print whatever the original message
+        carried (defense in depth — the original message is sanitized
+        too, but suppressing the chain is the belt-and-braces guarantee)."""
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        try:
+            with _wrap_sdk_errors():
+                raise ImportError("original-message-with-secret")
+        except BackendUnavailableError as exc:
+            assert exc.__cause__ is None
+            assert "original-message-with-secret" in str(exc)  # passed through sanitize() unchanged
+        else:
+            pytest.fail("BackendUnavailableError was not raised")
 
 
 class TestEmbedContentConfigBuilder:

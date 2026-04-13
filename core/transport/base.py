@@ -252,6 +252,21 @@ class Transport(Protocol):
 
     name: Literal["sdk", "raw_http"]
 
+    def supports(self, capability: str) -> bool:
+        """Return True iff this backend is KNOWN to handle ``capability``.
+
+        Called by the coordinator BEFORE dispatching any operation so
+        unsupported capabilities route deterministically to the fallback
+        backend without a try/except dance. The SDK backend returns the
+        membership test against its explicit ``_SUPPORTED_CAPABILITIES``
+        frozenset; the raw HTTP backend returns ``True`` for every
+        capability in the skill's dispatch table because urllib can issue
+        any REST endpoint. Part of the Protocol (not just the SDK class)
+        because the coordinator calls it polymorphically on whichever
+        backend is in its ``primary`` slot — Phase 3 would AttributeError
+        at runtime if a backend forgot to implement it.
+        """
+
     def api_call(
         self,
         endpoint: str,

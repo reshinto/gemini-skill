@@ -46,10 +46,7 @@ from urllib.request import Request, urlopen
 from core.auth.auth import resolve_key
 from core.infra.errors import APIError
 from core.infra.sanitize import sanitize
-from core.transport._validation import (
-    _SAFE_MIME_RE as _SAFE_MIME_RE,  # re-export for backward compat
-    validate_mime_type as _validate_mime_type,
-)
+from core.transport._validation import validate_mime_type as _validate_mime_type
 
 # Gemini API base URL — all requests are relative to this
 BASE_URL = "https://generativelanguage.googleapis.com"
@@ -58,13 +55,12 @@ BASE_URL = "https://generativelanguage.googleapis.com"
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 1  # seconds — backoff sequence: 1, 2, 4
 
-# NOTE: ``_SAFE_MIME_RE`` and ``_validate_mime_type`` were moved to
-# ``core/transport/_validation.py`` during the Phase 2 review pass so the
-# SDK transport can import the same single source of truth without
-# reaching across a private symbol boundary. Both names are re-exported
-# at module top via the import alias so any in-repo caller (and any
-# existing test) that referenced ``_SAFE_MIME_RE`` or ``_validate_mime_type``
-# from this module path still resolves correctly.
+# NOTE: the mime-type guard was moved to ``core/transport/_validation.py``
+# during the Phase 2 review pass so both transport backends share a single
+# source of truth. ``_validate_mime_type`` stays re-exported here under the
+# private name because the in-module ``upload_file`` call site uses it; the
+# previously-re-exported ``_SAFE_MIME_RE`` was dead and was removed in the
+# Phase 2 squash review.
 
 
 def api_call(
