@@ -60,7 +60,12 @@ from core.transport.base import (
     GeminiResponse,
     StreamChunk,
 )
-from core.transport.normalize import sdk_response_to_rest_envelope
+from core.transport.normalize import (
+    sdk_file_to_metadata,
+    sdk_response_to_rest_envelope,
+    sdk_stream_chunk_to_envelope,
+)
+from core.transport._validation import validate_mime_type, validate_no_crlf
 from core.transport.sdk.client_factory import get_client
 
 
@@ -532,10 +537,59 @@ class SdkTransport:
         api_version: str = "v1beta",
         timeout: int = 30,
     ) -> Iterator[StreamChunk]:
-        """Stream chunks from generate_content_stream. (slice 2c)"""
-        raise NotImplementedError(  # pragma: no cover
-            "SdkTransport.stream_generate_content lands in Phase 2 slice 2c"
+        """Yield normalized stream chunks from ``client.models.generate_content_stream``.
+
+        Streaming uses the same body translation as ``api_call`` for
+        ``generateContent`` — pulls ``contents`` and folds the rest of the
+        body into a ``GenerateContentConfig``. Each chunk the SDK yields is
+        a pydantic-shaped object with the same field surface as a full
+        response, so we route every chunk through
+        ``sdk_stream_chunk_to_envelope`` to land it in the camelCase REST
+        envelope the adapter loop expects.
+
+        Args:
+            model: The Gemini model identifier (e.g. ``"gemini-2.5-flash"``).
+                Passed straight through to the SDK as the ``model`` kwarg.
+            body: Legacy REST-shaped request body. Same shape as the
+                ``api_call`` body for ``generateContent``.
+            api_version: Ignored — the SDK manages its own versioning.
+                Accepted for Transport-protocol shape compatibility.
+            timeout: Ignored in this slice — see slice 2d for the SDK
+                request_options timeout wiring.
+
+        Yields:
+            ``StreamChunk`` dicts (one per SDK chunk) with camelCase keys.
+            The generator runs to exhaustion when the SDK iterator stops.
+
+        Raises:
+            BackendUnavailableError: Propagated from ``get_client()`` if
+                google-genai is not importable.
+        """
+        client = get_client()
+        body_dict: dict[str, object] = dict(body)
+        contents, config = self._build_generate_content_kwargs(body_dict)
+        # The SDK call returns a generator; iterating it issues the HTTP
+        # request and reads SSE chunks lazily. We forward each chunk through
+        # the normalize translator one at a time so a slow consumer's
+        # backpressure flows back to the SDK naturally.
+        sdk_iterator = client.models.generate_content_stream(
+            model=model, contents=contents, config=config
         )
+        # Wrap iteration in try/finally so the SDK iterator is closed even
+        # if the consumer breaks out of the loop early (timeout, exception,
+        # GeneratorExit from the coordinator). CPython's reference counting
+        # would close the iterator promptly anyway, but the explicit
+        # ``close()`` call makes the lifecycle obvious and works on any
+        # Python implementation. The guard around hasattr() keeps the
+        # behavior safe for SDK iterators that don't implement close()
+        # (older or mock objects).
+        try:
+            for chunk in sdk_iterator:
+                yield sdk_stream_chunk_to_envelope(chunk)
+        finally:
+            close = getattr(sdk_iterator, "close", None)
+            if callable(close):
+                close()
 
     def upload_file(
         self,
@@ -544,7 +598,56 @@ class SdkTransport:
         display_name: str | None = None,
         timeout: int = 120,
     ) -> FileMetadata:
-        """Upload a file via client.files.upload. (slice 2c)"""
-        raise NotImplementedError(  # pragma: no cover
-            "SdkTransport.upload_file lands in Phase 2 slice 2c"
+        """Upload a file via ``client.files.upload`` and return its metadata.
+
+        The SDK's ``files.upload`` accepts ``file=<path>`` plus a config
+        dict carrying ``mime_type`` and ``display_name``. We deliberately
+        validate the mime_type before reaching the SDK using the SAME
+        regex the raw HTTP backend uses — defense in depth, identical
+        sanitization on both backends so a CRLF injection cannot reach
+        the wire on either path.
+
+        Args:
+            file_path: Path to the file to upload. Accepted as either a
+                ``Path`` or a string for caller convenience; the SDK
+                expects a string so we coerce.
+            mime_type: MIME type of the upload. Validated against the
+                same RFC 2045 regex the raw HTTP backend uses
+                (``_SAFE_MIME_RE`` in ``core/transport/raw_http/client.py``).
+            display_name: Optional human-readable display name. ``None``
+                tells the SDK to fall back to the filename.
+            timeout: Ignored in this slice — see slice 2d for the SDK
+                request_options timeout wiring.
+
+        Returns:
+            A ``FileMetadata`` dict with camelCase keys (``name``,
+            ``displayName``, ``mimeType``, ``sizeBytes``, ``state``,
+            ``uri``), normalized via ``sdk_file_to_metadata``.
+
+        Raises:
+            ValueError: If ``mime_type`` contains unsafe characters
+                (CRLF or anything outside the RFC 2045 media-type regex).
+            BackendUnavailableError: Propagated from ``get_client()`` if
+                google-genai is not importable.
+        """
+        # Validate FIRST — even before fetching the client. This means a
+        # malformed mime never even causes a network probe; the test that
+        # asserts ``files.upload.assert_not_called()`` after a bad mime
+        # relies on this ordering.
+        validate_mime_type(mime_type)
+        # display_name is a free-form string that might end up in a
+        # Content-Disposition header somewhere downstream of the SDK. The
+        # SDK should sanitize it, but defense in depth means we reject
+        # CR/LF here at the transport boundary so a malicious display
+        # name can never reach the wire on either backend. (The raw HTTP
+        # backend never honored display_name in headers in the first
+        # place — this guard pre-empts the same risk on the SDK path.)
+        if display_name is not None:
+            validate_no_crlf(display_name, field_name="display_name")
+
+        client = get_client()
+        sdk_file = client.files.upload(
+            file=str(file_path),
+            config={"mime_type": mime_type, "display_name": display_name},
         )
+        return sdk_file_to_metadata(sdk_file)

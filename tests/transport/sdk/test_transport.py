@@ -17,6 +17,7 @@ Every test in this file mocks google.genai.Client. There is no live network.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any, cast
 from unittest import mock
 
@@ -601,3 +602,229 @@ class TestWrapCollection:
         patched_get_client.files.list.return_value = None
         result = cast(dict[str, Any], SdkTransport().api_call("files", method="GET"))
         assert result == {"files": []}
+
+
+class TestStreamGenerateContent:
+    """``stream_generate_content`` mirrors ``api_call`` for the streaming
+    family. Body translation is identical; the difference is that the SDK
+    returns an iterator of chunks rather than a single response, and the
+    transport yields normalized StreamChunk dicts one at a time."""
+
+    def test_yields_normalized_chunks(self, patched_get_client: mock.Mock) -> None:
+        from core.transport.sdk.transport import SdkTransport
+
+        chunk1 = _make_sdk_response(
+            {"candidates": [{"content": {"parts": [{"text": "Hello "}]}}]}
+        )
+        chunk2 = _make_sdk_response(
+            {"candidates": [{"content": {"parts": [{"text": "world"}]}}]}
+        )
+        patched_get_client.models.generate_content_stream.return_value = iter([chunk1, chunk2])
+
+        body = {"contents": [{"role": "user", "parts": [{"text": "say hi"}]}]}
+        chunks = list(SdkTransport().stream_generate_content("gemini-2.5-flash", body=body))
+
+        # SDK call shape mirrors generate_content
+        call = patched_get_client.models.generate_content_stream.call_args
+        assert call.kwargs["model"] == "gemini-2.5-flash"
+        assert call.kwargs["contents"] == body["contents"]
+        # Two chunks, each a normalized dict
+        assert len(chunks) == 2
+        assert chunks[0]["candidates"][0]["content"]["parts"][0]["text"] == "Hello "
+        assert chunks[1]["candidates"][0]["content"]["parts"][0]["text"] == "world"
+
+    def test_passes_full_config(self, patched_get_client: mock.Mock) -> None:
+        """Streaming honors the same body translation as api_call generateContent."""
+        from core.transport.sdk.transport import SdkTransport
+
+        patched_get_client.models.generate_content_stream.return_value = iter([])
+        body = {
+            "contents": [{"role": "user", "parts": [{"text": "x"}]}],
+            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 64},
+            "systemInstruction": {"parts": [{"text": "be terse"}]},
+        }
+        list(SdkTransport().stream_generate_content("gemini-2.5-flash", body=body))
+
+        from google.genai import types
+
+        call = patched_get_client.models.generate_content_stream.call_args
+        cfg = call.kwargs["config"]
+        assert isinstance(cfg, types.GenerateContentConfig)
+        assert cfg.temperature == 0.3
+        assert cfg.max_output_tokens == 64
+        assert cfg.system_instruction is not None
+
+    def test_empty_stream_yields_nothing(self, patched_get_client: mock.Mock) -> None:
+        from core.transport.sdk.transport import SdkTransport
+
+        patched_get_client.models.generate_content_stream.return_value = iter([])
+        body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
+        chunks = list(SdkTransport().stream_generate_content("gemini-2.5-flash", body=body))
+        assert chunks == []
+
+
+class TestUploadFile:
+    """``upload_file`` wraps ``client.files.upload`` and normalizes the
+    returned File pydantic model into the FileMetadata envelope shape."""
+
+    def test_uploads_with_mime_and_display_name(
+        self, patched_get_client: mock.Mock, tmp_path: Path
+    ) -> None:
+        from core.transport.sdk.transport import SdkTransport
+
+        path = tmp_path / "hello.txt"
+        path.write_text("hello world")
+
+        sdk_file = mock.Mock()
+        sdk_file.model_dump.return_value = {
+            "name": "files/abc",
+            "display_name": "hello.txt",
+            "mime_type": "text/plain",
+            "size_bytes": "11",
+            "state": "ACTIVE",
+            "uri": "https://generativelanguage.googleapis.com/v1beta/files/abc",
+        }
+        patched_get_client.files.upload.return_value = sdk_file
+
+        result = SdkTransport().upload_file(
+            file_path=path, mime_type="text/plain", display_name="hello.txt"
+        )
+
+        call = patched_get_client.files.upload.call_args
+        # SDK accepts file= as path string
+        assert call.kwargs["file"] == str(path)
+        # Config carries mime_type and display_name
+        cfg = call.kwargs["config"]
+        assert cfg["mime_type"] == "text/plain"
+        assert cfg["display_name"] == "hello.txt"
+        # Normalized envelope: snake_case → camelCase via sdk_file_to_metadata
+        assert result["mimeType"] == "text/plain"
+        assert result["displayName"] == "hello.txt"
+        assert result["sizeBytes"] == "11"
+
+    def test_upload_without_display_name(
+        self, patched_get_client: mock.Mock, tmp_path: Path
+    ) -> None:
+        from core.transport.sdk.transport import SdkTransport
+
+        path = tmp_path / "data.bin"
+        path.write_bytes(b"\x00\x01\x02")
+
+        sdk_file = mock.Mock()
+        sdk_file.model_dump.return_value = {
+            "name": "files/xyz",
+            "mime_type": "application/octet-stream",
+            "size_bytes": "3",
+            "state": "ACTIVE",
+            "uri": "https://example/files/xyz",
+        }
+        patched_get_client.files.upload.return_value = sdk_file
+
+        SdkTransport().upload_file(file_path=path, mime_type="application/octet-stream")
+
+        cfg = patched_get_client.files.upload.call_args.kwargs["config"]
+        assert cfg["mime_type"] == "application/octet-stream"
+        assert cfg["display_name"] is None
+
+    def test_upload_accepts_string_path(
+        self, patched_get_client: mock.Mock, tmp_path: Path
+    ) -> None:
+        from core.transport.sdk.transport import SdkTransport
+
+        path = tmp_path / "s.txt"
+        path.write_text("x")
+
+        sdk_file = mock.Mock()
+        sdk_file.model_dump.return_value = {"name": "files/s", "mime_type": "text/plain"}
+        patched_get_client.files.upload.return_value = sdk_file
+
+        SdkTransport().upload_file(file_path=str(path), mime_type="text/plain")
+        assert patched_get_client.files.upload.call_args.kwargs["file"] == str(path)
+
+    def test_unsafe_mime_type_rejected(self, patched_get_client: mock.Mock) -> None:
+        """Defense in depth: validate mime_type with the same CRLF guard the
+        raw HTTP backend uses, so a malformed mime can never reach the SDK
+        even if the SDK were to forward it into a header somewhere downstream."""
+        from core.transport.sdk.transport import SdkTransport
+
+        with pytest.raises(ValueError, match="Unsafe MIME type"):
+            SdkTransport().upload_file(
+                file_path="/tmp/anything", mime_type="text/plain\r\nX-Injected: yes"
+            )
+        # SDK upload was never called
+        patched_get_client.files.upload.assert_not_called()
+
+    def test_unsafe_display_name_rejected(self, patched_get_client: mock.Mock) -> None:
+        """The display_name CRLF guard pre-empts header injection downstream
+        of the SDK. Mirrors the mime_type guard but for the free-form field."""
+        from core.transport.sdk.transport import SdkTransport
+
+        with pytest.raises(ValueError, match="display_name"):
+            SdkTransport().upload_file(
+                file_path="/tmp/anything",
+                mime_type="text/plain",
+                display_name="legit\r\nX-Injected: yes",
+            )
+        patched_get_client.files.upload.assert_not_called()
+
+
+class TestStreamCloseOnEarlyExit:
+    """The streaming generator wraps iteration in try/finally so the SDK
+    iterator's close() is called even if the consumer breaks out early.
+    Pins the resource-cleanup contract a hardening review asked for."""
+
+    def test_iterator_close_called_on_full_consumption(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.transport.sdk.transport import SdkTransport
+
+        chunk = _make_sdk_response({"candidates": []})
+        sdk_iter = mock.Mock()
+        sdk_iter.__iter__ = mock.Mock(return_value=iter([chunk]))
+        sdk_iter.close = mock.Mock()
+        patched_get_client.models.generate_content_stream.return_value = sdk_iter
+
+        body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
+        list(SdkTransport().stream_generate_content("gemini-2.5-flash", body=body))
+        sdk_iter.close.assert_called_once()
+
+    def test_iterator_close_called_on_consumer_exception(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.transport.sdk.transport import SdkTransport
+
+        chunk1 = _make_sdk_response({"candidates": []})
+        chunk2 = _make_sdk_response({"candidates": []})
+        sdk_iter = mock.Mock()
+        sdk_iter.__iter__ = mock.Mock(return_value=iter([chunk1, chunk2]))
+        sdk_iter.close = mock.Mock()
+        patched_get_client.models.generate_content_stream.return_value = sdk_iter
+
+        body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
+        # cast to Generator so mypy sees the .close() method that all
+        # generator objects expose at runtime — the protocol's
+        # Iterator[StreamChunk] return type doesn't include it.
+        from collections.abc import Generator
+
+        gen = cast(
+            "Generator[Any, None, None]",
+            SdkTransport().stream_generate_content("gemini-2.5-flash", body=body),
+        )
+        next(gen)  # consume one chunk
+        gen.close()  # consumer aborts early
+        sdk_iter.close.assert_called_once()
+
+    def test_iterator_without_close_method_does_not_crash(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        """If the SDK iterator doesn't expose close() (older versions or a
+        bare generator), the finally block silently skips the call."""
+        from core.transport.sdk.transport import SdkTransport
+
+        chunk = _make_sdk_response({"candidates": []})
+        # iter([...]) returns a list_iterator with no .close() method.
+        patched_get_client.models.generate_content_stream.return_value = iter([chunk])
+
+        body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
+        chunks = list(SdkTransport().stream_generate_content("gemini-2.5-flash", body=body))
+        assert len(chunks) == 1
