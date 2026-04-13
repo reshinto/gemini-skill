@@ -4,6 +4,7 @@ Verifies API call construction, header auth, retry classification,
 exponential backoff, streaming SSE, and error handling.
 All tests mock urllib to avoid network calls.
 """
+
 from __future__ import annotations
 
 import io
@@ -26,8 +27,12 @@ class TestApiCall:
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen", return_value=mock_response
+            ) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             result = api_call("models", method="GET")
 
         assert result == response_data
@@ -44,8 +49,12 @@ class TestApiCall:
         mock_response.__exit__ = MagicMock(return_value=False)
 
         body = {"contents": [{"parts": [{"text": "hello"}]}]}
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen", return_value=mock_response
+            ) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             result = api_call("models/gemini-2.5-flash:generateContent", body=body)
 
         req = mock_urlopen.call_args[0][0]
@@ -56,12 +65,16 @@ class TestApiCall:
         from core.infra.client import api_call, BASE_URL
 
         mock_response = MagicMock()
-        mock_response.read.return_value = b'{}'
+        mock_response.read.return_value = b"{}"
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen", return_value=mock_response
+            ) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             api_call("models", method="GET")
 
         req = mock_urlopen.call_args[0][0]
@@ -71,12 +84,16 @@ class TestApiCall:
         from core.infra.client import api_call
 
         mock_response = MagicMock()
-        mock_response.read.return_value = b'{}'
+        mock_response.read.return_value = b"{}"
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen", return_value=mock_response
+            ) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             api_call("models", method="GET", api_version="v1")
 
         req = mock_urlopen.call_args[0][0]
@@ -86,12 +103,16 @@ class TestApiCall:
         from core.infra.client import api_call
 
         mock_response = MagicMock()
-        mock_response.read.return_value = b'{}'
+        mock_response.read.return_value = b"{}"
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen", return_value=mock_response
+            ) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             api_call("models", method="GET", timeout=60)
 
         _, kwargs = mock_urlopen.call_args
@@ -101,17 +122,49 @@ class TestApiCall:
         from core.infra.client import api_call
 
         mock_response = MagicMock()
-        mock_response.read.return_value = b'{}'
+        mock_response.read.return_value = b"{}"
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="AIzaSyTestKey1234567890123456789012345"):
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen", return_value=mock_response
+            ) as mock_urlopen,
+            patch(
+                "core.transport.raw_http.client.resolve_key",
+                return_value="AIzaSyTestKey1234567890123456789012345",
+            ),
+        ):
             api_call("models", method="GET")
 
         req = mock_urlopen.call_args[0][0]
         assert "AIza" not in req.full_url
         assert "key=" not in req.full_url
+
+    def test_explicit_api_key_never_appears_in_url(self):
+        """When a caller bypasses resolve_key() and passes api_key directly,
+        the key must still travel via the x-goog-api-key header — never via
+        the URL query string. This pins the explicit-key path of api_call."""
+        from core.infra.client import api_call
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = b"{}"
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch(
+            "core.transport.raw_http.client.urlopen", return_value=mock_response
+        ) as mock_urlopen:
+            api_call(
+                "models",
+                method="GET",
+                api_key="AIzaSyExplicitKey1234567890123456789012",
+            )
+
+        req = mock_urlopen.call_args[0][0]
+        assert "AIza" not in req.full_url
+        assert "key=" not in req.full_url
+        assert req.get_header("X-goog-api-key") == "AIzaSyExplicitKey1234567890123456789012"
 
 
 class TestApiCallErrors:
@@ -122,9 +175,13 @@ class TestApiCallErrors:
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
-        err = HTTPError("http://x", 400, "Bad Request", {}, io.BytesIO(b'{"error": {"message": "bad"}}'))
-        with patch("core.infra.client.urlopen", side_effect=err), \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        err = HTTPError(
+            "http://x", 400, "Bad Request", {}, io.BytesIO(b'{"error": {"message": "bad"}}')
+        )
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             with pytest.raises(APIError, match="400") as exc_info:
                 api_call("models", method="GET")
             assert exc_info.value.status_code == 400
@@ -134,9 +191,11 @@ class TestApiCallErrors:
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
-        err = HTTPError("http://x", 401, "Unauthorized", {}, io.BytesIO(b'{}'))
-        with patch("core.infra.client.urlopen", side_effect=err), \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        err = HTTPError("http://x", 401, "Unauthorized", {}, io.BytesIO(b"{}"))
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             with pytest.raises(APIError) as exc_info:
                 api_call("models", method="GET")
             assert exc_info.value.status_code == 401
@@ -146,10 +205,12 @@ class TestApiCallErrors:
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
-        err = HTTPError("http://x", 429, "Too Many Requests", {}, io.BytesIO(b'{}'))
-        with patch("core.infra.client.urlopen", side_effect=err), \
-             patch("core.infra.client.resolve_key", return_value="fake-key"), \
-             patch("time.sleep"):
+        err = HTTPError("http://x", 429, "Too Many Requests", {}, io.BytesIO(b"{}"))
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+            patch("time.sleep"),
+        ):
             with pytest.raises(APIError) as exc_info:
                 api_call("models", method="GET")
             assert exc_info.value.status_code == 429
@@ -159,10 +220,12 @@ class TestApiCallErrors:
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
-        err = HTTPError("http://x", 429, "Too Many Requests", {}, io.BytesIO(b'{}'))
-        with patch("core.infra.client.urlopen", side_effect=err) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"), \
-             patch("time.sleep"):
+        err = HTTPError("http://x", 429, "Too Many Requests", {}, io.BytesIO(b"{}"))
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+            patch("time.sleep"),
+        ):
             with pytest.raises(APIError):
                 api_call("models", method="GET")
             # 1 initial + 3 retries = 4 total calls
@@ -173,10 +236,12 @@ class TestApiCallErrors:
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
-        err = HTTPError("http://x", 503, "Service Unavailable", {}, io.BytesIO(b'{}'))
-        with patch("core.infra.client.urlopen", side_effect=err) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"), \
-             patch("time.sleep"):
+        err = HTTPError("http://x", 503, "Service Unavailable", {}, io.BytesIO(b"{}"))
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+            patch("time.sleep"),
+        ):
             with pytest.raises(APIError):
                 api_call("models", method="GET")
             assert mock_urlopen.call_count == 4
@@ -186,10 +251,12 @@ class TestApiCallErrors:
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
-        err = HTTPError("http://x", 504, "Gateway Timeout", {}, io.BytesIO(b'{}'))
-        with patch("core.infra.client.urlopen", side_effect=err) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"), \
-             patch("time.sleep"):
+        err = HTTPError("http://x", 504, "Gateway Timeout", {}, io.BytesIO(b"{}"))
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+            patch("time.sleep"),
+        ):
             with pytest.raises(APIError):
                 api_call("models", method="GET")
             # 1 initial + 1 timeout retry = 2
@@ -200,10 +267,12 @@ class TestApiCallErrors:
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
-        err = HTTPError("http://x", 504, "Gateway Timeout", {}, io.BytesIO(b'{}'))
-        with patch("core.infra.client.urlopen", side_effect=err) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"), \
-             patch("time.sleep"):
+        err = HTTPError("http://x", 504, "Gateway Timeout", {}, io.BytesIO(b"{}"))
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+            patch("time.sleep"),
+        ):
             with pytest.raises(APIError):
                 api_call("models/x:generateContent", body={"x": 1}, method="POST")
             assert mock_urlopen.call_count == 1
@@ -212,15 +281,17 @@ class TestApiCallErrors:
         from core.infra.client import api_call
         from urllib.error import HTTPError
 
-        err = HTTPError("http://x", 429, "Too Many Requests", {}, io.BytesIO(b'{}'))
+        err = HTTPError("http://x", 429, "Too Many Requests", {}, io.BytesIO(b"{}"))
         mock_success = MagicMock()
         mock_success.read.return_value = b'{"ok": true}'
         mock_success.__enter__ = MagicMock(return_value=mock_success)
         mock_success.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", side_effect=[err, mock_success]), \
-             patch("core.infra.client.resolve_key", return_value="fake-key"), \
-             patch("time.sleep"):
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=[err, mock_success]),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+            patch("time.sleep"),
+        ):
             result = api_call("models", method="GET")
         assert result == {"ok": True}
 
@@ -230,9 +301,11 @@ class TestApiCallErrors:
         from urllib.error import URLError
 
         err = URLError("Connection refused")
-        with patch("core.infra.client.urlopen", side_effect=err) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"), \
-             patch("time.sleep"):
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+            patch("time.sleep"),
+        ):
             with pytest.raises(APIError, match="Connection"):
                 api_call("models", method="GET")
             assert mock_urlopen.call_count == 4
@@ -243,9 +316,11 @@ class TestApiCallErrors:
         import socket
 
         err = socket.timeout("timed out")
-        with patch("core.infra.client.urlopen", side_effect=err) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"), \
-             patch("time.sleep"):
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+            patch("time.sleep"),
+        ):
             with pytest.raises(APIError, match="timed out"):
                 api_call("models", method="GET")
             assert mock_urlopen.call_count == 4
@@ -255,11 +330,13 @@ class TestApiCallErrors:
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
-        err = HTTPError("http://x", 429, "Too Many Requests", {}, io.BytesIO(b'{}'))
+        err = HTTPError("http://x", 429, "Too Many Requests", {}, io.BytesIO(b"{}"))
         sleep_calls = []
-        with patch("core.infra.client.urlopen", side_effect=err), \
-             patch("core.infra.client.resolve_key", return_value="fake-key"), \
-             patch("time.sleep", side_effect=lambda s: sleep_calls.append(s)):
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+            patch("time.sleep", side_effect=lambda s: sleep_calls.append(s)),
+        ):
             with pytest.raises(APIError):
                 api_call("models", method="GET")
         # Exponential backoff: 1, 2, 4
@@ -272,8 +349,10 @@ class TestApiCallErrors:
 
         body = json.dumps({"error": {"message": "Model not found"}}).encode()
         err = HTTPError("http://x", 404, "Not Found", {}, io.BytesIO(body))
-        with patch("core.infra.client.urlopen", side_effect=err), \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             with pytest.raises(APIError, match="Model not found"):
                 api_call("models/nonexistent", method="GET")
 
@@ -282,10 +361,12 @@ class TestApiCallErrors:
         from core.infra.errors import APIError
         from urllib.error import HTTPError
 
-        err = HTTPError("http://x", 500, "Internal Server Error", {}, io.BytesIO(b'not json'))
-        with patch("core.infra.client.urlopen", side_effect=err) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"), \
-             patch("time.sleep"):
+        err = HTTPError("http://x", 500, "Internal Server Error", {}, io.BytesIO(b"not json"))
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+            patch("time.sleep"),
+        ):
             with pytest.raises(APIError, match="500"):
                 api_call("models", method="GET")
 
@@ -305,8 +386,10 @@ class TestStreamGenerateContent:
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response), \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch("core.transport.raw_http.client.urlopen", return_value=mock_response),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             chunks = list(stream_generate_content("gemini-2.5-flash", {"contents": []}))
 
         assert len(chunks) == 2
@@ -320,8 +403,12 @@ class TestStreamGenerateContent:
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen", return_value=mock_response
+            ) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             list(stream_generate_content("gemini-2.5-flash", {}))
 
         req = mock_urlopen.call_args[0][0]
@@ -339,8 +426,10 @@ class TestStreamGenerateContent:
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response), \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch("core.transport.raw_http.client.urlopen", return_value=mock_response),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             chunks = list(stream_generate_content("gemini-2.5-flash", {}))
 
         assert len(chunks) == 1
@@ -348,15 +437,17 @@ class TestStreamGenerateContent:
     def test_skips_malformed_json_lines(self):
         from core.infra.client import stream_generate_content
 
-        sse_data = b"data: not-json\n\ndata: {\"ok\": true}\n\n"
+        sse_data = b'data: not-json\n\ndata: {"ok": true}\n\n'
 
         mock_response = MagicMock()
         mock_response.read.return_value = sse_data
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response), \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch("core.transport.raw_http.client.urlopen", return_value=mock_response),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             chunks = list(stream_generate_content("gemini-2.5-flash", {}))
 
         assert len(chunks) == 1
@@ -370,8 +461,12 @@ class TestStreamGenerateContent:
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen", return_value=mock_response
+            ) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             list(stream_generate_content("gemini-2.5-flash", {}, api_version="v1"))
 
         req = mock_urlopen.call_args[0][0]
@@ -393,8 +488,10 @@ class TestUploadFile:
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response), \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch("core.transport.raw_http.client.urlopen", return_value=mock_response),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             result = upload_file(test_file, mime_type="application/pdf")
 
         assert result == response_data
@@ -410,8 +507,12 @@ class TestUploadFile:
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen", return_value=mock_response
+            ) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             upload_file(test_file, mime_type="text/plain")
 
         req = mock_urlopen.call_args[0][0]
@@ -428,8 +529,12 @@ class TestUploadFile:
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen", return_value=mock_response
+            ) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             upload_file(test_file, mime_type="application/pdf", display_name="My Report")
 
         req = mock_urlopen.call_args[0][0]
@@ -445,53 +550,62 @@ class TestApiCallWithKey:
         from core.infra.client import api_call
 
         mock_response = MagicMock()
-        mock_response.read.return_value = b'{}'
+        mock_response.read.return_value = b"{}"
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen, \
-             patch("core.infra.client.resolve_key", return_value="test-api-key-value"):
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen", return_value=mock_response
+            ) as mock_urlopen,
+            patch("core.transport.raw_http.client.resolve_key", return_value="test-api-key-value"),
+        ):
             api_call("models", method="GET")
 
         req = mock_urlopen.call_args[0][0]
         assert req.get_header("X-goog-api-key") == "test-api-key-value"
 
-    def test_passes_skill_root_to_resolve_key(self):
-        """Regression: client must pass env_dir=_SKILL_ROOT so the installed
-        skill's .env file is actually loaded. Previously it called resolve_key()
-        with no arguments, which silently ignored ~/.claude/skills/gemini/.env.
+    def test_api_call_invokes_resolve_key_with_no_arguments(self):
+        """The installed skill reads GEMINI_API_KEY from the process environment
+        (Claude Code injects it from ~/.claude/settings.json). The raw HTTP
+        client must therefore call resolve_key() with NO arguments — the old
+        ``env_dir=_SKILL_ROOT`` path was deleted in the dual-backend refactor.
         """
-        from core.infra.client import api_call, _SKILL_ROOT
+        from core.infra.client import api_call
 
         mock_response = MagicMock()
-        mock_response.read.return_value = b'{}'
+        mock_response.read.return_value = b"{}"
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response), \
-             patch("core.infra.client.resolve_key", return_value="key") as mock_resolve:
+        with (
+            patch("core.transport.raw_http.client.urlopen", return_value=mock_response),
+            patch("core.transport.raw_http.client.resolve_key", return_value="key") as mock_resolve,
+        ):
             api_call("models", method="GET")
 
-        mock_resolve.assert_called_once_with(env_dir=_SKILL_ROOT)
+        mock_resolve.assert_called_once_with()
 
-    def test_stream_generate_content_passes_skill_root_to_resolve_key(self):
-        """Regression: stream_generate_content must also load the skill .env."""
-        from core.infra.client import stream_generate_content, _SKILL_ROOT
+    def test_stream_generate_content_invokes_resolve_key_with_no_arguments(self):
+        """stream_generate_content must follow the same no-arg auth contract."""
+        from core.infra.client import stream_generate_content
 
         mock_response = MagicMock()
         mock_response.read.return_value = b""
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response), \
-             patch("core.infra.client.resolve_key", return_value="key") as mock_resolve:
+        with (
+            patch("core.transport.raw_http.client.urlopen", return_value=mock_response),
+            patch("core.transport.raw_http.client.resolve_key", return_value="key") as mock_resolve,
+        ):
             list(stream_generate_content("gemini-2.5-flash", {"contents": []}))
 
-        mock_resolve.assert_called_once_with(env_dir=_SKILL_ROOT)
+        mock_resolve.assert_called_once_with()
 
-    def test_upload_file_passes_skill_root_to_resolve_key(self, tmp_path):
-        """Regression: upload_file must also load the skill .env."""
-        from core.infra.client import upload_file, _SKILL_ROOT
+    def test_upload_file_invokes_resolve_key_with_no_arguments(self, tmp_path):
+        """upload_file must follow the same no-arg auth contract."""
+        from core.infra.client import upload_file
 
         f = tmp_path / "tiny.txt"
         f.write_text("hi")
@@ -501,21 +615,25 @@ class TestApiCallWithKey:
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response), \
-             patch("core.infra.client.resolve_key", return_value="key") as mock_resolve:
+        with (
+            patch("core.transport.raw_http.client.urlopen", return_value=mock_response),
+            patch("core.transport.raw_http.client.resolve_key", return_value="key") as mock_resolve,
+        ):
             upload_file(str(f), "text/plain")
 
-        mock_resolve.assert_called_once_with(env_dir=_SKILL_ROOT)
+        mock_resolve.assert_called_once_with()
 
     def test_accepts_explicit_api_key(self):
         from core.infra.client import api_call
 
         mock_response = MagicMock()
-        mock_response.read.return_value = b'{}'
+        mock_response.read.return_value = b"{}"
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("core.infra.client.urlopen", return_value=mock_response) as mock_urlopen:
+        with patch(
+            "core.transport.raw_http.client.urlopen", return_value=mock_response
+        ) as mock_urlopen:
             api_call("models", method="GET", api_key="explicit-key")
 
         req = mock_urlopen.call_args[0][0]
@@ -531,8 +649,10 @@ class TestSslErrorHandling:
         import ssl
 
         err = ssl.SSLCertVerificationError("certificate verify failed")
-        with patch("core.infra.client.urlopen", side_effect=err), \
-             patch("core.infra.client.resolve_key", return_value="fake-key"):
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
             with pytest.raises(APIError, match="certificate"):
                 api_call("models", method="GET")
 
