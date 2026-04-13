@@ -28,6 +28,8 @@ ALLOWED_COMMANDS: dict[str, str] = {
     "multimodal": "adapters.generation.multimodal",
     "structured": "adapters.generation.structured",
     "streaming": "adapters.generation.streaming",
+    "imagen": "adapters.generation.imagen",
+    "live": "adapters.generation.live",
     # Data
     "embed": "adapters.data.embeddings",
     "token_count": "adapters.data.token_count",

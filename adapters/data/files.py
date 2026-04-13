@@ -7,6 +7,7 @@ policy boundary via registry metadata (mutating: true).
 Dependencies: core/infra/client.py, core/adapter/helpers.py,
     core/infra/sanitize.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,6 +17,7 @@ from core.adapter.helpers import build_base_parser, check_dry_run, emit_json
 from core.infra.client import api_call, upload_file
 from core.infra.mime import guess_mime_for_path
 from core.infra.sanitize import safe_print
+from core.transport.raw_http.client import download_file_bytes
 from pathlib import Path
 
 
@@ -37,6 +39,14 @@ def get_parser() -> argparse.ArgumentParser:
     delete_p = sub.add_parser("delete", help="Delete a file")
     delete_p.add_argument("name", help="File resource name to delete.")
 
+    # Phase 7: download a previously-uploaded file's raw bytes to a
+    # local path. Non-mutating (read-only on the remote side), so no
+    # --execute gate at the dispatch layer — but defense-in-depth
+    # check_dry_run still fires because the adapter writes to disk.
+    download_p = sub.add_parser("download", help="Download a file's contents")
+    download_p.add_argument("name", help="File resource name (e.g., files/abc123).")
+    download_p.add_argument("out_path", help="Local path to write the downloaded bytes.")
+
     return parser
 
 
@@ -44,6 +54,7 @@ def run(
     action: str | None = None,
     path: str | None = None,
     name: str | None = None,
+    out_path: str | None = None,
     mime: str | None = None,
     display_name: str | None = None,
     execute: bool = False,
@@ -62,8 +73,10 @@ def run(
         _get_file(name=name)
     elif action == "delete":
         _delete_file(name=name, execute=execute)
+    elif action == "download":
+        _download(name=name, out_path=out_path, execute=execute)
     else:
-        safe_print("[ERROR] No action specified. Use: upload, list, get, delete")
+        safe_print("[ERROR] No action specified. Use: upload, list, get, delete, download")
 
 
 def _upload(
@@ -84,32 +97,36 @@ def _upload(
     response = upload_file(file_path, mime_type=mime_type, display_name=display_name)
 
     file_info = response.get("file", {})
-    emit_json({
-        "name": file_info.get("name", ""),
-        "uri": file_info.get("uri", ""),
-        "mimeType": file_info.get("mimeType", mime_type),
-        "sizeBytes": file_info.get("sizeBytes", ""),
-        "state": file_info.get("state", ""),
-    })
+    emit_json(
+        {
+            "name": file_info.get("name", ""),
+            "uri": file_info.get("uri", ""),
+            "mimeType": file_info.get("mimeType", mime_type),
+            "sizeBytes": file_info.get("sizeBytes", ""),
+            "state": file_info.get("state", ""),
+        }
+    )
 
 
 def _list_files() -> None:
     """List all uploaded files."""
     response = api_call("files", method="GET")
     files = response.get("files", [])
-    emit_json({
-        "count": len(files),
-        "files": [
-            {
-                "name": f.get("name", ""),
-                "displayName": f.get("displayName", ""),
-                "mimeType": f.get("mimeType", ""),
-                "sizeBytes": f.get("sizeBytes", ""),
-                "state": f.get("state", ""),
-            }
-            for f in files
-        ],
-    })
+    emit_json(
+        {
+            "count": len(files),
+            "files": [
+                {
+                    "name": f.get("name", ""),
+                    "displayName": f.get("displayName", ""),
+                    "mimeType": f.get("mimeType", ""),
+                    "sizeBytes": f.get("sizeBytes", ""),
+                    "state": f.get("state", ""),
+                }
+                for f in files
+            ],
+        }
+    )
 
 
 def _get_file(name: str | None) -> None:
@@ -119,6 +136,39 @@ def _get_file(name: str | None) -> None:
         return
     response = api_call(name, method="GET")
     emit_json(response)
+
+
+def _download(name: str | None, out_path: str | None, execute: bool) -> None:
+    """Download an uploaded file's raw bytes to ``out_path``.
+
+    Non-mutating on the remote side but still dry-run-gated because the
+    adapter writes to the local filesystem and users running in dry-run
+    mode expect ZERO side effects. Uses the raw HTTP transport helper
+    ``download_file_bytes`` directly because the bytes response doesn't
+    fit the JSON dict envelope the facade/coordinator is built around.
+    """
+    if not name:
+        safe_print("[ERROR] No file name provided.")
+        return
+    if not out_path:
+        safe_print("[ERROR] No output path provided.")
+        return
+    if check_dry_run(execute, f"download {name} -> {out_path}"):
+        return
+
+    data = download_file_bytes(name)
+    target = Path(out_path)
+    # Auto-create parent directories so nested output paths work
+    # without a separate mkdir step. parents=True is idempotent.
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    emit_json(
+        {
+            "path": str(target),
+            "name": name,
+            "size_bytes": len(data),
+        }
+    )
 
 
 def _delete_file(name: str | None, execute: bool) -> None:

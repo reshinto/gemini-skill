@@ -9,8 +9,10 @@ Mutating — requires --execute (enforced at dispatch + defense-in-depth here).
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
+import argparse
 import base64
 from pathlib import Path
 from typing import Any
@@ -34,14 +36,52 @@ _IMAGE_MIME_MAP = {
     "image/gif": ".gif",
 }
 
+# Aspect ratios supported by Gemini 3 Pro Image. Kept as a module-level
+# tuple so the parser's choices= list and the validation call site share
+# one source of truth — add a new value to the tuple and both update.
+_ALLOWED_ASPECT_RATIOS: tuple[str, ...] = (
+    "1:1",
+    "2:3",
+    "3:2",
+    "3:4",
+    "4:3",
+    "4:5",
+    "5:4",
+    "9:16",
+    "16:9",
+    "21:9",
+)
+
+# Image sizes supported by Gemini 3 Pro Image. ``"1K"`` is the default;
+# higher resolutions cost more. Values match the SDK's GenerateImagesConfig
+# image_size field at pinned google-genai 1.33.0.
+_ALLOWED_IMAGE_SIZES: tuple[str, ...] = ("1K", "2K", "4K")
+
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the image generation adapter."""
     parser = build_base_parser("Generate images using Gemini")
     parser.add_argument("prompt", help="Image generation prompt.")
     parser.add_argument(
-        "--output-dir", default=None,
+        "--output-dir",
+        default=None,
         help="Directory for output files (default: OS temp dir).",
+    )
+    # Phase 7 additions — Gemini 3 Pro Image / Imagen-style controls.
+    # Both flags are optional; omitting them preserves the legacy body
+    # shape (no imageConfig key at all) so older request paths are
+    # byte-identical.
+    parser.add_argument(
+        "--aspect-ratio",
+        default=None,
+        choices=_ALLOWED_ASPECT_RATIOS,
+        help="Image aspect ratio (Gemini 3 Pro Image).",
+    )
+    parser.add_argument(
+        "--image-size",
+        default=None,
+        choices=_ALLOWED_IMAGE_SIZES,
+        help="Image output resolution (Gemini 3 Pro Image).",
     )
     return parser
 
@@ -50,6 +90,8 @@ def run(
     prompt: str,
     model: str | None = None,
     output_dir: str | None = None,
+    aspect_ratio: str | None = None,
+    image_size: str | None = None,
     execute: bool = False,
     **kwargs: Any,
 ) -> None:
@@ -58,6 +100,7 @@ def run(
         return
 
     from core.routing.router import Router
+
     config = load_config()
     router = Router(
         root_dir=Path(__file__).parent.parent.parent,
@@ -65,9 +108,21 @@ def run(
     )
     resolved_model = model or router.select_model("image_gen")
 
+    generation_config: dict[str, Any] = {"responseModalities": ["IMAGE", "TEXT"]}
+    # Only attach imageConfig when at least one flag is set. Omitting
+    # the key entirely (instead of sending an empty dict) keeps the
+    # legacy request shape byte-identical for the 99% path.
+    image_config: dict[str, Any] = {}
+    if aspect_ratio is not None:
+        image_config["aspectRatio"] = aspect_ratio
+    if image_size is not None:
+        image_config["imageSize"] = image_size
+    if image_config:
+        generation_config["imageConfig"] = image_config
+
     body: dict[str, Any] = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseModalities": ["IMAGE", "TEXT"]},
+        "generationConfig": generation_config,
     }
 
     response = api_call(f"models/{resolved_model}:generateContent", body=body)
@@ -85,11 +140,13 @@ def run(
         output_path = create_media_output_file(ext, out_dir)
         Path(output_path).write_bytes(image_bytes)
 
-        emit_json({
-            "path": output_path,
-            "mime_type": mime,
-            "size_bytes": len(image_bytes),
-        })
+        emit_json(
+            {
+                "path": output_path,
+                "mime_type": mime,
+                "size_bytes": len(image_bytes),
+            }
+        )
         return
 
     # No image in response — emit text if available

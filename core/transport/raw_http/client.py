@@ -212,6 +212,53 @@ def upload_file(
         return json.loads(response.read())
 
 
+def download_file_bytes(
+    name: str,
+    timeout: int = 120,
+) -> bytes:
+    """Download an uploaded file's bytes from the Gemini Files API.
+
+    Uses ``GET <files/{name}>?alt=media`` which streams the raw file
+    content (not a JSON envelope). The caller decides where to write
+    the bytes — this function deliberately does not touch the
+    filesystem so it remains safe to compose with in-memory consumers
+    (tests, encryption wrappers, streaming hashers).
+
+    Unlike ``api_call``, the response here is NOT JSON. Parsing with
+    ``json.loads`` would immediately fail on binary content, so this
+    helper reads the raw bytes via ``urlopen(...).read()`` directly
+    and returns them unchanged.
+
+    Args:
+        name: File resource name (e.g. ``"files/abc123"``). Must NOT
+            include a leading slash.
+        timeout: Request timeout in seconds. Defaults to 120s to match
+            upload_file — downloads of large files can take as long as
+            the original upload.
+
+    Returns:
+        The raw file bytes.
+
+    Raises:
+        APIError: On HTTP errors (403/404/5xx) or network failures.
+    """
+    key = resolve_key()
+    url = f"{BASE_URL}/v1beta/{name}?alt=media"
+    headers = {"x-goog-api-key": key}
+    request = Request(url, headers=headers, method="GET")
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            data = response.read()
+            return data if isinstance(data, bytes) else bytes(data)
+    except HTTPError as exc:
+        raise APIError(
+            sanitize(f"Download failed for {name}: {_extract_error_message(exc)}"),
+            status_code=exc.code,
+        ) from exc
+    except (URLError, socket.timeout, ssl.SSLError) as exc:
+        raise APIError(sanitize(f"Download network error for {name}: {exc}")) from exc
+
+
 def _execute_with_retry(
     request: Request,
     timeout: int,

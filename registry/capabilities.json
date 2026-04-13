@@ -227,6 +227,30 @@
       "preview": true,
       "reference": "reference/deep_research.md",
       "doc_url": "https://ai.google.dev/gemini-api/docs/deep-research"
+    },
+    "imagen": {
+      "command": "imagen",
+      "adapter": "adapters/generation/imagen.py",
+      "status": "preview",
+      "api_version": "v1beta",
+      "default_model": "imagen-3.0-generate-002",
+      "mutating": true,
+      "privacy_sensitive": false,
+      "preview": true,
+      "reference": "reference/imagen.md",
+      "doc_url": "https://ai.google.dev/gemini-api/docs/imagen"
+    },
+    "live": {
+      "command": "live",
+      "adapter": "adapters/generation/live.py",
+      "status": "preview",
+      "api_version": "v1beta",
+      "default_model": "gemini-live-2.5-flash-preview",
+      "mutating": false,
+      "privacy_sensitive": false,
+      "preview": true,
+      "reference": "reference/live.md",
+      "doc_url": "https://ai.google.dev/gemini-api/docs/live-api"
     }
   }
 }

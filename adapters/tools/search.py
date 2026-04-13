@@ -6,12 +6,14 @@ opt-in. Outputs are untrusted external content.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from typing import Any
 
-from core.adapter.helpers import build_base_parser, emit_output, extract_parts
+from core.adapter.helpers import build_base_parser, emit_json, emit_output, extract_parts
 from core.infra.client import api_call
 from core.infra.config import load_config
 
@@ -20,12 +22,23 @@ def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the search adapter."""
     parser = build_base_parser("Generate text with Google Search grounding")
     parser.add_argument("prompt", help="The text prompt.")
+    # Phase 7: emit grounding metadata as JSON alongside the answer so
+    # agent callers can structurally consume the grounding chunks (web
+    # queries, search entry point, chunk URIs). Opt-in — the default
+    # preserves the legacy human-readable "Sources:" footer output.
+    parser.add_argument(
+        "--show-grounding",
+        action="store_true",
+        default=False,
+        help="Emit the full grounding metadata as JSON instead of the text footer.",
+    )
     return parser
 
 
 def run(
     prompt: str,
     model: str | None = None,
+    show_grounding: bool = False,
     **kwargs: Any,
 ) -> None:
     """Execute search-grounded generation."""
@@ -49,8 +62,18 @@ def run(
     text_parts = [p["text"] for p in parts if "text" in p]
     text = "\n".join(text_parts)
 
-    # Append grounding metadata if present
     grounding = response.get("candidates", [{}])[0].get("groundingMetadata")
+
+    # Phase 7: when --show-grounding is passed, emit a structured JSON
+    # payload with both the text and the raw grounding metadata so
+    # agent callers don't have to re-parse the human-readable footer.
+    # The ``grounding`` field is None when the model didn't attach any
+    # (asking a question that didn't need web search, for example).
+    if show_grounding:
+        emit_json({"text": text, "grounding": grounding})
+        return
+
+    # Default path: append a human-readable sources footer if present.
     if grounding:
         chunks = grounding.get("groundingChunks", [])
         if chunks:

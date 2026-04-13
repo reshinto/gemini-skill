@@ -7,6 +7,7 @@ Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
 from __future__ import annotations
 
+import argparse
 from typing import Any
 
 from core.adapter.helpers import build_base_parser, check_dry_run, emit_json

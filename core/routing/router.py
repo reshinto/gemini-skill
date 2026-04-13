@@ -12,6 +12,7 @@ General text/chat/code tasks use a complexity-based decision tree:
 
 Dependencies: core/routing/registry.py, core/infra/errors.py
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,10 +22,21 @@ from core.routing.registry import Registry
 
 # Task types that route to a dedicated model via capability default_model.
 # These ignore complexity and preview settings.
-_SPECIALTY_TASKS = frozenset({
-    "embed", "image_gen", "video_gen", "music_gen",
-    "computer_use", "file_search", "maps",
-})
+_SPECIALTY_TASKS = frozenset(
+    {
+        "embed",
+        "image_gen",
+        "video_gen",
+        "music_gen",
+        "computer_use",
+        "file_search",
+        "maps",
+        # Phase 7 additions — both route to dedicated models via the
+        # capability registry's default_model field.
+        "imagen",
+        "live",
+    }
+)
 
 # Complexity → model mapping for general tasks (text, multimodal, etc.)
 _STABLE_MODELS = {

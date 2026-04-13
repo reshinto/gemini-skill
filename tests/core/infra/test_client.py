@@ -789,3 +789,108 @@ class TestMimeTypeValidation:
         f.write_text("hello")
         with pytest.raises(ValueError, match="Unsafe MIME type"):
             upload_file(f, mime_type="")
+
+
+class TestDownloadFileBytes:
+    """Phase 7: download a file's raw bytes via ``GET <files/{name}>?alt=media``.
+
+    The response is binary, not JSON, so the helper bypasses the
+    ``api_call`` json.loads path entirely and reads the raw bytes via
+    ``urlopen(...).read()``.
+    """
+
+    def test_returns_raw_bytes(self):
+        from core.transport.raw_http.client import download_file_bytes
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = b"\x89PNG raw data"
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen",
+                return_value=mock_response,
+            ),
+            patch("core.transport.raw_http.client.resolve_key", return_value="k"),
+        ):
+            result = download_file_bytes("files/abc")
+        assert result == b"\x89PNG raw data"
+
+    def test_uses_correct_url_and_header(self):
+        from core.transport.raw_http.client import download_file_bytes
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = b"x"
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen",
+                return_value=mock_response,
+            ) as mock_urlopen,
+            patch(
+                "core.transport.raw_http.client.resolve_key",
+                return_value="test-key",
+            ),
+        ):
+            download_file_bytes("files/abc")
+        req = mock_urlopen.call_args.args[0]
+        assert req.full_url.endswith("/v1beta/files/abc?alt=media")
+        assert req.headers["X-goog-api-key"] == "test-key"
+        assert req.get_method() == "GET"
+
+    def test_http_error_becomes_apierror(self):
+        from urllib.error import HTTPError
+
+        from core.infra.errors import APIError
+        from core.transport.raw_http.client import download_file_bytes
+
+        err = HTTPError(
+            "http://x", 404, "Not Found", {}, io.BytesIO(b'{"error":{"message":"missing"}}')
+        )
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err),
+            patch("core.transport.raw_http.client.resolve_key", return_value="k"),
+        ):
+            with pytest.raises(APIError) as excinfo:
+                download_file_bytes("files/abc")
+        assert excinfo.value.status_code == 404
+
+    def test_network_error_becomes_apierror(self):
+        import socket
+
+        from core.infra.errors import APIError
+        from core.transport.raw_http.client import download_file_bytes
+
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen",
+                side_effect=socket.timeout("timed out"),
+            ),
+            patch("core.transport.raw_http.client.resolve_key", return_value="k"),
+        ):
+            with pytest.raises(APIError, match="network error"):
+                download_file_bytes("files/abc")
+
+    def test_handles_non_bytes_read_result(self):
+        """Some mock urlopen implementations return bytearray or memoryview;
+        the helper must coerce to bytes for a consistent return type."""
+        from core.transport.raw_http.client import download_file_bytes
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = bytearray(b"raw")
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch(
+                "core.transport.raw_http.client.urlopen",
+                return_value=mock_response,
+            ),
+            patch("core.transport.raw_http.client.resolve_key", return_value="k"),
+        ):
+            result = download_file_bytes("files/abc")
+        assert isinstance(result, bytes)
+        assert result == b"raw"
