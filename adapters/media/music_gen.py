@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from core.adapter.helpers import (
+    add_execute_flag,
     build_base_parser,
     check_dry_run,
     create_media_output_file,
@@ -36,6 +37,7 @@ _AUDIO_MIME_MAP = {
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the music generation adapter."""
     parser = build_base_parser("Generate music using Lyria")
+    add_execute_flag(parser)
     parser.add_argument("prompt", help="Music generation prompt.")
     parser.add_argument(
         "--output-dir", default=None,

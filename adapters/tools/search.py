@@ -1,8 +1,8 @@
 """Google Search grounding adapter.
 
 Sends a prompt with Google Search grounding enabled. The model can
-access real-time web information. Privacy-sensitive — requires explicit
-opt-in. Outputs are untrusted external content.
+access real-time web information. Privacy-sensitive, with dispatcher-
+managed opt-in. Outputs are untrusted external content.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """

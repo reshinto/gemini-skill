@@ -14,10 +14,22 @@ class TestFileSearchGetParser:
         assert args.action == "create"
         assert args.name == "my-store"
 
+    def test_create_accepts_execute(self):
+        from adapters.data.file_search import get_parser
+
+        args = get_parser().parse_args(["create", "my-store", "--execute"])
+        assert args.execute is True
+
     def test_has_upload_action(self):
         from adapters.data.file_search import get_parser
         args = get_parser().parse_args(["upload", "stores/x", "files/abc"])
         assert args.action == "upload"
+
+    def test_upload_accepts_execute(self):
+        from adapters.data.file_search import get_parser
+
+        args = get_parser().parse_args(["upload", "stores/x", "files/abc", "--execute"])
+        assert args.execute is True
 
     def test_has_query_action(self):
         from adapters.data.file_search import get_parser
@@ -25,15 +37,33 @@ class TestFileSearchGetParser:
         assert args.action == "query"
         assert args.prompt == "search this"
 
+    def test_query_rejects_execute(self):
+        from adapters.data.file_search import get_parser
+
+        with pytest.raises(SystemExit):
+            get_parser().parse_args(["query", "search this", "--store", "stores/x", "--execute"])
+
     def test_has_list_action(self):
         from adapters.data.file_search import get_parser
         args = get_parser().parse_args(["list"])
         assert args.action == "list"
 
+    def test_list_rejects_execute(self):
+        from adapters.data.file_search import get_parser
+
+        with pytest.raises(SystemExit):
+            get_parser().parse_args(["list", "--execute"])
+
     def test_has_delete_action(self):
         from adapters.data.file_search import get_parser
         args = get_parser().parse_args(["delete", "stores/x"])
         assert args.action == "delete"
+
+    def test_delete_accepts_execute(self):
+        from adapters.data.file_search import get_parser
+
+        args = get_parser().parse_args(["delete", "stores/x", "--execute"])
+        assert args.execute is True
 
 
 class TestFileSearchCreate:

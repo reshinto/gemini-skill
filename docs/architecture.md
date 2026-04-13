@@ -218,6 +218,7 @@ The dispatcher enforces two tiers of safety:
 Commands that modify server state require `--execute`:
 
 - `files upload`, `files delete`
+- `files download`
 - `cache create`, `cache delete`
 - `batch create`, `batch cancel`
 - `file_search` (create, upload, delete)
@@ -226,16 +227,16 @@ Commands that modify server state require `--execute`:
 
 Without `--execute`, these print a dry-run message and exit. This prevents accidental resource creation.
 
-### Tier 2: Cost/Privacy-Sensitive Operations (Explicit Opt-In)
+### Tier 2: Cost/Privacy-Sensitive Operations (Dispatcher-Managed Opt-In)
 
-Commands that send data outside the user's control or incur cost require explicit opt-in:
+Commands that send data outside the user's control or incur cost are marked privacy-sensitive:
 
 - `search` — sends queries to Google Search
 - `maps` — sends location queries to Google Maps
 - `computer_use` — can capture full desktop screenshots
 - `deep_research` — long-running background task with server-side storage
 
-These are non-mutating but flagged in `SKILL.md` as requiring caution. The `--execute` flag serves double duty for privacy-sensitive ops.
+When the user explicitly invokes one of these commands, the dispatcher auto-applies the internal privacy opt-in flag before policy enforcement. `--execute` remains only for mutating operations.
 
 ## Error Handling
 

@@ -17,7 +17,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from core.adapter.helpers import build_base_parser, check_dry_run, emit_json, emit_output, extract_text
+from core.adapter.helpers import (
+    add_execute_flag,
+    build_base_parser,
+    check_dry_run,
+    emit_json,
+    emit_output,
+    extract_text,
+)
 from core.infra.sanitize import safe_print
 from core.infra.client import api_call
 from core.infra.config import load_config
@@ -29,9 +36,11 @@ def get_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="action", help="File Search action")
 
     create_p = sub.add_parser("create", help="Create a File Search store")
+    add_execute_flag(create_p)
     create_p.add_argument("name", help="Display name for the store.")
 
     upload_p = sub.add_parser("upload", help="Upload a document to a store")
+    add_execute_flag(upload_p)
     upload_p.add_argument("store", help="Store resource name.")
     upload_p.add_argument("file_uri", help="Gemini file URI to import.")
 
@@ -42,6 +51,7 @@ def get_parser() -> argparse.ArgumentParser:
     sub.add_parser("list", help="List File Search stores")
 
     delete_p = sub.add_parser("delete", help="Delete a store")
+    add_execute_flag(delete_p)
     delete_p.add_argument("name", help="Store resource name to delete.")
 
     return parser

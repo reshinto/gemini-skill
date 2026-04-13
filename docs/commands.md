@@ -1,6 +1,6 @@
 # Commands
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-14
 
 A human-facing index of all gemini-skill commands, organized by capability family.
 
@@ -55,8 +55,8 @@ Ground responses in real-time web and map data.
 
 | Command | Purpose | Reference |
 |---------|---------|-----------|
-| `search` | Ground text in Google Search results (opt-in) | [search.md](../reference/search.md) |
-| `maps` | Ground text in Google Maps data (opt-in) | [maps.md](../reference/maps.md) |
+| `search` | Ground text in Google Search results (privacy-sensitive) | [search.md](../reference/search.md) |
+| `maps` | Ground text in Google Maps data (privacy-sensitive) | [maps.md](../reference/maps.md) |
 
 ## File Management
 
@@ -99,7 +99,7 @@ Specialized and preview-stage capabilities.
 
 | Command | Purpose | Reference |
 |---------|---------|-----------|
-| `computer_use` | Enable model to see and control your screen (preview, opt-in) | [computer_use.md](../reference/computer_use.md) |
+| `computer_use` | Enable model to see and control your screen (preview, privacy-sensitive) | [computer_use.md](../reference/computer_use.md) |
 | `deep_research` | Conduct multi-step research via Interactions API | [deep_research.md](../reference/deep_research.md) |
 
 ## Utility
@@ -123,17 +123,18 @@ System commands (not adapters).
 
 **Mutating (require `--execute`):**
 - `files upload`, `files delete`
+- `files download`
 - `cache create`, `cache delete`
 - `batch create`, `batch cancel`
 - `file_search` (create, upload, delete)
 - `image_gen`, `video_gen`, `music_gen`
 - `deep_research`
 
-**Privacy-sensitive (opt-in, use `--execute`):**
+**Privacy-sensitive (dispatcher auto-applies internal opt-in):**
 - `search` — sends queries to Google Search
 - `maps` — sends location queries to Google Maps
 - `computer_use` — captures your screen
-- `deep_research` — long-running background task
+- `deep_research` — long-running background task with server-side storage; still requires `--execute` because it is mutating
 
 ### By latency
 
@@ -240,9 +241,10 @@ See [Google Gemini pricing](https://aistudio.google.com/pricing) for current rat
 ### Create a hosted RAG store
 
 ```bash
-/gemini file_search create --execute
-/gemini file_search upload "store-id" document.pdf --execute
-/gemini file_search query "store-id" "What are the key findings?"
+/gemini file_search create research-library --execute
+/gemini files upload document.pdf --execute
+/gemini file_search upload "fileSearchStores/store-id" "files/abc123" --execute
+/gemini file_search query "What are the key findings?" --store "fileSearchStores/store-id"
 ```
 
 ### Generate an image

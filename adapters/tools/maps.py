@@ -1,8 +1,7 @@
 """Google Maps grounding adapter.
 
 Sends a prompt with Google Maps grounding enabled. Privacy-sensitive
-and off by default — requires explicit opt-in. Outputs are untrusted
-external content.
+and dispatcher-managed. Outputs are untrusted external content.
 
 Mandatory output schema:
 1. Grounded answer text

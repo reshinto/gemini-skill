@@ -1,6 +1,6 @@
 # search
 
-Ground text generation in real-time Google Search results. Opt-in (privacy-sensitive, adds latency and cost).
+Ground text generation in real-time Google Search results. Privacy-sensitive, with dispatcher-managed opt-in.
 
 ## Usage
 
@@ -11,23 +11,23 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" search "prompt" [flags]
 ## Flags
 
 - `--model MODEL` — Override the default model.
-- `--i-understand-privacy` — Required. Search grounding sends queries to Google and is gated by the dispatcher as privacy-sensitive.
 - `--session ID` — Start or continue a named session.
 - `--continue` — Continue the most recent session.
 
 The `search` adapter accepts only the base flags above plus the `prompt` positional. It does **not** support `--system`, `--max-tokens`, or `--temperature`.
+The dispatcher auto-applies the internal privacy opt-in flag for this command, so callers do not need to pass `--i-understand-privacy`.
 
 ## Examples
 
 ```bash
 # Current events query
-gemini_run.py search "What are the latest developments in quantum computing?" --i-understand-privacy
+gemini_run.py search "What are the latest developments in quantum computing?"
 
 # Up-to-date information
-gemini_run.py search "Current Bitcoin price" --model gemini-2.5-pro --i-understand-privacy
+gemini_run.py search "Current Bitcoin price" --model gemini-2.5-pro
 
 # News search
-gemini_run.py search "Breaking news in space exploration" --i-understand-privacy
+gemini_run.py search "Breaking news in space exploration"
 ```
 
 ## Privacy note

@@ -174,15 +174,15 @@ Each file is **self-contained** — no shared conftest, no cross-file state — 
 | `test_token_count_live.py` | Count tokens (free) |
 | `test_function_calling_live.py` | Declares one no-arg tool |
 | `test_code_exec_live.py` | `compute 2+2` |
-| `test_search_live.py` | Grounded query with `--i-understand-privacy` |
-| `test_maps_live.py` | Grounded query with `--i-understand-privacy` |
-| `test_computer_use_live.py` | Preview model, `--i-understand-privacy` |
+| `test_search_live.py` | Grounded query with dispatcher-managed privacy opt-in |
+| `test_maps_live.py` | Grounded query with dispatcher-managed privacy opt-in |
+| `test_computer_use_live.py` | Preview model with dispatcher-managed privacy opt-in |
 
 **Dry-run only (8 mutating adapters):**
 
 `test_files_live.py`, `test_cache_live.py`, `test_batch_live.py`, `test_file_search_live.py`, `test_image_gen_live.py`, `test_video_gen_live.py`, `test_music_gen_live.py`, `test_deep_research_live.py`
 
-These adapters are mutating, so they are blocked by the dispatcher unless `--execute` is passed. The smoke tests **do not** pass `--execute` — they assert the `[DRY RUN]` output instead. This verifies the CLI → dispatch → registry → policy path without burning quota on image/video/music generation, persistent cache/store creation, or long-running agentic flows. To actually exercise these adapters against the live API, see the rationale in each file's docstring and run them manually with `--execute`.
+These smoke tests target mutating commands or mutating subcommands, so they are blocked by the dispatcher unless `--execute` is passed. The tests **do not** pass `--execute` — they assert the `[DRY RUN]` output instead. This verifies the CLI → dispatch → registry → policy path without burning quota on image/video/music generation, persistent cache/store creation, downloads to the local filesystem, or long-running agentic flows. To actually exercise these adapters against the live API, see the rationale in each file's docstring and run them manually with `--execute`.
 
 ### Estimated cost per full run
 
@@ -190,7 +190,7 @@ Running all 19 live tests once costs roughly a **few cents** in total — the re
 
 ### Privacy note
 
-The search, maps, computer-use, and deep-research tests send prompts through privacy-sensitive capabilities (web search results, maps data, computer interaction, long-term research storage). They pass `--i-understand-privacy` explicitly. Don't run them on a machine where that consent is not appropriate.
+The search, maps, computer-use, and deep-research tests send prompts through privacy-sensitive capabilities (web search results, maps data, computer interaction, long-term research storage). Dispatch auto-applies the internal privacy opt-in flag for those commands. Don't run them on a machine where that consent is not appropriate.
 
 ---
 

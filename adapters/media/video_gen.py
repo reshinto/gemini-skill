@@ -15,6 +15,7 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from core.adapter.helpers import (
+    add_execute_flag,
     build_base_parser,
     check_dry_run,
     create_media_output_file,
@@ -28,6 +29,7 @@ from core.infra.sanitize import safe_print
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the video generation adapter."""
     parser = build_base_parser("Generate videos using Veo")
+    add_execute_flag(parser)
     parser.add_argument("prompt", help="Video generation prompt.")
     parser.add_argument(
         "--output-dir", default=None,

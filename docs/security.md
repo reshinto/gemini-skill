@@ -131,9 +131,9 @@ Threat model, authentication, data protection, and risk management.
 **Risk:** Sending queries to third-party services (Google Search, Google Maps) reveals user intent.
 
 **Mitigations:**
-- **Explicit opt-in (no silent sending):**
+- **Explicit command invocation (no automatic search on unrelated commands):**
   ```bash
-  # SAFE: Explicitly use /gemini search
+  # SAFE: User explicitly invokes a privacy-sensitive command
   /gemini search "covid-19 latest updates"
   
   # NOT: Automatic search for every query
@@ -366,7 +366,7 @@ See https://ai.google.dev/terms for API terms of service.
 | Token overflow | 50KB guard, media to file | Temp dir secure |
 | Concurrent access | File locking + atomic writes | fcntl/msvcrt work on your FS |
 | Unencrypted storage | No crypto (stdlib only), file perms | OS enforces permissions |
-| Privacy leak (search/maps) | Explicit opt-in, documentation | Users read docs |
+| Privacy leak (search/maps) | Command-level opt-in, documentation | Users read docs |
 | Dependency vuln | Stdlib only, no deps | Python stdlib trustworthy |
 | Model outputs | No filtering, user review | Users understand LLM limits |
 

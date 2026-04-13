@@ -27,17 +27,17 @@ class TestBuildBaseParser:
         args = parser.parse_args([])
         assert args.model is None
 
-    def test_includes_execute_flag(self):
-        from core.adapter.helpers import build_base_parser
-        parser = build_base_parser("test")
-        args = parser.parse_args(["--execute"])
-        assert args.execute is True
-
     def test_execute_defaults_false(self):
         from core.adapter.helpers import build_base_parser
         parser = build_base_parser("test")
         args = parser.parse_args([])
         assert args.execute is False
+
+    def test_base_parser_rejects_execute_flag(self):
+        from core.adapter.helpers import build_base_parser
+        parser = build_base_parser("test")
+        with pytest.raises(SystemExit):
+            parser.parse_args(["--execute"])
 
     def test_includes_session_flags(self):
         from core.adapter.helpers import build_base_parser
@@ -55,6 +55,24 @@ class TestBuildBaseParser:
         from core.adapter.helpers import build_base_parser
         parser = build_base_parser("Text generation")
         assert "Text generation" in parser.description
+
+
+class TestAddExecuteFlag:
+    def test_includes_execute_flag(self):
+        from core.adapter.helpers import add_execute_flag, build_base_parser
+
+        parser = build_base_parser("test")
+        add_execute_flag(parser)
+        args = parser.parse_args(["--execute"])
+        assert args.execute is True
+
+    def test_execute_defaults_false(self):
+        from core.adapter.helpers import add_execute_flag, build_base_parser
+
+        parser = build_base_parser("test")
+        add_execute_flag(parser)
+        args = parser.parse_args([])
+        assert args.execute is False
 
 
 class TestCheckDryRun:

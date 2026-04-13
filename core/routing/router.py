@@ -127,7 +127,7 @@ class Router:
         return self._registry.get_model_pricing(model_id)
 
     def is_mutating(self, capability: str) -> bool:
-        """Check if a capability requires --execute flag.
+        """Check if a capability has mutating operations.
 
         Raises:
             CapabilityUnavailableError: If the capability is not registered.
@@ -136,7 +136,7 @@ class Router:
         return bool(cap.get("mutating", False))
 
     def is_privacy_sensitive(self, capability: str) -> bool:
-        """Check if a capability requires explicit opt-in.
+        """Check if a capability is privacy-sensitive.
 
         Raises:
             CapabilityUnavailableError: If the capability is not registered.

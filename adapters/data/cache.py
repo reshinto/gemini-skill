@@ -11,7 +11,7 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-from core.adapter.helpers import build_base_parser, check_dry_run, emit_json
+from core.adapter.helpers import add_execute_flag, build_base_parser, check_dry_run, emit_json
 from core.infra.sanitize import safe_print
 from core.infra.client import api_call
 from core.infra.config import load_config
@@ -23,6 +23,7 @@ def get_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="action", help="Cache action")
 
     create_p = sub.add_parser("create", help="Create a cache")
+    add_execute_flag(create_p)
     create_p.add_argument("content", help="Content to cache (text or file URI).")
     create_p.add_argument("--ttl", default="3600s", help="Time-to-live (e.g., '3600s').")
 
@@ -32,6 +33,7 @@ def get_parser() -> argparse.ArgumentParser:
     get_p.add_argument("name", help="Cache resource name.")
 
     delete_p = sub.add_parser("delete", help="Delete a cache")
+    add_execute_flag(delete_p)
     delete_p.add_argument("name", help="Cache resource name to delete.")
 
     return parser

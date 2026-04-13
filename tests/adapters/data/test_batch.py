@@ -14,15 +14,35 @@ class TestBatchGetParser:
         assert args.action == "create"
         assert args.src == "gs://in"
 
+    def test_create_accepts_execute(self):
+        from adapters.data.batch import get_parser
+
+        args = get_parser().parse_args(
+            ["create", "--src", "gs://in", "--dest", "gs://out", "--execute"]
+        )
+        assert args.execute is True
+
     def test_has_list_action(self):
         from adapters.data.batch import get_parser
         args = get_parser().parse_args(["list"])
         assert args.action == "list"
 
+    def test_list_rejects_execute(self):
+        from adapters.data.batch import get_parser
+
+        with pytest.raises(SystemExit):
+            get_parser().parse_args(["list", "--execute"])
+
     def test_has_cancel_action(self):
         from adapters.data.batch import get_parser
         args = get_parser().parse_args(["cancel", "batchJobs/abc"])
         assert args.action == "cancel"
+
+    def test_cancel_accepts_execute(self):
+        from adapters.data.batch import get_parser
+
+        args = get_parser().parse_args(["cancel", "batchJobs/abc", "--execute"])
+        assert args.execute is True
 
 
 class TestBatchCreate:

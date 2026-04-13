@@ -1,8 +1,8 @@
-"""File API adapter — upload, list, get, and delete files.
+"""File API adapter — upload, list, get, download, and delete files.
 
 Uses the Gemini Files API (upload/v1beta/files) for managing uploaded
-files. Mutating operations (upload, delete) are gated at the dispatch
-policy boundary via registry metadata (mutating: true).
+files. Mutating operations (upload, download, delete) are gated at the
+dispatch policy boundary via registry metadata.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py,
     core/infra/sanitize.py
@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
-from core.adapter.helpers import build_base_parser, check_dry_run, emit_json
+from core.adapter.helpers import add_execute_flag, build_base_parser, check_dry_run, emit_json
 from core.infra.client import api_call, upload_file
 from core.infra.mime import guess_mime_for_path
 from core.infra.sanitize import safe_print
@@ -27,6 +27,7 @@ def get_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="action", help="File action")
 
     upload_p = sub.add_parser("upload", help="Upload a file")
+    add_execute_flag(upload_p)
     upload_p.add_argument("path", help="Path to the file to upload.")
     upload_p.add_argument("--mime", default=None, help="Override MIME type.")
     upload_p.add_argument("--display-name", default=None, help="Display name.")
@@ -37,13 +38,15 @@ def get_parser() -> argparse.ArgumentParser:
     get_p.add_argument("name", help="File resource name (e.g., files/abc123).")
 
     delete_p = sub.add_parser("delete", help="Delete a file")
+    add_execute_flag(delete_p)
     delete_p.add_argument("name", help="File resource name to delete.")
 
     # Phase 7: download a previously-uploaded file's raw bytes to a
-    # local path. Non-mutating (read-only on the remote side), so no
-    # --execute gate at the dispatch layer — but defense-in-depth
-    # check_dry_run still fires because the adapter writes to disk.
+    # local path. Remote read-only, but still gated because it writes
+    # to the local filesystem and users expect no side effects without
+    # explicit confirmation.
     download_p = sub.add_parser("download", help="Download a file's contents")
+    add_execute_flag(download_p)
     download_p.add_argument("name", help="File resource name (e.g., files/abc123).")
     download_p.add_argument("out_path", help="Local path to write the downloaded bytes.")
 

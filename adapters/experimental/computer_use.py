@@ -1,7 +1,7 @@
 """Computer use adapter (preview).
 
 Enables Gemini to interact with a computer environment via screenshots
-and actions. Privacy-sensitive — requires explicit opt-in.
+and actions. Privacy-sensitive, with dispatcher-managed opt-in.
 Preview with high churn risk.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py

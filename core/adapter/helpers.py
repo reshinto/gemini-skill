@@ -1,7 +1,8 @@
 """Shared adapter lifecycle helpers.
 
 Provides common functionality used by all adapters:
-    - build_base_parser(): ArgumentParser with shared flags (--model, --execute, --session)
+    - build_base_parser(): ArgumentParser with shared flags (--model, --session)
+    - add_execute_flag(): Opt-in mutating-operation flag
     - check_dry_run(): Enforce dry-run policy for mutating operations
     - emit_output(): Print text or save large responses to file
     - emit_json(): Output structured JSON for media adapters
@@ -31,7 +32,6 @@ def build_base_parser(description: str) -> argparse.ArgumentParser:
 
     Common flags:
         --model: Override the default model selection.
-        --execute: Required for mutating operations (dry-run default).
         --session: Start or continue a named conversation session.
         --continue: Continue the most recent session.
 
@@ -42,16 +42,11 @@ def build_base_parser(description: str) -> argparse.ArgumentParser:
         An ArgumentParser with common flags added.
     """
     parser = argparse.ArgumentParser(description=description)
+    parser.set_defaults(execute=False)
     parser.add_argument(
         "--model",
         default=None,
         help="Override the default model for this command.",
-    )
-    parser.add_argument(
-        "--execute",
-        action="store_true",
-        default=False,
-        help="Execute the operation (required for mutating commands).",
     )
     parser.add_argument(
         "--session",
@@ -66,6 +61,16 @@ def build_base_parser(description: str) -> argparse.ArgumentParser:
         help="Continue the most recent conversation session.",
     )
     return parser
+
+
+def add_execute_flag(parser: argparse.ArgumentParser) -> None:
+    """Add the ``--execute`` confirmation flag to a mutating parser."""
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        default=False,
+        help="Execute the operation (mutating operations only).",
+    )
 
 
 def check_dry_run(execute: bool, operation: str) -> bool:

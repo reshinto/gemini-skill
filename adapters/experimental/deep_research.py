@@ -15,7 +15,7 @@ import argparse
 import time
 from typing import Any
 
-from core.adapter.helpers import build_base_parser, check_dry_run, emit_output
+from core.adapter.helpers import add_execute_flag, build_base_parser, check_dry_run, emit_output
 from core.infra.client import api_call
 from core.infra.config import Config, load_config
 from core.infra.sanitize import safe_print
@@ -24,6 +24,7 @@ from core.infra.sanitize import safe_print
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the deep research adapter."""
     parser = build_base_parser("Run deep research via Interactions API (preview)")
+    add_execute_flag(parser)
     parser.add_argument("prompt", help="Research query.")
     parser.add_argument(
         "--resume", default=None,

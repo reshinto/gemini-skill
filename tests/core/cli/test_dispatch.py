@@ -85,17 +85,20 @@ class TestDispatchPolicyEnforcement:
             main(["image_gen", "a cat", "--execute"])
         mock_run.assert_called_once()
 
-    def test_privacy_sensitive_blocked_without_opt_in(self, capsys):
+    @pytest.mark.parametrize(
+        ("command", "adapter_path", "argv"),
+        [
+            ("search", "adapters.tools.search.run", ["search", "weather today"]),
+            ("maps", "adapters.tools.maps.run", ["maps", "coffee shops near me"]),
+            ("computer_use", "adapters.experimental.computer_use.run", ["computer_use", "describe screen"]),
+        ],
+    )
+    def test_privacy_sensitive_main_auto_injects_opt_in(self, command, adapter_path, argv):
         from core.cli.dispatch import main
 
-        with patch("adapters.tools.search.run") as mock_run:
-            with pytest.raises(SystemExit) as exc_info:
-                main(["search", "weather today"])
-        assert exc_info.value.code == 1
-        output = capsys.readouterr().out
-        assert "[BLOCKED]" in output
-        assert "privacy-sensitive" in output
-        mock_run.assert_not_called()
+        with patch(adapter_path) as mock_run:
+            main(argv)
+        mock_run.assert_called_once()
 
     def test_privacy_sensitive_allowed_with_opt_in(self):
         from core.cli.dispatch import main
@@ -104,15 +107,75 @@ class TestDispatchPolicyEnforcement:
             main(["search", "weather today", "--i-understand-privacy"])
         mock_run.assert_called_once()
 
-    def test_mutating_privacy_sensitive_needs_both_flags(self, capsys):
+    def test_raw_policy_still_blocks_without_privacy_opt_in(self, capsys):
+        from core.cli.dispatch import _enforce_policy
+
+        with pytest.raises(SystemExit) as exc_info:
+            _enforce_policy("search", ["weather today"])
+        assert exc_info.value.code == 1
+        output = capsys.readouterr().out
+        assert "[BLOCKED]" in output
+        assert "privacy-sensitive" in output
+
+    def test_mutating_privacy_sensitive_without_execute_dry_runs(self, capsys):
         from core.cli.dispatch import main
 
         with patch("adapters.experimental.deep_research.run") as mock_run:
-            # Missing both flags — privacy block fires first
-            with pytest.raises(SystemExit):
+            with pytest.raises(SystemExit) as exc_info:
                 main(["deep_research", "research topic"])
-        assert "[BLOCKED]" in capsys.readouterr().out
+        assert exc_info.value.code == 0
+        assert "[DRY RUN]" in capsys.readouterr().out
         mock_run.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("argv", "adapter_path"),
+        [
+            (["files", "list"], "adapters.data.files.run"),
+            (["cache", "list"], "adapters.data.cache.run"),
+            (["batch", "list"], "adapters.data.batch.run"),
+            (["file_search", "query", "find doc", "--store", "stores/x"], "adapters.data.file_search.run"),
+            (["file_search", "list"], "adapters.data.file_search.run"),
+        ],
+    )
+    def test_read_only_operations_run_without_execute(self, argv, adapter_path):
+        from core.cli.dispatch import main
+
+        with patch(adapter_path) as mock_run:
+            main(argv)
+        mock_run.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "argv",
+        [
+            ["files", "list", "--execute"],
+            ["cache", "list", "--execute"],
+            ["batch", "list", "--execute"],
+            ["file_search", "query", "find doc", "--store", "stores/x", "--execute"],
+        ],
+    )
+    def test_read_only_operations_reject_execute(self, argv):
+        from core.cli.dispatch import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(argv)
+        assert exc_info.value.code == 2
+
+    @pytest.mark.parametrize(
+        "argv",
+        [
+            ["files", "delete", "files/x"],
+            ["cache", "delete", "cachedContents/x"],
+            ["batch", "cancel", "batchJobs/x"],
+            ["file_search", "delete", "fileSearchStores/x"],
+        ],
+    )
+    def test_mutating_subcommands_still_dry_run_without_execute(self, argv, capsys):
+        from core.cli.dispatch import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(argv)
+        assert exc_info.value.code == 0
+        assert "[DRY RUN]" in capsys.readouterr().out
 
     def test_non_policy_command_runs_freely(self):
         from core.cli.dispatch import main

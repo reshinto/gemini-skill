@@ -12,6 +12,12 @@ class TestDeepResearchGetParser:
         args = get_parser().parse_args(["research quantum computing"])
         assert args.prompt == "research quantum computing"
 
+    def test_accepts_execute_flag(self):
+        from adapters.experimental.deep_research import get_parser
+
+        args = get_parser().parse_args(["research quantum computing", "--execute"])
+        assert args.execute is True
+
     def test_has_resume_flag(self):
         from adapters.experimental.deep_research import get_parser
         args = get_parser().parse_args(["test", "--resume", "int-123"])

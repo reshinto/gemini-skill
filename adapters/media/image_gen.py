@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from core.adapter.helpers import (
+    add_execute_flag,
     build_base_parser,
     check_dry_run,
     create_media_output_file,
@@ -61,6 +62,7 @@ _ALLOWED_IMAGE_SIZES: tuple[str, ...] = ("1K", "2K", "4K")
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the image generation adapter."""
     parser = build_base_parser("Generate images using Gemini")
+    add_execute_flag(parser)
     parser.add_argument("prompt", help="Image generation prompt.")
     parser.add_argument(
         "--output-dir",

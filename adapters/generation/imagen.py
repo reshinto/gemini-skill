@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from core.adapter.helpers import (
+    add_execute_flag,
     build_base_parser,
     check_dry_run,
     create_media_output_file,
@@ -87,6 +88,7 @@ def _positive_int(value: str) -> int:
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the imagen adapter."""
     parser = build_base_parser("Generate photoreal images with Imagen")
+    add_execute_flag(parser)
     parser.add_argument("prompt", help="Image generation prompt.")
     parser.add_argument(
         "--num-images",

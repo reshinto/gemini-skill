@@ -237,7 +237,7 @@ See [code_exec.md](../reference/code_exec.md).
 
 ### Google Search grounding
 
-**Status:** Stable (opt-in)
+**Status:** Stable (privacy-sensitive)
 
 Ground responses in real-time Google Search results.
 
@@ -247,7 +247,7 @@ Ground responses in real-time Google Search results.
 - Search source attribution
 
 **Limitations:**
-- Requires explicit opt-in (privacy-sensitive)
+- Dispatcher auto-applies the internal privacy opt-in flag
 - Slower than text-only (network latency)
 - Adds cost per request
 - May cite unreliable sources
@@ -262,7 +262,7 @@ See [search.md](../reference/search.md).
 
 ### Google Maps grounding
 
-**Status:** Stable (opt-in)
+**Status:** Stable (privacy-sensitive)
 
 Ground responses in Google Maps location data.
 
@@ -272,7 +272,7 @@ Ground responses in Google Maps location data.
 - Attribution required
 
 **Limitations:**
-- Requires explicit opt-in (privacy-sensitive)
+- Dispatcher auto-applies the internal privacy opt-in flag
 - Location queries may reveal intent
 - Mandatory output schema enforced
 - Adds cost per request
@@ -305,7 +305,7 @@ Upload, list, retrieve, and delete files in Gemini's file storage.
 - 2GB per file, 20GB total quota
 - 48-hour expiration (automatic deletion)
 - File reuse requires `file_id` tracking
-- Cannot download file content (only metadata)
+- Downloading file content writes locally and requires `--execute`
 
 **Use cases:**
 - Upload large documents once, reference many times
@@ -455,7 +455,7 @@ See [music_gen.md](../reference/music_gen.md).
 
 ### Computer use
 
-**Status:** Preview (v1beta, privacy-sensitive, opt-in)
+**Status:** Preview (v1beta, privacy-sensitive)
 
 Enable the model to capture screenshots, analyze UI, and simulate keyboard/mouse input.
 
@@ -484,7 +484,7 @@ See [computer_use.md](../reference/computer_use.md).
 
 ### Deep Research
 
-**Status:** Preview (Interactions API, opt-in)
+**Status:** Preview (Interactions API, privacy-sensitive)
 
 Conduct multi-step research tasks with server-side storage and resumption.
 

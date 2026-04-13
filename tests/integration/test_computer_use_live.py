@@ -1,6 +1,6 @@
 """Live smoke test for `gemini computer_use` — one cheap real API call.
 
-Privacy-sensitive, passes --i-understand-privacy. The preview model may
+Privacy-sensitive, but dispatch auto-injects the internal opt-in flag. The preview model may
 return text with no actions for a trivial prompt — either is a valid
 "it works" signal.
 
@@ -34,8 +34,7 @@ pytestmark = [
 def test_computer_use_live() -> None:
     result = subprocess.run(
         [sys.executable, str(_RUNNER), "computer_use",
-         "Respond with exactly one word: ok",
-         "--i-understand-privacy"],
+         "Respond with exactly one word: ok"],
         capture_output=True, text=True, timeout=90, cwd=str(_REPO_ROOT),
     )
     assert result.returncode == 0, f"stderr={result.stderr}"

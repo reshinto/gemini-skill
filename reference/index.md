@@ -14,23 +14,23 @@ Run any command via: `python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" <comma
 | `token_count` | Count tokens | no | no | [token_count.md](token_count.md) |
 | `function_calling` | Tool/function calling | no | no | [function_calling.md](function_calling.md) |
 | `code_exec` | Sandboxed code execution | no | no | [code_exec.md](code_exec.md) |
-| `search` | Google Search grounding (opt-in) | no | no | [search.md](search.md) |
-| `maps` | Google Maps grounding (opt-in) | no | no | [maps.md](maps.md) |
-| `files` | Files API (upload/list/get/delete) | YES | no | [files.md](files.md) |
-| `cache` | Context caching (create/list/get/delete) | YES | no | [cache.md](cache.md) |
-| `batch` | Batch processing (create/list/get/cancel) | YES | no | [batch.md](batch.md) |
-| `file_search` | File Search / hosted RAG | YES | yes | [file_search.md](file_search.md) |
+| `search` | Google Search grounding (privacy-sensitive) | no | no | [search.md](search.md) |
+| `maps` | Google Maps grounding (privacy-sensitive) | no | no | [maps.md](maps.md) |
+| `files` | Files API (upload/list/get/download/delete) | some | no | [files.md](files.md) |
+| `cache` | Context caching (create/list/get/delete) | some | no | [cache.md](cache.md) |
+| `batch` | Batch processing (create/list/get/cancel) | some | no | [batch.md](batch.md) |
+| `file_search` | File Search / hosted RAG | some | yes | [file_search.md](file_search.md) |
 | `image_gen` | Image generation (Nano Banana) | YES | yes | [image_gen.md](image_gen.md) |
 | `video_gen` | Video generation (Veo) | YES | yes | [video_gen.md](video_gen.md) |
 | `music_gen` | Music generation (Lyria 3) | YES | yes | [music_gen.md](music_gen.md) |
-| `computer_use` | Computer use (preview, opt-in) | no | yes | [computer_use.md](computer_use.md) |
+| `computer_use` | Computer use (preview, privacy-sensitive) | no | yes | [computer_use.md](computer_use.md) |
 | `deep_research` | Deep Research (Interactions API) | YES | yes | [deep_research.md](deep_research.md) |
 | `help` | Show command list | — | — | — |
 | `models` | List available models | — | — | — |
 
 ## Mutating operations
 
-Commands marked **YES** require `--execute` to actually run. Without it, they print a dry-run message and exit.
+Commands marked **YES** require `--execute` on every invocation. Commands marked `some` have mixed read-only and mutating subcommands; see the per-command reference for which subcommands accept `--execute`.
 
 ## Preview commands
 

@@ -35,6 +35,15 @@ class TestFilesGetParser:
         args = get_parser().parse_args(["delete", "files/abc"])
         assert args.action == "delete"
 
+    def test_mutating_subcommands_accept_execute(self):
+        from adapters.data.files import get_parser
+
+        args = get_parser().parse_args(["upload", "test.pdf", "--execute"])
+        assert args.execute is True
+
+        args = get_parser().parse_args(["delete", "files/abc", "--execute"])
+        assert args.execute is True
+
     def test_has_download_action(self):
         from adapters.data.files import get_parser
 
@@ -42,6 +51,21 @@ class TestFilesGetParser:
         assert args.action == "download"
         assert args.name == "files/abc"
         assert args.out_path == "/tmp/out.bin"
+
+    def test_download_accepts_execute(self):
+        from adapters.data.files import get_parser
+
+        args = get_parser().parse_args(["download", "files/abc", "/tmp/out.bin", "--execute"])
+        assert args.execute is True
+
+    def test_read_only_subcommands_reject_execute(self):
+        from adapters.data.files import get_parser
+
+        parser = get_parser()
+        with pytest.raises(SystemExit):
+            parser.parse_args(["list", "--execute"])
+        with pytest.raises(SystemExit):
+            parser.parse_args(["get", "files/abc", "--execute"])
 
 
 class TestFilesDownload:

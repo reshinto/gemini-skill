@@ -64,6 +64,7 @@ def main(argv: list[str]) -> None:
 The dispatcher is the **policy boundary**. It enforces:
 - Command whitelist (only commands in `ALLOWED_COMMANDS` allowed)
 - Argument parsing (each adapter's parser)
+- Privacy opt-in injection for privacy-sensitive commands
 - Dry-run enforcement (mutating ops require `--execute`)
 
 ## Step 3: Adapter executes
@@ -320,18 +321,17 @@ If the user runs:
 /gemini files upload dataset.csv
 ```
 
-Without `--execute`:
+Without `--execute`, the dispatcher exits before the adapter runs:
 
 ```python
-def run(..., execute: bool = False, ...):
-    if check_dry_run(execute, "upload file: dataset.csv"):
-        return  # Prints dry-run message and exits
+_enforce_policy("files", ["upload", "dataset.csv"])
+# prints [DRY RUN] 'files' is a mutating operation. Pass --execute to actually run it.
+# exits before adapter.run(...)
 ```
 
 Output:
 ```
-[DRY RUN] upload file: dataset.csv
-[To execute, add --execute flag]
+[DRY RUN] 'files' is a mutating operation. Pass --execute to actually run it.
 ```
 
 The file is NOT uploaded. To actually upload:

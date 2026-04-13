@@ -19,8 +19,8 @@ All commands route through `scripts/gemini_run.py` which dispatches to the right
 
 ## Rules
 
-- Mutating operations (upload, delete, create, image/video/music gen, batch submit, cache create) require `--execute` flag. Default is dry-run.
-- Cost/privacy-sensitive operations (search grounding, maps grounding, URL context, inline file send, computer use, deep research) require explicit opt-in even when non-mutating.
+- Mutating operations and mutating subcommands require `--execute`. Default is dry-run.
+- Privacy-sensitive commands (search grounding, maps grounding, computer use, deep research) are handled internally by dispatch; callers do not pass a separate privacy flag.
 - Pass user input as single opaque argv values (quoted).
 - Use stdin or temp files for complex/multiline content.
 - Never reconstruct shell commands by concatenating user text.

@@ -65,7 +65,7 @@ def run(
         prompt: Main input from user.
         model: Optional model override.
         custom_flag: Optional custom flag.
-        execute: Required for mutating commands (--execute flag).
+        execute: Include only for mutating commands or mutating subcommands.
         **kwargs: Additional arguments (session, continue, etc.).
     """
     # Check dry-run for mutating commands

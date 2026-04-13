@@ -14,15 +14,33 @@ class TestCacheGetParser:
         assert args.action == "create"
         assert args.content == "system prompt text"
 
+    def test_create_accepts_execute(self):
+        from adapters.data.cache import get_parser
+
+        args = get_parser().parse_args(["create", "system prompt text", "--execute"])
+        assert args.execute is True
+
     def test_has_list_action(self):
         from adapters.data.cache import get_parser
         args = get_parser().parse_args(["list"])
         assert args.action == "list"
 
+    def test_list_rejects_execute(self):
+        from adapters.data.cache import get_parser
+
+        with pytest.raises(SystemExit):
+            get_parser().parse_args(["list", "--execute"])
+
     def test_has_delete_action(self):
         from adapters.data.cache import get_parser
         args = get_parser().parse_args(["delete", "cachedContents/abc"])
         assert args.action == "delete"
+
+    def test_delete_accepts_execute(self):
+        from adapters.data.cache import get_parser
+
+        args = get_parser().parse_args(["delete", "cachedContents/abc", "--execute"])
+        assert args.execute is True
 
 
 class TestCacheCreate:

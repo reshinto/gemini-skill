@@ -242,6 +242,16 @@ class TestCapabilityProperties:
         reg = Registry(root_dir=tmp_path)
         assert reg.get_capability("search")["privacy_sensitive"] is True
 
+    def test_mutating_actions_exposed(self, tmp_path):
+        from core.routing.registry import Registry
+
+        cap = _sample_capability()
+        cap["mutating"] = True
+        cap["mutating_actions"] = ["create", "delete"]
+        _write_capabilities(tmp_path, {"cache": cap})
+        reg = Registry(root_dir=tmp_path)
+        assert reg.get_capability("cache")["mutating_actions"] == ["create", "delete"]
+
     def test_is_preview(self, tmp_path):
         from core.routing.registry import Registry
         cap = _sample_capability()

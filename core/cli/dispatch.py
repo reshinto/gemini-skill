@@ -53,6 +53,8 @@ ALLOWED_COMMANDS: dict[str, str] = {
 
 # Environment/argument flag for opting into privacy-sensitive operations
 _PRIVACY_OPT_IN_FLAG = "--i-understand-privacy"
+_FLAGS_WITH_VALUES = {"--model", "--session"}
+_BOOLEAN_FLAGS = {"--continue", "--execute", _PRIVACY_OPT_IN_FLAG}
 
 
 def main(argv: list[str]) -> None:
@@ -85,11 +87,15 @@ def main(argv: list[str]) -> None:
         safe_print("Run 'help' to see available commands.")
         sys.exit(1)
 
+    # Normalize privacy opt-in before policy enforcement so normal CLI
+    # callers do not need to pass the dispatcher-only flag manually.
+    normalized_args = _inject_privacy_opt_in_if_needed(command, remaining)
+
     # Enforce registry-driven policy before invoking the adapter
-    _enforce_policy(command, remaining)
+    _enforce_policy(command, normalized_args)
 
     # Strip policy-only flags before handing off to the adapter
-    adapter_args = [a for a in remaining if a != _PRIVACY_OPT_IN_FLAG]
+    adapter_args = [a for a in normalized_args if a != _PRIVACY_OPT_IN_FLAG]
 
     # Import and validate adapter
     adapter_module = importlib.import_module(ALLOWED_COMMANDS[command])
@@ -111,6 +117,21 @@ def main(argv: list[str]) -> None:
         return
 
     adapter_module.run(**vars(args))
+
+
+def _inject_privacy_opt_in_if_needed(command: str, args: list[str]) -> list[str]:
+    """Append the privacy opt-in flag for privacy-sensitive commands."""
+    from core.routing.registry import Registry
+
+    try:
+        reg = Registry(root_dir=_get_repo_root())
+        cap = reg.get_capability(command)
+    except CapabilityUnavailableError:
+        return args
+
+    if cap.get("privacy_sensitive") and _PRIVACY_OPT_IN_FLAG not in args:
+        return args + [_PRIVACY_OPT_IN_FLAG]
+    return args
 
 
 def _enforce_policy(command: str, args: list[str]) -> None:
@@ -141,11 +162,38 @@ def _enforce_policy(command: str, args: list[str]) -> None:
         )
         sys.exit(1)
 
-    if cap.get("mutating") and "--execute" not in args:
+    if _is_mutating_invocation(cap, args) and "--execute" not in args:
         safe_print(
             f"[DRY RUN] '{command}' is a mutating operation. " "Pass --execute to actually run it."
         )
         sys.exit(0)
+
+
+def _extract_action_token(args: list[str]) -> str | None:
+    """Return the subcommand/action token from raw CLI args, if any."""
+    i = 0
+    while i < len(args):
+        token = args[i]
+        if token in _FLAGS_WITH_VALUES:
+            i += 2
+            continue
+        if token in _BOOLEAN_FLAGS:
+            i += 1
+            continue
+        if token.startswith("-"):
+            i += 1
+            continue
+        return token
+    return None
+
+
+def _is_mutating_invocation(cap: dict[str, object], args: list[str]) -> bool:
+    """Resolve whether this specific invocation is mutating."""
+    action = _extract_action_token(args)
+    mutating_actions = cap.get("mutating_actions")
+    if isinstance(mutating_actions, list):
+        return action in mutating_actions
+    return bool(cap.get("mutating", False))
 
 
 def _validate_adapter_protocol(command: str, adapter_module: ModuleType) -> None:
@@ -181,7 +229,7 @@ def _print_help() -> None:
     safe_print("")
     safe_print("Policy:")
     safe_print("  - Mutating commands require --execute (dry-run default)")
-    safe_print(f"  - Privacy-sensitive commands require {_PRIVACY_OPT_IN_FLAG}")
+    safe_print("  - Privacy-sensitive commands are opt-in internally at dispatch")
 
 
 def _list_models() -> None:
