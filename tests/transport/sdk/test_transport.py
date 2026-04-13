@@ -828,3 +828,341 @@ class TestStreamCloseOnEarlyExit:
         body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
         chunks = list(SdkTransport().stream_generate_content("gemini-2.5-flash", body=body))
         assert len(chunks) == 1
+
+
+# ---------------------------------------------------------------------------
+# Slice 2d — SDK error wrapping
+# ---------------------------------------------------------------------------
+#
+# Every SDK call site runs inside ``_wrap_sdk_errors``, a context manager
+# that catches google.genai.errors.{ClientError,ServerError,APIError} and
+# re-raises them as one of the skill's own exception classes (AuthError
+# for 401/403, APIError otherwise) with a **sanitized** message. The
+# tests below exercise the mapping directly by raising SDK errors from
+# the mock client.
+#
+# The leaked-key fixture uses the same 39-character AIza-pattern value
+# Phase 1 used to pin the sanitize() wiring on the raw HTTP error paths.
+# If this key substring ever appears in a wrapped exception message,
+# that's a production-severity key-leakage bug.
+
+_LEAKED_KEY_SDK = "AIzaSyTestKey12345678901234567890123456"  # AIza + 35 chars
+
+
+def _make_sdk_client_error(code: int, message: str) -> Exception:
+    """Build a google.genai.errors.ClientError instance for tests."""
+    from google.genai import errors as genai_errors
+
+    return genai_errors.ClientError(
+        code, {"error": {"code": code, "status": "FAILED", "message": message}}
+    )
+
+
+def _make_sdk_server_error(code: int, message: str) -> Exception:
+    from google.genai import errors as genai_errors
+
+    return genai_errors.ServerError(
+        code, {"error": {"code": code, "status": "FAILED", "message": message}}
+    )
+
+
+class TestWrapSdkErrorsUnit:
+    """Direct tests of the ``_wrap_sdk_errors`` context manager.
+
+    These tests exercise the mapper in isolation without going through
+    the dispatch matrix. Each test asserts:
+        1. the right skill-level exception class is raised,
+        2. the HTTP status code is preserved,
+        3. the leaked key substring does NOT appear in the message.
+    """
+
+    def test_plain_exception_propagates_unchanged(self) -> None:
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(ValueError, match="not mine"):
+            with _wrap_sdk_errors():
+                raise ValueError("not mine")
+
+    def test_client_error_401_maps_to_auth_error(self) -> None:
+        from core.infra.errors import AuthError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(AuthError) as exc_info:
+            with _wrap_sdk_errors():
+                raise _make_sdk_client_error(
+                    401, f"API key invalid: key={_LEAKED_KEY_SDK}"
+                )
+        assert _LEAKED_KEY_SDK not in str(exc_info.value)
+        assert "[REDACTED]" in str(exc_info.value)
+
+    def test_client_error_403_maps_to_auth_error(self) -> None:
+        from core.infra.errors import AuthError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        # Include a leaked-key fixture in the message so the test pins
+        # the sanitize() guarantee on the 403 path the same way the 401
+        # path does — without this, the 403 test couldn't catch a
+        # regression where sanitize() stops being called.
+        with pytest.raises(AuthError) as exc_info:
+            with _wrap_sdk_errors():
+                raise _make_sdk_client_error(
+                    403, f"permission denied: key={_LEAKED_KEY_SDK}"
+                )
+        assert _LEAKED_KEY_SDK not in str(exc_info.value)
+        assert "[REDACTED]" in str(exc_info.value)
+
+    def test_client_error_407_maps_to_auth_error(self) -> None:
+        """HTTP 407 (proxy auth required) is also terminal — bad proxy
+        credentials are bad on every backend, just like a bad API key."""
+        from core.infra.errors import AuthError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(AuthError):
+            with _wrap_sdk_errors():
+                raise _make_sdk_client_error(407, "proxy auth required")
+
+    def test_client_error_400_maps_to_api_error(self) -> None:
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(APIError) as exc_info:
+            with _wrap_sdk_errors():
+                raise _make_sdk_client_error(
+                    400, f"bad request with key {_LEAKED_KEY_SDK}"
+                )
+        assert exc_info.value.status_code == 400
+        assert _LEAKED_KEY_SDK not in str(exc_info.value)
+
+    def test_client_error_429_maps_to_api_error(self) -> None:
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(APIError) as exc_info:
+            with _wrap_sdk_errors():
+                raise _make_sdk_client_error(429, "rate limited")
+        assert exc_info.value.status_code == 429
+
+    def test_server_error_500_maps_to_api_error(self) -> None:
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(APIError) as exc_info:
+            with _wrap_sdk_errors():
+                raise _make_sdk_server_error(
+                    500, f"server error {_LEAKED_KEY_SDK}"
+                )
+        assert exc_info.value.status_code == 500
+        assert _LEAKED_KEY_SDK not in str(exc_info.value)
+
+    def test_server_error_503_maps_to_api_error(self) -> None:
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(APIError) as exc_info:
+            with _wrap_sdk_errors():
+                raise _make_sdk_server_error(503, "unavailable")
+        assert exc_info.value.status_code == 503
+
+    def test_bare_genai_api_error_maps_to_api_error(self) -> None:
+        """The base ``google.genai.errors.APIError`` (not a ClientError or
+        ServerError subclass) is rare but must still be mapped."""
+        from google.genai import errors as genai_errors
+
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(APIError) as exc_info:
+            with _wrap_sdk_errors():
+                raise genai_errors.APIError(
+                    418, {"error": {"code": 418, "status": "FAILED", "message": "teapot"}}
+                )
+        assert exc_info.value.status_code == 418
+
+    def test_context_manager_no_error_runs_body(self) -> None:
+        """Happy path: body runs to completion, no exception, return value
+        is discarded (context managers don't forward return values)."""
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with _wrap_sdk_errors():
+            result = 1 + 1
+        assert result == 2
+
+    def test_client_error_with_zero_code_yields_zero_status(self) -> None:
+        """Cover the ``int(getattr(exc, 'code', 0) or 0)`` falsy-zero path
+        — the SDK occasionally raises with a missing or 0 status code."""
+        from google.genai import errors as genai_errors
+
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(APIError) as exc_info:
+            with _wrap_sdk_errors():
+                # Construct a ClientError with code=0 and an empty
+                # response_json so the .code attribute is 0.
+                raise genai_errors.ClientError(0, {})
+        # 0 is in neither _AUTH_STATUS_CODES nor 4xx → APIError(status_code=0)
+        assert exc_info.value.status_code == 0
+
+    def test_unknown_api_response_error_is_sanitized(self) -> None:
+        """The ValueError-branch SDK errors don't inherit from APIError, so
+        they need their own catch arm. ``UnknownApiResponseError`` is the
+        dangerous one because the SDK raises it with the raw HTTP response
+        body in the message — that body can echo the api_key from the
+        request URL when a misconfigured proxy reflects it back."""
+        from google.genai import errors as genai_errors
+
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(APIError) as exc_info:
+            with _wrap_sdk_errors():
+                raise genai_errors.UnknownApiResponseError(
+                    f"Failed to parse response. Raw: key={_LEAKED_KEY_SDK}"
+                )
+        assert _LEAKED_KEY_SDK not in str(exc_info.value)
+        assert "[REDACTED]" in str(exc_info.value)
+        assert exc_info.value.status_code == 0
+
+    def test_function_invocation_error_is_sanitized(self) -> None:
+        from google.genai import errors as genai_errors
+
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(APIError):
+            with _wrap_sdk_errors():
+                raise genai_errors.FunctionInvocationError("invocation failed")
+
+    def test_unsupported_function_error_is_sanitized(self) -> None:
+        from google.genai import errors as genai_errors
+
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(APIError):
+            with _wrap_sdk_errors():
+                raise genai_errors.UnsupportedFunctionError("unsupported")
+
+    def test_cause_chain_is_suppressed_to_prevent_logging_leak(self) -> None:
+        """``raise ... from None`` suppresses the __cause__ chain so a
+        downstream ``traceback.format_exception`` cannot walk back to the
+        raw SDK exception and print its un-sanitized message. This is the
+        load-bearing guarantee that closes the SDK-path key-leakage gap."""
+        from core.infra.errors import AuthError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(AuthError) as exc_info:
+            with _wrap_sdk_errors():
+                raise _make_sdk_client_error(
+                    401, f"bad key {_LEAKED_KEY_SDK}"
+                )
+        # __cause__ is None: the chain is suppressed at the boundary.
+        assert exc_info.value.__cause__ is None
+
+    def test_server_error_and_client_error_are_siblings_not_subclasses(self) -> None:
+        """If a future SDK release made ServerError a subclass of
+        ClientError, the ServerError except arm in _wrap_sdk_errors would
+        become unreachable (ClientError catches first). This sanity check
+        pins the sibling relationship at the pinned version. Bumping the
+        SDK pin re-runs this test as part of the parity audit."""
+        from google.genai import errors as genai_errors
+
+        assert not issubclass(genai_errors.ServerError, genai_errors.ClientError)
+        assert not issubclass(genai_errors.ClientError, genai_errors.ServerError)
+        assert issubclass(genai_errors.ClientError, genai_errors.APIError)
+        assert issubclass(genai_errors.ServerError, genai_errors.APIError)
+
+
+class TestWrapSdkErrorsIntegration:
+    """End-to-end tests that the dispatch matrix actually uses the wrapper.
+
+    These tests patch the SDK call site directly (not _wrap_sdk_errors)
+    and raise an SDK error; the resulting skill-level exception proves
+    the wrapper is threaded through the dispatch code path."""
+
+    def test_api_call_wraps_generate_content_error(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import SdkTransport
+
+        patched_get_client.models.generate_content.side_effect = _make_sdk_client_error(
+            429, "rate"
+        )
+        body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
+        with pytest.raises(APIError) as exc_info:
+            SdkTransport().api_call("models/gemini:generateContent", body=body)
+        assert exc_info.value.status_code == 429
+
+    def test_api_call_wraps_files_list_error(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import SdkTransport
+
+        patched_get_client.files.list.side_effect = _make_sdk_server_error(
+            500, "server"
+        )
+        with pytest.raises(APIError):
+            SdkTransport().api_call("files", method="GET")
+
+    def test_api_call_wraps_auth_error(self, patched_get_client: mock.Mock) -> None:
+        from core.infra.errors import AuthError
+        from core.transport.sdk.transport import SdkTransport
+
+        patched_get_client.models.count_tokens.side_effect = _make_sdk_client_error(
+            401, "bad key"
+        )
+        body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
+        with pytest.raises(AuthError):
+            SdkTransport().api_call("models/gemini:countTokens", body=body)
+
+    def test_stream_wraps_initial_call_error(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import SdkTransport
+
+        patched_get_client.models.generate_content_stream.side_effect = (
+            _make_sdk_server_error(500, "boom")
+        )
+        body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
+        with pytest.raises(APIError):
+            list(SdkTransport().stream_generate_content("gemini", body=body))
+
+    def test_stream_wraps_mid_iteration_error(
+        self, patched_get_client: mock.Mock
+    ) -> None:
+        """An SDK error raised during chunk iteration (not the initial call)
+        must also be mapped through the wrapper."""
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import SdkTransport
+
+        good_chunk = _make_sdk_response({"candidates": []})
+
+        def raising_iterator() -> Iterator[object]:
+            yield good_chunk
+            raise _make_sdk_server_error(503, "stream dropped")
+
+        patched_get_client.models.generate_content_stream.return_value = (
+            raising_iterator()
+        )
+        body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
+        with pytest.raises(APIError) as exc_info:
+            list(SdkTransport().stream_generate_content("gemini", body=body))
+        assert exc_info.value.status_code == 503
+
+    def test_upload_wraps_error(
+        self, patched_get_client: mock.Mock, tmp_path: Path
+    ) -> None:
+        from core.infra.errors import APIError
+        from core.transport.sdk.transport import SdkTransport
+
+        path = tmp_path / "f.txt"
+        path.write_text("x")
+        patched_get_client.files.upload.side_effect = _make_sdk_client_error(
+            413, "too large"
+        )
+        with pytest.raises(APIError) as exc_info:
+            SdkTransport().upload_file(file_path=path, mime_type="text/plain")
+        assert exc_info.value.status_code == 413

@@ -51,9 +51,13 @@ core/transport/sdk/client_factory.py (cached genai.Client).
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from pathlib import Path
 from typing import ClassVar, Literal, cast
 
+from core.infra.errors import APIError, AuthError
+from core.infra.sanitize import sanitize
+from core.transport._validation import validate_mime_type, validate_no_crlf
 from core.transport.base import (
     BackendUnavailableError,
     FileMetadata,
@@ -65,8 +69,114 @@ from core.transport.normalize import (
     sdk_response_to_rest_envelope,
     sdk_stream_chunk_to_envelope,
 )
-from core.transport._validation import validate_mime_type, validate_no_crlf
 from core.transport.sdk.client_factory import get_client
+
+# HTTP status codes that indicate authentication / authorization failure.
+# These map to AuthError so the coordinator's fallback policy treats them
+# as non-fallback-eligible — a bad key is bad on every backend. 407 is
+# proxy auth and fails the same way (bad proxy credentials are terminal).
+_AUTH_STATUS_CODES: frozenset[int] = frozenset({401, 403, 407})
+
+
+@contextmanager
+def _wrap_sdk_errors() -> Iterator[None]:
+    """Map google.genai.errors.* into the skill's own exception classes.
+
+    Every SDK call site in ``SdkTransport`` runs inside this context
+    manager so the raw ``google.genai.errors.{ClientError, ServerError,
+    APIError}`` surface is translated into the skill-level ``AuthError``
+    / ``APIError`` classes that the rest of the codebase already knows
+    how to display. Three guarantees:
+
+    1. **Typed mapping, not string matching.** We match on the exception
+       CLASS hierarchy (``genai_errors.ClientError``, ``ServerError``,
+       ``APIError`` base) and dispatch based on the ``.code`` attribute
+       (HTTP status). This is the opposite of the architect-rejected
+       "substring match AttributeError.message" approach from the earlier
+       plan — the contract is explicit and refactor-proof.
+    2. **Sanitized messages.** Every wrapped message passes through
+       ``sanitize()`` before being surfaced. SDK error bodies commonly
+       echo request details; a misconfigured proxy or a malformed API
+       response could plausibly include the api_key value. Sanitizing at
+       the boundary means a key leak is impossible on this path —
+       matching the identical guarantee Phase 1 landed on the raw HTTP
+       error paths.
+    3. **Auth is special-cased.** HTTP 401/403 become ``AuthError`` so
+       the coordinator's ``is_fallback_eligible`` policy refuses to
+       fall back (a bad key is bad everywhere). All other codes become
+       ``APIError(status_code=code)`` which the policy routes according
+       to the transient/terminal split.
+
+    Errors that are NOT google.genai SDK errors propagate unchanged.
+    Programmer bugs (TypeError, AttributeError, AssertionError) must
+    reach the coordinator's "not eligible for fallback" rule, not be
+    swallowed here.
+
+    Yields:
+        ``None`` — context managers with no resource management.
+
+    Raises:
+        AuthError: When the wrapped body raises a ``ClientError`` with
+            HTTP code 401 or 403.
+        APIError: When the wrapped body raises any other
+            ``google.genai.errors.APIError`` subclass. The
+            ``status_code`` field carries the HTTP code from the SDK
+            error's ``.code`` attribute.
+    """
+    # Lazy import so the module stays importable without google-genai.
+    # If the SDK isn't installed, ``get_client()`` would have raised
+    # BackendUnavailableError before reaching any call site that runs
+    # inside this wrapper — but we still guard with a try/except in case
+    # a test monkeypatches something weird.
+    try:
+        from google.genai import errors as genai_errors
+    except ImportError:  # pragma: no cover
+        # If google.genai isn't available at all, fall back to a base
+        # Exception check so the wrapper never silently swallows errors.
+        yield
+        return
+
+    try:
+        yield
+    except genai_errors.ClientError as exc:
+        code = int(getattr(exc, "code", 0) or 0)
+        message = sanitize(str(exc))
+        # ``raise ... from None`` deliberately suppresses the __cause__
+        # chain. The original SDK exception's str() value carries the
+        # raw error body which can echo the api_key (e.g. when a
+        # misconfigured proxy reflects the request URL). Python's default
+        # traceback printer walks __cause__ and prints raw cause messages,
+        # so preserving the chain would leak the key into any log line
+        # that calls ``traceback.format_exception`` — bypassing the
+        # sanitize() guarantee we just enforced. The mapped message
+        # already carries the actionable information for callers; the
+        # raw original adds nothing that justifies the leakage risk.
+        if code in _AUTH_STATUS_CODES:
+            raise AuthError(message) from None
+        raise APIError(message, status_code=code) from None
+    except genai_errors.ServerError as exc:
+        code = int(getattr(exc, "code", 0) or 0)
+        raise APIError(sanitize(str(exc)), status_code=code) from None
+    except genai_errors.APIError as exc:
+        # Base class catch — covers any future APIError subclass we
+        # haven't special-cased above.
+        code = int(getattr(exc, "code", 0) or 0)
+        raise APIError(sanitize(str(exc)), status_code=code) from None
+    except (
+        genai_errors.UnknownApiResponseError,
+        genai_errors.FunctionInvocationError,
+        genai_errors.UnsupportedFunctionError,
+    ) as exc:
+        # The ValueError-branch SDK errors do NOT inherit from APIError, so
+        # the three blocks above don't catch them. ``UnknownApiResponseError``
+        # is the dangerous one: the SDK raises it from _api_client.py with
+        # the raw HTTP response body as the message, and a malformed proxy
+        # response that echoes the request URL would put the api_key into
+        # that body. Sanitizing here closes the SDK-path equivalent of the
+        # raw HTTP key-leakage paths Phase 1 already locked down.
+        # status_code=0 signals "no HTTP code available" (matches the
+        # sentinel used elsewhere in this module).
+        raise APIError(sanitize(str(exc)), status_code=0) from None
 
 
 class SdkTransport:
@@ -222,13 +332,17 @@ class SdkTransport:
         method_upper = method.upper()
         body_dict: dict[str, object] = dict(body) if body is not None else {}
 
-        # 1. Action endpoints (contain ':')
-        if ":" in endpoint:
-            return self._dispatch_action(client, endpoint, body_dict)
+        # Every SDK call below runs inside _wrap_sdk_errors so the raw
+        # google.genai.errors.* surface is mapped to AuthError / APIError
+        # with sanitized messages BEFORE it reaches the coordinator.
+        with _wrap_sdk_errors():
+            # 1. Action endpoints (contain ':')
+            if ":" in endpoint:
+                return self._dispatch_action(client, endpoint, body_dict)
 
-        # 2/3. CRUD endpoints — split into [collection, *path_tail]
-        parts = endpoint.split("/")
-        return self._dispatch_crud(client, parts, method_upper, body_dict)
+            # 2/3. CRUD endpoints — split into [collection, *path_tail]
+            parts = endpoint.split("/")
+            return self._dispatch_crud(client, parts, method_upper, body_dict)
 
     # ------------------------------------------------------------------
     # Dispatch helpers (private)
@@ -567,29 +681,39 @@ class SdkTransport:
         """
         client = get_client()
         body_dict: dict[str, object] = dict(body)
-        contents, config = self._build_generate_content_kwargs(body_dict)
         # The SDK call returns a generator; iterating it issues the HTTP
         # request and reads SSE chunks lazily. We forward each chunk through
         # the normalize translator one at a time so a slow consumer's
         # backpressure flows back to the SDK naturally.
-        sdk_iterator = client.models.generate_content_stream(
-            model=model, contents=contents, config=config
-        )
-        # Wrap iteration in try/finally so the SDK iterator is closed even
-        # if the consumer breaks out of the loop early (timeout, exception,
-        # GeneratorExit from the coordinator). CPython's reference counting
-        # would close the iterator promptly anyway, but the explicit
-        # ``close()`` call makes the lifecycle obvious and works on any
-        # Python implementation. The guard around hasattr() keeps the
-        # behavior safe for SDK iterators that don't implement close()
-        # (older or mock objects).
-        try:
-            for chunk in sdk_iterator:
-                yield sdk_stream_chunk_to_envelope(chunk)
-        finally:
-            close = getattr(sdk_iterator, "close", None)
-            if callable(close):
-                close()
+        #
+        # The _wrap_sdk_errors context manager wraps BOTH the body
+        # translation, the initial SDK call, AND the iteration loop so:
+        #   - a pydantic ValidationError from model_validate (which could
+        #     embed body-derived content in its message) is mapped through
+        #     the wrapper and sanitized,
+        #   - an error raised mid-stream (e.g. a 503 after a few chunks
+        #     have already been yielded) is translated the same way as an
+        #     error raised by the initial call.
+        with _wrap_sdk_errors():
+            contents, config = self._build_generate_content_kwargs(body_dict)
+            sdk_iterator = client.models.generate_content_stream(
+                model=model, contents=contents, config=config
+            )
+            # Wrap iteration in try/finally so the SDK iterator is closed
+            # even if the consumer breaks out of the loop early (timeout,
+            # exception, GeneratorExit from the coordinator). CPython's
+            # reference counting would close the iterator promptly anyway,
+            # but the explicit ``close()`` call makes the lifecycle obvious
+            # and works on any Python implementation. The guard around
+            # hasattr() keeps the behavior safe for SDK iterators that
+            # don't implement close() (older or mock objects).
+            try:
+                for chunk in sdk_iterator:
+                    yield sdk_stream_chunk_to_envelope(chunk)
+            finally:
+                close = getattr(sdk_iterator, "close", None)
+                if callable(close):
+                    close()
 
     def upload_file(
         self,
@@ -646,8 +770,9 @@ class SdkTransport:
             validate_no_crlf(display_name, field_name="display_name")
 
         client = get_client()
-        sdk_file = client.files.upload(
-            file=str(file_path),
-            config={"mime_type": mime_type, "display_name": display_name},
-        )
+        with _wrap_sdk_errors():
+            sdk_file = client.files.upload(
+                file=str(file_path),
+                config={"mime_type": mime_type, "display_name": display_name},
+            )
         return sdk_file_to_metadata(sdk_file)
