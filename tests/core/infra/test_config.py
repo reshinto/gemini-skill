@@ -1,7 +1,9 @@
 """Tests for core/infra/config.py — JSON configuration management.
 
 Verifies loading, defaults, saving with secure permissions, and
-config field access.
+config field access. Also covers the dual-backend priority flags
+(GEMINI_IS_SDK_PRIORITY / GEMINI_IS_RAWHTTP_PRIORITY) introduced by the
+dual-backend transport refactor.
 """
 from __future__ import annotations
 
@@ -9,6 +11,7 @@ import json
 import os
 import stat
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -81,6 +84,14 @@ class TestConfigLoading:
         from core.infra.config import load_config
         config_file = tmp_path / "config.json"
         config_file.write_text("not valid json {{{")
+        cfg = load_config(config_dir=tmp_path)
+        assert cfg.default_model == "gemini-2.5-flash"
+
+    def test_non_dict_json_returns_defaults(self, tmp_path):
+        """A JSON list at the top level is valid JSON but not a config dict."""
+        from core.infra.config import load_config
+        config_file = tmp_path / "config.json"
+        config_file.write_text("[1, 2, 3]")
         cfg = load_config(config_dir=tmp_path)
         assert cfg.default_model == "gemini-2.5-flash"
 
@@ -257,3 +268,99 @@ class TestConfigSaveErrorHandling:
 
         with pytest.raises(OSError, match="replace failed"):
             save_config(cfg, config_dir=tmp_path)
+
+
+class TestParseBoolEnv:
+    """_parse_bool_env() must accept settings.json string values case-insensitively.
+
+    The values originate in ~/.claude/settings.json's `env` block where Claude
+    Code stores them as strings (JSON has no shell-style booleans). The skill
+    config layer must parse them into real Python booleans so the coordinator
+    can branch on them.
+    """
+
+    def test_returns_default_when_unset(self):
+        from core.infra.config import _parse_bool_env
+        with patch.dict(os.environ, {}, clear=True):
+            assert _parse_bool_env("ANY_FLAG", default=True) is True
+            assert _parse_bool_env("ANY_FLAG", default=False) is False
+
+    @pytest.mark.parametrize("raw", ["true", "True", "TRUE", "1", "yes", "Yes", " true "])
+    def test_truthy_values(self, raw):
+        from core.infra.config import _parse_bool_env
+        with patch.dict(os.environ, {"FLAG": raw}, clear=True):
+            assert _parse_bool_env("FLAG", default=False) is True
+
+    @pytest.mark.parametrize("raw", ["false", "False", "FALSE", "0", "no", "No", "", "anything-else"])
+    def test_falsy_values(self, raw):
+        from core.infra.config import _parse_bool_env
+        with patch.dict(os.environ, {"FLAG": raw}, clear=True):
+            assert _parse_bool_env("FLAG", default=True) is False
+
+
+class TestBackendPriorityFlags:
+    """Config must expose GEMINI_IS_SDK_PRIORITY / GEMINI_IS_RAWHTTP_PRIORITY.
+
+    The two flags determine which transport backend is primary. The defaults
+    (sdk=True, raw_http=False) match the documented dual-backend rollout: SDK
+    is the new primary, raw HTTP remains as the always-available fallback.
+    """
+
+    def test_default_is_sdk_priority_true(self, tmp_path):
+        from core.infra.config import load_config
+        with patch.dict(os.environ, {}, clear=True):
+            cfg = load_config(config_dir=tmp_path)
+            assert cfg.is_sdk_priority is True
+
+    def test_default_is_rawhttp_priority_false(self, tmp_path):
+        from core.infra.config import load_config
+        with patch.dict(os.environ, {}, clear=True):
+            cfg = load_config(config_dir=tmp_path)
+            assert cfg.is_rawhttp_priority is False
+
+    def test_env_var_overrides_sdk_priority(self, tmp_path):
+        from core.infra.config import load_config
+        with patch.dict(os.environ, {"GEMINI_IS_SDK_PRIORITY": "false", "GEMINI_IS_RAWHTTP_PRIORITY": "true"}, clear=True):
+            cfg = load_config(config_dir=tmp_path)
+            assert cfg.is_sdk_priority is False
+            assert cfg.is_rawhttp_priority is True
+
+    def test_both_flags_true_is_valid(self, tmp_path):
+        """When both backends are enabled, SDK wins (per user rule)."""
+        from core.infra.config import load_config
+        with patch.dict(os.environ, {"GEMINI_IS_SDK_PRIORITY": "true", "GEMINI_IS_RAWHTTP_PRIORITY": "true"}, clear=True):
+            cfg = load_config(config_dir=tmp_path)
+            assert cfg.is_sdk_priority is True
+            assert cfg.is_rawhttp_priority is True
+
+    def test_both_flags_false_raises_config_error(self, tmp_path):
+        """At least one backend must be enabled — both-false is the only invalid combo."""
+        from core.infra.config import load_config, ConfigError
+        with patch.dict(os.environ, {"GEMINI_IS_SDK_PRIORITY": "false", "GEMINI_IS_RAWHTTP_PRIORITY": "false"}, clear=True):
+            with pytest.raises(ConfigError, match="GEMINI_IS_SDK_PRIORITY"):
+                load_config(config_dir=tmp_path)
+
+
+class TestPrimaryFallbackProperties:
+    """Config exposes computed primary/fallback backend names for the coordinator."""
+
+    def test_sdk_only_has_no_fallback(self, tmp_path):
+        from core.infra.config import load_config
+        with patch.dict(os.environ, {"GEMINI_IS_SDK_PRIORITY": "true", "GEMINI_IS_RAWHTTP_PRIORITY": "false"}, clear=True):
+            cfg = load_config(config_dir=tmp_path)
+            assert cfg.primary_backend == "sdk"
+            assert cfg.fallback_backend is None
+
+    def test_rawhttp_only_has_no_fallback(self, tmp_path):
+        from core.infra.config import load_config
+        with patch.dict(os.environ, {"GEMINI_IS_SDK_PRIORITY": "false", "GEMINI_IS_RAWHTTP_PRIORITY": "true"}, clear=True):
+            cfg = load_config(config_dir=tmp_path)
+            assert cfg.primary_backend == "raw_http"
+            assert cfg.fallback_backend is None
+
+    def test_both_enabled_sdk_wins_with_rawhttp_fallback(self, tmp_path):
+        from core.infra.config import load_config
+        with patch.dict(os.environ, {"GEMINI_IS_SDK_PRIORITY": "true", "GEMINI_IS_RAWHTTP_PRIORITY": "true"}, clear=True):
+            cfg = load_config(config_dir=tmp_path)
+            assert cfg.primary_backend == "sdk"
+            assert cfg.fallback_backend == "raw_http"
