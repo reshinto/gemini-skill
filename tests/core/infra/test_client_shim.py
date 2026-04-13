@@ -14,8 +14,6 @@ from __future__ import annotations
 
 from unittest import mock
 
-import pytest
-
 
 class TestReExports:
     """Names re-exported from the facade must be the same objects."""

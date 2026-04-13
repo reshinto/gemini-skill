@@ -25,20 +25,11 @@ from unittest import mock
 import pytest
 
 
-@pytest.fixture(autouse=True)
-def _reset_factory_cache():
-    """Drop the lru_cache between every test so each one gets a fresh client.
-
-    Without this fixture, the first test to call ``get_client()`` would
-    poison the cache for every subsequent test in the file. The cache is
-    cleared at both setup and teardown so a test that raises mid-flight
-    can't leak state into the next one.
-    """
-    from core.transport.sdk import client_factory
-
-    client_factory.get_client.cache_clear()
-    yield
-    client_factory.get_client.cache_clear()
+# NOTE: cache reset is handled by the autouse fixture in
+# tests/transport/conftest.py which runs for every test in this directory
+# tree (including this file under tests/transport/sdk/). Do not duplicate
+# the fixture here — keeping it in one place means a future addition
+# (e.g. a third singleton) only needs editing once.
 
 
 class TestGetClient:

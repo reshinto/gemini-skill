@@ -6,9 +6,15 @@ determines the appropriate retry action for a given HTTP status code.
 format_user_error() produces clean, user-friendly messages without
 stack traces, suitable for stdout consumption by Claude Code.
 
-Dependency: none (leaf module — no imports from other core modules).
+Dependencies: core.infra.sanitize (single in-package import — used by
+APIError.__init__ to scrub error strings at the construction boundary
+so any caller that builds an APIError with raw upstream content gets
+defense-in-depth redaction). sanitize is itself a leaf module with
+zero core/* imports, so no circular risk.
 """
 from __future__ import annotations
+
+from core.infra.sanitize import sanitize as _sanitize
 
 
 
@@ -97,9 +103,9 @@ class APIError(GeminiSkillError):
         # an APIError directly with an unsanitized error string would
         # otherwise leak it through ``__str__`` / ``format_user_error``.
         # Sanitizing here closes that gap structurally instead of
-        # relying on every call site to remember.
-        from core.infra.sanitize import sanitize as _sanitize
-
+        # relying on every call site to remember. ``_sanitize`` is
+        # imported at module top — see the module docstring's note on
+        # the lack of circular-import risk.
         self.primary_error = _sanitize(primary_error) if primary_error is not None else None
         self.fallback_error = (
             _sanitize(fallback_error) if fallback_error is not None else None

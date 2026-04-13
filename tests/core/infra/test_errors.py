@@ -150,6 +150,40 @@ class TestAPIErrorMultiBackendContext:
         assert err.status_code == 404
         assert "legacy" in str(err)
 
+    def test_constructor_sanitizes_primary_error_field(self):
+        """The constructor must scrub API-key patterns from the
+        primary_error string at the boundary so a future caller that
+        constructs an APIError directly with an unsanitized upstream
+        message cannot leak the key through ``__str__`` /
+        ``format_user_error``. Mutation guard: removing the
+        ``_sanitize()`` call inside ``__init__`` would break this test."""
+        from core.infra.errors import APIError
+
+        leaked_key = "AIzaSyTestKey12345678901234567890123456"
+        err = APIError(
+            "boom",
+            status_code=500,
+            primary_backend="sdk",
+            primary_error=f"upstream said: {leaked_key}",
+        )
+        assert leaked_key not in (err.primary_error or "")
+        assert leaked_key not in str(err)
+
+    def test_constructor_sanitizes_fallback_error_field(self):
+        """Same mutation guard for fallback_error."""
+        from core.infra.errors import APIError
+
+        leaked_key = "AIzaSyTestKey12345678901234567890123456"
+        err = APIError(
+            "both failed",
+            primary_backend="sdk",
+            fallback_backend="raw_http",
+            primary_error="sdk timeout",
+            fallback_error=f"raw error: {leaked_key}",
+        )
+        assert leaked_key not in (err.fallback_error or "")
+        assert leaked_key not in str(err)
+
 
 class TestRetryClassification:
     """classify_retry() must return the correct action for each HTTP status."""
