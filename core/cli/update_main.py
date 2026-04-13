@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TypedDict, cast
 from urllib.request import Request, urlopen
 
 from core.infra.sanitize import safe_print
@@ -86,9 +86,18 @@ def _parse_version(version: str) -> tuple[int, ...]:
     return tuple(parts)
 
 
-def _fetch_latest_release() -> dict[str, Any]:
+def _fetch_latest_release() -> LatestRelease:
     """Fetch the latest release info from GitHub API."""
     request = Request(_RELEASE_API)
     request.add_header("Accept", "application/vnd.github+json")
     with urlopen(request, timeout=30) as response:
-        return json.loads(response.read())
+        payload = json.loads(response.read())
+        if isinstance(payload, dict):
+            return cast(LatestRelease, payload)
+        return {}
+
+
+class LatestRelease(TypedDict, total=False):
+    """Subset of the GitHub releases API used by this command."""
+
+    tag_name: str

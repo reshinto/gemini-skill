@@ -50,7 +50,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
-from typing import ClassVar, Literal, cast
+from typing import ClassVar, cast
 
 from core.infra.sanitize import sanitize
 from core.transport._validation import validate_mime_type, validate_no_crlf
@@ -84,7 +84,7 @@ class SdkAsyncTransport:
             layers and log readers don't need to special-case async.
     """
 
-    name: ClassVar[Literal["sdk"]] = "sdk"
+    name: ClassVar[str] = "sdk"
 
     def supports(self, capability: str) -> bool:
         """Return True iff the SDK advertises an async twin for ``capability``.

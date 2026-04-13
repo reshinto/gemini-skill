@@ -14,7 +14,8 @@ All tests mock ``client.aio.live.connect``; no live network.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Iterator
+from types import TracebackType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -55,7 +56,7 @@ class _FakeSession:
         self.send_client_content = AsyncMock()
         self.last_receive_stream: _FakeReceiveStream | None = None
 
-    def receive(self) -> Any:
+    def receive(self) -> _FakeReceiveStream:
         self.last_receive_stream = _FakeReceiveStream(self._messages)
         return self.last_receive_stream
 
@@ -69,7 +70,13 @@ class _FakeConnectCM:
     async def __aenter__(self) -> _FakeSession:
         return self._session
 
-    async def __aexit__(self, *_: Any) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        del exc_type, exc_val, exc_tb
         return None
 
 
@@ -109,7 +116,7 @@ def patched_client(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 
 
 @pytest.fixture(autouse=True)
-def _reset_client_cache() -> None:
+def _reset_client_cache() -> Iterator[None]:
     from core.transport.sdk import client_factory
 
     client_factory.get_client.cache_clear()

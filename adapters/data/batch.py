@@ -8,7 +8,6 @@ Dependencies: core/infra/client.py, core/adapter/helpers.py
 from __future__ import annotations
 
 import argparse
-from typing import Any
 
 from core.adapter.helpers import add_execute_flag, build_base_parser, check_dry_run, emit_json
 from core.infra.sanitize import safe_print
@@ -44,7 +43,7 @@ def run(
     dest: str | None = None,
     model: str | None = None,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute batch management operations."""
     if action == "create":
@@ -73,7 +72,7 @@ def _create(
     if check_dry_run(execute, f"create batch job from {src}"):
         return
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "inputConfig": {"gcsSource": {"inputUri": src}},
         "outputConfig": {"gcsDestination": {"outputUriPrefix": dest}},
     }
@@ -87,7 +86,8 @@ def _create(
 def _list_batches() -> None:
     """List all batch jobs."""
     response = api_call("batchJobs", method="GET")
-    jobs = response.get("batchJobs", [])
+    jobs_value = response.get("batchJobs")
+    jobs = jobs_value if isinstance(jobs_value, list) else []
     emit_json({"count": len(jobs), "jobs": jobs})
 
 

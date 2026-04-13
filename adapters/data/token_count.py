@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any
 
 from core.adapter.helpers import build_base_parser, emit_json
 from core.infra.client import api_call
@@ -26,7 +25,7 @@ def get_parser() -> argparse.ArgumentParser:
 def run(
     text: str,
     model: str | None = None,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute token counting."""
     from core.routing.router import Router
@@ -38,7 +37,7 @@ def run(
     )
     resolved_model = model or router.select_model("text")
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": [{"role": "user", "parts": [{"text": text}]}],
     }
 

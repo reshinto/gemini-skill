@@ -15,11 +15,11 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import TypedDict, cast
 
 from core.infra.atomic_write import atomic_write_json
 from core.infra.filelock import FileLock
-from core.state.identity import DocumentIdentity
+from core.state.identity import DocumentIdentity, DocumentIdentityPayload
 
 _STATE_FILENAME = "stores.json"
 _LOCK_FILENAME = "stores.lock"
@@ -40,19 +40,21 @@ class StoreState:
         self._state_file = self._state_dir / _STATE_FILENAME
         self._lock_path = self._state_dir / _LOCK_FILENAME
 
-    def _load(self) -> dict[str, Any]:
+    def _load(self) -> dict[str, StoreRecord]:
         """Load state from disk or return empty structure."""
         if not self._state_file.is_file():
             return {}
         try:
             raw = json.loads(self._state_file.read_text(encoding="utf-8"))
             if isinstance(raw, dict) and "stores" in raw:
-                return raw["stores"]
+                stores = raw["stores"]
+                if isinstance(stores, dict):
+                    return cast(dict[str, StoreRecord], stores)
         except (json.JSONDecodeError, OSError):
             pass
         return {}
 
-    def _save(self, data: dict[str, Any]) -> None:
+    def _save(self, data: dict[str, StoreRecord]) -> None:
         """Atomically write state to disk. Must be called under lock."""
         self._state_dir.mkdir(parents=True, exist_ok=True)
         atomic_write_json(
@@ -64,7 +66,7 @@ class StoreState:
         """Return names of all tracked stores."""
         return list(self._load().keys())
 
-    def get_store(self, name: str) -> dict[str, Any] | None:
+    def get_store(self, name: str) -> StoreRecord | None:
         """Get store info by name, or None if not found."""
         return self._load().get(name)
 
@@ -125,7 +127,7 @@ class StoreState:
             doc["status"] = status
             self._save(data)
 
-    def list_documents(self, store_name: str) -> list[dict[str, Any]]:
+    def list_documents(self, store_name: str) -> list[StoreDocumentRecord]:
         """List all documents in a store. Empty list if store not found."""
         store = self._load().get(store_name)
         if store is None:
@@ -138,3 +140,20 @@ class StoreState:
         if store is None:
             return False
         return identity.content_sha256 in store["documents"]
+
+
+class StoreDocumentRecord(TypedDict):
+    """Tracked status for one document inside a store."""
+
+    identity: DocumentIdentityPayload
+    operation_name: str
+    status: str
+    added_at: float
+
+
+class StoreRecord(TypedDict):
+    """Tracked metadata for one file-search store."""
+
+    store_id: str
+    documents: dict[str, StoreDocumentRecord]
+    created_at: float

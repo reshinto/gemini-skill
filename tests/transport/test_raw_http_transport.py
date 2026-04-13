@@ -10,7 +10,7 @@ behavior (retries, SSE parsing, multipart upload) is covered by
 
 from __future__ import annotations
 
-from pathlib import Path
+from collections.abc import Iterator, Mapping
 from unittest.mock import patch
 
 import pytest
@@ -77,7 +77,7 @@ class TestRawHttpTransportSupports:
 class TestApiCallDelegation:
     """api_call must forward every argument to the underlying client function."""
 
-    def test_forwards_all_kwargs(self):
+    def test_forwards_all_kwargs(self) -> None:
         from core.transport.raw_http.transport import RawHttpTransport
 
         with patch("core.transport.raw_http.transport._client_api_call") as mock:
@@ -100,7 +100,7 @@ class TestApiCallDelegation:
             timeout=30,
         )
 
-    def test_propagates_client_exception(self):
+    def test_propagates_client_exception(self) -> None:
         from core.infra.errors import APIError
         from core.transport.raw_http.transport import RawHttpTransport
 
@@ -119,10 +119,15 @@ class TestApiCallDelegation:
 class TestStreamDelegation:
     """stream_generate_content must forward and yield from the underlying generator."""
 
-    def test_yields_each_chunk(self):
+    def test_yields_each_chunk(self) -> None:
         from core.transport.raw_http.transport import RawHttpTransport
 
-        def fake_stream(model, body, api_version, timeout):
+        def fake_stream(
+            model: str,
+            body: Mapping[str, object],
+            api_version: str,
+            timeout: int,
+        ) -> Iterator[dict[str, object]]:
             yield {"candidates": [{"content": {"parts": [{"text": "hello"}]}}]}
             yield {"candidates": [{"content": {"parts": [{"text": " world"}]}}]}
 
@@ -142,12 +147,17 @@ class TestStreamDelegation:
         assert len(chunks) == 2
         assert chunks[0]["candidates"][0]["content"]["parts"][0]["text"] == "hello"
 
-    def test_forwards_kwargs(self):
+    def test_forwards_kwargs(self) -> None:
         from core.transport.raw_http.transport import RawHttpTransport
 
         captured: dict[str, object] = {}
 
-        def fake_stream(model, body, api_version, timeout):
+        def fake_stream(
+            model: str,
+            body: Mapping[str, object],
+            api_version: str,
+            timeout: int,
+        ) -> Iterator[dict[str, object]]:
             captured.update(
                 {"model": model, "body": body, "api_version": api_version, "timeout": timeout}
             )

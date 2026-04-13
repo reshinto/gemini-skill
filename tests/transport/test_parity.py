@@ -48,12 +48,13 @@ fails in CI months from now.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 from unittest import mock
 
 import pytest
+from core.types import JSONObject
 from deepdiff import DeepDiff  # type: ignore[import-untyped]
 
 from core.transport.normalize import _translate_keys
@@ -64,7 +65,7 @@ from core.transport.normalize import _translate_keys
 # ---------------------------------------------------------------------------
 
 
-def _make_sdk_obj(payload: dict[str, Any]) -> mock.Mock:
+def _make_sdk_obj(payload: Mapping[str, object]) -> mock.Mock:
     """Wrap a snake_case payload as a pydantic-shaped SDK response mock.
 
     The normalize layer only cares that the object exposes a callable
@@ -73,11 +74,11 @@ def _make_sdk_obj(payload: dict[str, Any]) -> mock.Mock:
     wired up is the cheapest possible stand-in for a real SDK response.
     """
     fake = mock.Mock()
-    fake.model_dump.return_value = payload
+    fake.model_dump.return_value = dict(payload)
     return fake
 
 
-def _derive_camel(snake_payload: dict[str, Any]) -> dict[str, Any]:
+def _derive_camel(snake_payload: Mapping[str, object]) -> JSONObject:
     """Return the camelCase envelope the SDK normalizer would produce.
 
     Running the snake_case payload through ``_translate_keys`` is the
@@ -86,7 +87,7 @@ def _derive_camel(snake_payload: dict[str, Any]) -> dict[str, Any]:
     ``sdk_response_to_rest_envelope``, which is what the parity tests
     exist to catch.
     """
-    return cast(dict[str, Any], _translate_keys(snake_payload))
+    return cast(JSONObject, _translate_keys(dict(snake_payload)))
 
 
 def _assert_parity(raw_result: object, sdk_result: object) -> None:
@@ -1034,7 +1035,7 @@ class TestOperationsParity:
 class TestStreamParity:
     def test_stream_chunks_byte_identical(self, patched_sdk_client: mock.Mock) -> None:
         """Each streaming chunk must match byte-for-byte across backends."""
-        snake_chunks: list[dict[str, Any]] = [
+        snake_chunks: list[JSONObject] = [
             {
                 "candidates": [
                     {
@@ -1068,7 +1069,7 @@ class TestStreamParity:
         from core.transport.sdk.transport import SdkTransport
 
         # Raw HTTP path — client.stream_generate_content already yields REST dicts.
-        def _raw_gen(*_a: object, **_kw: object) -> Iterator[dict[str, Any]]:
+        def _raw_gen(*_a: object, **_kw: object) -> Iterator[JSONObject]:
             yield from camel_chunks
 
         with mock.patch(

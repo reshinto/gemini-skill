@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import Literal
+from typing import ClassVar
 
 from core.transport.base import FileMetadata, GeminiResponse, StreamChunk
 from core.transport.raw_http.client import api_call as _client_api_call
@@ -57,7 +57,7 @@ class RawHttpTransport:
     presence rather than class hierarchy.
     """
 
-    name: Literal["raw_http"] = "raw_http"
+    name: ClassVar[str] = "raw_http"
 
     def supports(self, capability: str) -> bool:
         """Return True for every capability — urllib can issue any REST call.
@@ -115,11 +115,11 @@ class RawHttpTransport:
             APIError: Bubbled up from the underlying client on HTTP
                 failures, network errors, or SSL issues.
         """
-        # return-value: client.py returns ``dict[str, Any]``; we re-type as
+        # return-value: client.py returns ``JSONObject``; we re-type as
         # the precise GeminiResponse TypedDict at the Protocol boundary.
         return _client_api_call(  # type: ignore[return-value]
             endpoint=endpoint,
-            # arg-type: client.py declares ``body: dict[str, Any] | None``
+            # arg-type: client.py declares ``body: JSONObject | None``
             # so passing a ``Mapping[str, object]`` triggers an arg-type
             # error. Legacy signature debt — left until a later cleanup.
             body=body,  # type: ignore[arg-type]
@@ -149,11 +149,11 @@ class RawHttpTransport:
         # ``yield from`` propagates StopIteration cleanly and lets the caller
         # treat the result as any other iterator without a wrapper layer.
         # The type-ignore is narrow: client.py's underlying generator is
-        # typed as ``Generator[dict[str, Any], None, None]`` (legacy debt),
+        # typed as ``Generator[JSONObject, None, None]`` (legacy debt),
         # which mypy cannot prove satisfies ``Iterator[StreamChunk]``.
         yield from _client_stream_generate_content(  # type: ignore[misc]
             model=model,
-            # body: client.py declares ``dict[str, Any]`` so passing a
+            # body: client.py declares ``JSONObject`` so passing a
             # ``Mapping[str, object]`` triggers an arg-type error until the
             # legacy signature is tightened in a later cleanup pass.
             body=body,  # type: ignore[arg-type]
@@ -187,7 +187,7 @@ class RawHttpTransport:
             APIError: Bubbled up from the underlying client on HTTP
                 failures.
         """
-        # return-value: client.py returns ``dict[str, Any]``; we re-type as
+        # return-value: client.py returns ``JSONObject``; we re-type as
         # the precise FileMetadata TypedDict at the Protocol boundary.
         return _client_upload_file(  # type: ignore[return-value]
             # arg-type: client.py declares ``file_path: Path`` so a

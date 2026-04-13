@@ -11,14 +11,13 @@ Dependencies: core/infra/client.py, core/adapter/helpers.py,
 from __future__ import annotations
 
 import argparse
-from typing import Any
+from pathlib import Path
 
 from core.adapter.helpers import add_execute_flag, build_base_parser, check_dry_run, emit_json
 from core.infra.client import api_call, upload_file
 from core.infra.mime import guess_mime_for_path
 from core.infra.sanitize import safe_print
 from core.transport.raw_http.client import download_file_bytes
-from pathlib import Path
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -61,7 +60,7 @@ def run(
     mime: str | None = None,
     display_name: str | None = None,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute file management operations.
 
@@ -99,7 +98,8 @@ def _upload(
     mime_type = mime or guess_mime_for_path(file_path)
     response = upload_file(file_path, mime_type=mime_type, display_name=display_name)
 
-    file_info = response.get("file", {})
+    wrapped_file = response.get("file")
+    file_info = wrapped_file if isinstance(wrapped_file, dict) else response
     emit_json(
         {
             "name": file_info.get("name", ""),
@@ -114,7 +114,8 @@ def _upload(
 def _list_files() -> None:
     """List all uploaded files."""
     response = api_call("files", method="GET")
-    files = response.get("files", [])
+    raw_files = response.get("files")
+    files = raw_files if isinstance(raw_files, list) else []
     emit_json(
         {
             "count": len(files),
@@ -137,8 +138,7 @@ def _get_file(name: str | None) -> None:
     if not name:
         safe_print("[ERROR] No file name provided.")
         return
-    response = api_call(name, method="GET")
-    emit_json(response)
+    emit_json(api_call(name, method="GET"))
 
 
 def _download(name: str | None, out_path: str | None, execute: bool) -> None:

@@ -29,12 +29,13 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+
+from core.types import SettingsBuffer
 
 
 def migrate_legacy_env_to_settings(
     legacy_env_path: Path,
-    settings_buffer: dict[str, Any],
+    settings_buffer: SettingsBuffer,
     *,
     yes: bool,
     interactive: bool,
@@ -65,7 +66,7 @@ def migrate_legacy_env_to_settings(
     # Ensure the env block exists.
     if "env" not in settings_buffer or not isinstance(settings_buffer["env"], dict):
         settings_buffer["env"] = {}
-    env: dict[str, str] = settings_buffer["env"]
+    env = settings_buffer["env"]
 
     # Merge: only add keys the buffer doesn't already have. Never
     # overwrite — the settings.json value is always newer / more

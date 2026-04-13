@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import time
 from pathlib import Path
-from typing import Any
 from urllib.request import Request, urlopen
 
 from core.adapter.helpers import (
@@ -53,7 +52,7 @@ def run(
     poll_interval: int = 15,
     max_wait: int = 1800,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute video generation with Veo."""
     if check_dry_run(execute, f"generate video: {prompt}"):
@@ -67,7 +66,7 @@ def run(
     )
     resolved_model = model or router.select_model("video_gen")
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "instances": [{"prompt": prompt}],
     }
 
@@ -76,7 +75,12 @@ def run(
         f"models/{resolved_model}:predictLongRunning",
         body=body,
     )
-    operation_name = op.get("name", "")
+    operation_name_value = op.get("name")
+    if not isinstance(operation_name_value, str) or not operation_name_value:
+        safe_print("[ERROR] Video generation did not return an operation name.")
+        emit_json(op)
+        return
+    operation_name = operation_name_value
     safe_print(f"Video generation started: {operation_name}")
 
     # Poll until done
@@ -113,15 +117,23 @@ def run(
     })
 
 
-def _extract_video_uri(status: dict[str, Any]) -> str | None:
+def _extract_video_uri(status: dict[str, object]) -> str | None:
     """Extract video download URI from operation response."""
-    try:
-        response = status.get("response", {})
-        videos = response.get("generatedVideos", [])
-        if videos:
-            return videos[0].get("video", {}).get("uri")
-    except (KeyError, IndexError, TypeError, AttributeError):
-        pass
+    response = status.get("response")
+    if not isinstance(response, dict):
+        return None
+    videos = response.get("generatedVideos")
+    if not isinstance(videos, list) or not videos:
+        return None
+    first_video = videos[0]
+    if not isinstance(first_video, dict):
+        return None
+    video = first_video.get("video")
+    if not isinstance(video, dict):
+        return None
+    uri = video.get("uri")
+    if isinstance(uri, str):
+        return uri
     return None
 
 

@@ -15,10 +15,12 @@ dispatch-layer migration. Today every adapter call uses the
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import AsyncIterator
+from pathlib import Path
 from unittest import mock
 
 import pytest
+from core.types import JSONObject
 
 # NOTE: Singleton reset is handled by the autouse fixture in
 # tests/transport/conftest.py — do not duplicate here.
@@ -146,7 +148,7 @@ class TestStreamDelegation:
 
 
 class TestUploadDelegation:
-    def test_forwards_to_coordinator(self, tmp_path: Any) -> None:
+    def test_forwards_to_coordinator(self, tmp_path: Path) -> None:
         import core.transport as facade
 
         fake_coord = mock.Mock()
@@ -213,7 +215,7 @@ class TestAsyncFacade:
     async def test_async_stream_forwards_to_coordinator(self) -> None:
         import core.transport as facade
 
-        async def _fake_stream(**_: Any) -> Any:
+        async def _fake_stream(**_: object) -> AsyncIterator[JSONObject]:
             yield {"chunk": 1}
             yield {"chunk": 2}
 
@@ -232,7 +234,7 @@ class TestAsyncFacade:
         assert chunks == [{"chunk": 1}, {"chunk": 2}]
 
     @pytest.mark.asyncio
-    async def test_async_upload_forwards_to_coordinator(self, tmp_path: Any) -> None:
+    async def test_async_upload_forwards_to_coordinator(self, tmp_path: Path) -> None:
         import core.transport as facade
 
         f = tmp_path / "x.bin"

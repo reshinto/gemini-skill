@@ -45,16 +45,90 @@ Dependencies: core/auth/auth.py (resolve_key), core/transport/base.py
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Iterator
 from functools import lru_cache
-from typing import Any
+from typing import Protocol, cast, runtime_checkable
 
 from core.auth.auth import resolve_key
 from core.infra.sanitize import sanitize
 from core.transport.base import BackendUnavailableError
 
 
+class SyncModelsProtocol(Protocol):
+    def generate_content(
+        self, *, model: str, contents: object, config: object | None = None
+    ) -> object: ...
+
+    def count_tokens(self, *, model: str, contents: object) -> object: ...
+
+    def embed_content(
+        self, *, model: str, contents: object, config: object | None = None
+    ) -> object: ...
+
+    def generate_videos(self, *, model: str, prompt: str) -> object: ...
+
+    def generate_content_stream(
+        self, *, model: str, contents: object, config: object | None = None
+    ) -> Iterator[object]: ...
+
+
+class SyncFilesProtocol(Protocol):
+    def list(self) -> object: ...
+
+    def get(self, *, name: str) -> object: ...
+
+    def delete(self, *, name: str) -> object: ...
+
+    def upload(self, *, file: str, config: object) -> object: ...
+
+
+class AsyncModelsProtocol(Protocol):
+    async def generate_content(
+        self, *, model: str, contents: object, config: object | None = None
+    ) -> object: ...
+
+    async def count_tokens(self, *, model: str, contents: object) -> object: ...
+
+    async def embed_content(
+        self, *, model: str, contents: object, config: object | None = None
+    ) -> object: ...
+
+    async def generate_videos(self, *, model: str, prompt: str) -> object: ...
+
+    def generate_content_stream(
+        self, *, model: str, contents: object, config: object | None = None
+    ) -> AsyncIterator[object]: ...
+
+
+class AsyncFilesProtocol(Protocol):
+    async def get(self, *, name: str) -> object: ...
+
+    async def delete(self, *, name: str) -> object: ...
+
+    async def upload(self, *, file: str, config: object) -> object: ...
+
+
+class AsyncOperationsProtocol(Protocol):
+    async def get(self, *, operation: str) -> object: ...
+
+
+class AsyncGenAiNamespaceProtocol(Protocol):
+    models: AsyncModelsProtocol
+    files: AsyncFilesProtocol
+    operations: AsyncOperationsProtocol
+
+
+@runtime_checkable
+class SyncGenAiClientProtocol(Protocol):
+    """Minimal client surface referenced outside transport internals."""
+
+    aio: AsyncGenAiNamespaceProtocol
+    models: SyncModelsProtocol
+    files: SyncFilesProtocol
+
+
 @lru_cache(maxsize=1)
-def get_client() -> Any:
+def get_client() -> SyncGenAiClientProtocol:
     """Return a configured ``google.genai.Client`` (singleton per process).
 
     The client is built with ``api_key=resolve_key()`` — there is no other
@@ -63,10 +137,11 @@ def get_client() -> Any:
 
     Returns:
         A ``google.genai.Client`` instance authenticated with the resolved
-        Gemini API key. The return type is annotated as ``Any`` because
-        ``google.genai`` is an optional runtime dependency — using the real
-        type would force every importer to have google-genai installed even
-        when only the raw HTTP backend is in use.
+        Gemini API key. The return type is a minimal Protocol because
+        ``google.genai`` is an optional runtime dependency — importing the
+        concrete SDK type at module import time would force every importer
+        to have google-genai installed even when only the raw HTTP backend
+        is in use.
 
     Raises:
         BackendUnavailableError: If ``google.genai`` cannot be imported, or
@@ -129,7 +204,7 @@ def get_client() -> Any:
     # leaks a key on either backend's error surface.
     key = resolve_key()
     try:
-        return genai.Client(api_key=key)
+        return cast(SyncGenAiClientProtocol, genai.Client(api_key=key))
     except Exception as exc:
         # ``from None`` deliberately suppresses __cause__ so traceback
         # serializers (Sentry, logging.exception, traceback.format_exception)
@@ -142,7 +217,7 @@ def get_client() -> Any:
         ) from None
 
 
-def get_async_client() -> Any:
+def get_async_client() -> object:
     """Return the async surface of the singleton ``google.genai.Client``.
 
     The SDK exposes its async API as ``client.aio.<service>`` (e.g.
@@ -152,7 +227,7 @@ def get_async_client() -> Any:
 
     Returns:
         The ``client.aio`` namespace from the singleton client. Typed as
-        ``Any`` for the same reason as ``get_client``: google-genai is
+        ``object`` for the same reason as ``get_client``: google-genai is
         optional at runtime.
 
     Raises:

@@ -40,7 +40,7 @@ class TestBackendUnavailableError:
 
 
 class TestTransportProtocol:
-    """Transport is a runtime-checkable Protocol. Any object exposing the
+    """Transport is a runtime-checkable Protocol. Every object exposing the
     required methods + name attribute satisfies isinstance(obj, Transport)."""
 
     def test_protocol_is_runtime_checkable(self):
@@ -94,20 +94,20 @@ class TestGeminiResponseTypedDict:
     """GeminiResponse is a TypedDict — at runtime it's just a regular dict.
     Tests pin the recognised keys so accidental renames are caught."""
 
-    def test_can_construct_minimal_envelope(self):
+    def test_can_construct_minimal_envelope(self) -> None:
         from core.transport.base import GeminiResponse
 
         envelope: GeminiResponse = {"candidates": []}
         assert envelope["candidates"] == []
 
-    def test_recognised_keys_are_optional(self):
+    def test_recognised_keys_are_optional(self) -> None:
         """All keys are total=False — an empty envelope is structurally valid."""
         from core.transport.base import GeminiResponse
 
         envelope: GeminiResponse = {}
         assert envelope == {}
 
-    def test_can_construct_envelope_with_usage_metadata(self):
+    def test_can_construct_envelope_with_usage_metadata(self) -> None:
         from core.transport.base import GeminiResponse
 
         envelope: GeminiResponse = {
@@ -120,7 +120,7 @@ class TestGeminiResponseTypedDict:
 class TestFileMetadataTypedDict:
     """FileMetadata mirrors the Gemini Files API response shape."""
 
-    def test_can_construct_minimal_metadata(self):
+    def test_can_construct_minimal_metadata(self) -> None:
         from core.transport.base import FileMetadata
 
         meta: FileMetadata = {

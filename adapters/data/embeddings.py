@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any
 
 from core.adapter.helpers import build_base_parser, emit_json
 from core.infra.client import api_call
@@ -31,7 +30,7 @@ def run(
     text: str,
     task_type: str | None = None,
     model: str | None = None,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute embedding generation."""
     from core.routing.router import Router
@@ -43,7 +42,7 @@ def run(
     )
     resolved_model = model or router.select_model("embed")
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "content": {"parts": [{"text": text}]},
     }
     if task_type:
@@ -51,9 +50,15 @@ def run(
 
     response = api_call(f"models/{resolved_model}:embedContent", body=body)
 
-    embedding = response.get("embedding", {})
+    embedding_value = response.get("embedding")
+    values: list[object] = []
+    if isinstance(embedding_value, dict):
+        raw_values = embedding_value.get("values")
+        if isinstance(raw_values, list):
+            values = raw_values
+
     emit_json({
         "model": resolved_model,
-        "values": embedding.get("values", []),
-        "dimensions": len(embedding.get("values", [])),
+        "values": values,
+        "dimensions": len(values),
     })

@@ -16,9 +16,13 @@ Dependencies: core/routing/registry.py, core/infra/errors.py
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from core.infra.errors import CapabilityUnavailableError, ModelNotFoundError
+from core.infra.errors import CapabilityUnavailableError
 from core.routing.registry import Registry
+
+if TYPE_CHECKING:
+    from core.routing.registry import ModelPricing
 
 # Task types that route to a dedicated model via capability default_model.
 # These ignore complexity and preview settings.
@@ -118,7 +122,7 @@ class Router:
         model_map = _PREVIEW_MODELS if self._prefer_preview else _STABLE_MODELS
         return model_map.get(complexity, _FALLBACK_MODEL)
 
-    def get_pricing(self, model_id: str) -> dict[str, float]:
+    def get_pricing(self, model_id: str) -> "ModelPricing":
         """Get pricing info for a model.
 
         Raises:

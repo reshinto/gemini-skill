@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any
 
 from core.adapter.helpers import build_base_parser
 from core.infra.client import stream_generate_content
@@ -27,7 +26,7 @@ def get_parser() -> argparse.ArgumentParser:
 def run(
     prompt: str,
     model: str | None = None,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute streaming text generation."""
     from core.routing.router import Router
@@ -39,7 +38,7 @@ def run(
     )
     resolved_model = model or router.select_model("text")
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
     }
 

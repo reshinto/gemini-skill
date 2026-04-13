@@ -176,7 +176,7 @@ def format_user_error(error: GeminiSkillError) -> str:
     No stack traces, no internal details — just the user-facing message.
 
     Args:
-        error: Any GeminiSkillError instance.
+        error: A GeminiSkillError instance.
 
     Returns:
         A clean error string suitable for Claude Code to read.

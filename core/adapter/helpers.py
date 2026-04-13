@@ -18,10 +18,11 @@ import argparse
 import json
 import os
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
 
 from core.infra.sanitize import safe_print
+from core.transport.base import GeminiResponse, Part
 
 # Responses exceeding this size are saved to file instead of stdout
 _LARGE_RESPONSE_THRESHOLD = 50_000  # characters
@@ -127,7 +128,7 @@ def emit_output(
     )
 
 
-def emit_json(data: dict[str, Any]) -> None:
+def emit_json(data: Mapping[str, object] | object) -> None:
     """Output structured JSON data to stdout.
 
     Used by media adapters (image_gen, video_gen, music_gen) to return
@@ -139,7 +140,7 @@ def emit_json(data: dict[str, Any]) -> None:
     safe_print(json.dumps(data, indent=2))
 
 
-def extract_text(response: dict[str, Any]) -> str:
+def extract_text(response: GeminiResponse) -> str:
     """Extract text from a Gemini generateContent response.
 
     Handles safety blocks and missing candidates gracefully by raising
@@ -169,7 +170,7 @@ def extract_text(response: dict[str, Any]) -> str:
     return ""
 
 
-def extract_parts(response: dict[str, Any]) -> list[dict[str, Any]]:
+def extract_parts(response: GeminiResponse) -> list[Part]:
     """Extract content parts from a Gemini response.
 
     Returns the full parts list (text, inlineData, functionCall, etc.)

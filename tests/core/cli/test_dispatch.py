@@ -265,7 +265,7 @@ class TestDispatchAsyncAdapter:
     carries the opt-in marker.
     """
 
-    def test_is_async_adapter_uses_run_async_via_asyncio_run(self):
+    def test_is_async_adapter_uses_run_async_via_asyncio_run(self) -> None:
         """An adapter module with ``IS_ASYNC = True`` + an ``async def run_async``
         must be dispatched through ``asyncio.run`` rather than the sync
         ``run`` path."""

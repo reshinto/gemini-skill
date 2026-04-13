@@ -208,7 +208,7 @@ class TransportCoordinator:
                 error is fallback-eligible but no fallback exists. The
                 error carries ``primary_backend`` / ``primary_error`` /
                 ``fallback_backend`` / ``fallback_error`` context fields.
-            BaseException: Any non-fallback-eligible exception from the
+            BaseException: A non-fallback-eligible exception from the
                 primary backend (auth errors, programmer bugs, …)
                 propagates unchanged.
         """
@@ -289,7 +289,7 @@ class TransportCoordinator:
         2. Capability gate: ``supports(capability)`` False →
            BackendUnavailableError (no fallback to route to).
         3. Otherwise: await the async primary's api_call and return.
-           Any exception propagates unchanged — the caller handles retry.
+           Every exception propagates unchanged — the caller handles retry.
 
         Args:
             endpoint: REST-shaped endpoint string.
@@ -306,7 +306,7 @@ class TransportCoordinator:
         Raises:
             BackendUnavailableError: When no async primary is configured,
                 or when the capability gate refuses the capability.
-            BaseException: Any exception from the async primary propagates
+            BaseException: Every exception from the async primary propagates
                 unchanged — there's no fallback to swallow it.
         """
         async_primary = self._require_async_primary(op_name="api_call")

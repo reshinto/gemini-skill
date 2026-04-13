@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any
+from typing import Protocol, cast
 
 from core.adapter.helpers import (
     add_execute_flag,
@@ -67,6 +67,28 @@ _IMAGEN_MIME_MAP = {
     "image/jpeg": ".jpg",
     "image/webp": ".webp",
 }
+
+
+class _ImagenImageProtocol(Protocol):
+    image_bytes: bytes | None
+    mime_type: str | None
+
+
+class _ImagenGeneratedImageProtocol(Protocol):
+    image: _ImagenImageProtocol | None
+
+
+class _ImagenResponseProtocol(Protocol):
+    generated_images: list[_ImagenGeneratedImageProtocol] | None
+
+
+class _ImagenModelsProtocol(Protocol):
+    def generate_images(self, *, model: str, prompt: str, config: object) -> _ImagenResponseProtocol:
+        ...
+
+
+class _ImagenClientProtocol(Protocol):
+    models: _ImagenModelsProtocol
 
 
 def _positive_int(value: str) -> int:
@@ -117,7 +139,7 @@ def run(
     aspect_ratio: str | None = None,
     output_dir: str | None = None,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute Imagen text-to-image generation.
 
@@ -148,12 +170,15 @@ def run(
     # dry-run path above and parser surface remain reachable).
     from google.genai import types
 
-    cfg_kwargs: dict[str, Any] = {"number_of_images": num_images}
-    if aspect_ratio is not None:
-        cfg_kwargs["aspect_ratio"] = aspect_ratio
-    config_obj = types.GenerateImagesConfig(**cfg_kwargs)
+    if aspect_ratio is None:
+        config_obj = types.GenerateImagesConfig(number_of_images=num_images)
+    else:
+        config_obj = types.GenerateImagesConfig(
+            number_of_images=num_images,
+            aspect_ratio=aspect_ratio,
+        )
 
-    client = get_client()
+    client = cast(_ImagenClientProtocol, get_client())
     response = client.models.generate_images(
         model=resolved_model,
         prompt=prompt,
@@ -169,7 +194,7 @@ def run(
         return
 
     out_dir = output_dir or config.output_dir
-    saved: list[dict[str, Any]] = []
+    saved: list[dict[str, object]] = []
     for item in generated:
         image_obj = getattr(item, "image", None)
         if image_obj is None:

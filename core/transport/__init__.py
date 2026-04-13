@@ -17,7 +17,7 @@ Why is this a singleton? Two reasons:
    would burn unnecessary I/O and re-probe SDK availability, which
    matters when the SDK isn't installed.
 2. **The lru_cache on ``client_factory.get_client`` is process-wide
-   too.** Any per-call coordinator construction would still hit the
+   too.** A per-call coordinator construction would still hit the
    same cached SDK client, so making the coordinator per-call buys
    nothing but extra allocations.
 

@@ -22,17 +22,17 @@ user choices.
 
 from __future__ import annotations
 
-from typing import Any
 from unittest import mock
 
 import pytest
+from core.types import SettingsBuffer
 
 
 class TestKeyAlreadyPresent:
     def test_keep_choice_leaves_value_unchanged(self, capsys: pytest.CaptureFixture[str]) -> None:
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {"GEMINI_API_KEY": "AIzaSyExistingKey1234567890123456789"}}
+        buffer: SettingsBuffer = {"env": {"GEMINI_API_KEY": "AIzaSyExistingKey1234567890123456789"}}
         with mock.patch("builtins.input", return_value="k"):
             with mock.patch("getpass.getpass") as mock_getpass:
                 prompt_gemini_api_key(buffer, yes=False, interactive=True)
@@ -45,7 +45,7 @@ class TestKeyAlreadyPresent:
     def test_update_choice_prompts_and_replaces(self) -> None:
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {
+        buffer: SettingsBuffer = {
             "env": {"GEMINI_API_KEY": "AIzaSyOldKey1234567890123456789012345"}
         }
         with mock.patch("builtins.input", return_value="u"):
@@ -60,7 +60,7 @@ class TestKeyAlreadyPresent:
     def test_default_choice_on_enter_is_keep(self) -> None:
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {"GEMINI_API_KEY": "existing"}}
+        buffer: SettingsBuffer = {"env": {"GEMINI_API_KEY": "existing"}}
         with mock.patch("builtins.input", return_value=""):
             with mock.patch("getpass.getpass") as mock_getpass:
                 prompt_gemini_api_key(buffer, yes=False, interactive=True)
@@ -71,7 +71,7 @@ class TestKeyAlreadyPresent:
     def test_invalid_choice_reprompts(self) -> None:
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {"GEMINI_API_KEY": "existing"}}
+        buffer: SettingsBuffer = {"env": {"GEMINI_API_KEY": "existing"}}
         # First invalid, then valid "k".
         with mock.patch("builtins.input", side_effect=["xyz", "k"]):
             prompt_gemini_api_key(buffer, yes=False, interactive=True)
@@ -83,7 +83,7 @@ class TestKeyAbsent:
     def test_absent_key_prompts_for_value_and_stores_it(self) -> None:
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("getpass.getpass", return_value="AIzaSyNewKey1234567890123456789012345"):
             prompt_gemini_api_key(buffer, yes=False, interactive=True)
 
@@ -92,7 +92,7 @@ class TestKeyAbsent:
     def test_absent_key_empty_input_stored_as_empty_string(self) -> None:
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("getpass.getpass", return_value=""):
             prompt_gemini_api_key(buffer, yes=False, interactive=True)
 
@@ -103,7 +103,7 @@ class TestKeyAbsent:
         whitespace. Strip at the boundary."""
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch(
             "getpass.getpass", return_value="  AIzaSyKey1234567890123456789012345678  "
         ):
@@ -116,7 +116,7 @@ class TestKeyAbsent:
         valid input — the prompt creates the block before writing."""
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {}
+        buffer: SettingsBuffer = {}
         with mock.patch("getpass.getpass", return_value="AIza-value"):
             prompt_gemini_api_key(buffer, yes=False, interactive=True)
 
@@ -131,7 +131,7 @@ class TestNonInteractiveModes:
         the generic merge downstream handles the default."""
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("builtins.input", side_effect=RuntimeError("should not prompt")):
             with mock.patch("getpass.getpass", side_effect=RuntimeError("should not prompt")):
                 prompt_gemini_api_key(buffer, yes=True, interactive=False)
@@ -144,7 +144,7 @@ class TestNonInteractiveModes:
     ) -> None:
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("builtins.input", side_effect=RuntimeError("should not prompt")):
             with mock.patch("getpass.getpass", side_effect=RuntimeError("should not prompt")):
                 prompt_gemini_api_key(buffer, yes=False, interactive=False)
@@ -165,7 +165,7 @@ class TestGetpassEchoFallbackGuard:
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
         from core.cli.installer.venv import InstallError
 
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
 
         def fake_getpass(prompt: str = "") -> str:
             import warnings
@@ -183,7 +183,7 @@ class TestGetpassEchoFallbackGuard:
         aborts on ``GetPassWarning``; anything else flows through."""
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
 
         def fake_getpass(prompt: str = "") -> str:
             import warnings
@@ -203,7 +203,7 @@ class TestSecurityPrintContracts:
         report only the length (N chars) — never the value itself."""
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         secret = "AIzaSyTotallySecret1234567890123456789"
         with mock.patch("getpass.getpass", return_value=secret):
             prompt_gemini_api_key(buffer, yes=False, interactive=True)
@@ -219,7 +219,7 @@ class TestSecurityPrintContracts:
         formats) but a WARN line alerts the user."""
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("getpass.getpass", return_value="unusual-prefix-key"):
             prompt_gemini_api_key(buffer, yes=False, interactive=True)
 
@@ -232,7 +232,7 @@ class TestSecurityPrintContracts:
     ) -> None:
         from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("getpass.getpass", return_value=""):
             prompt_gemini_api_key(buffer, yes=False, interactive=True)
 

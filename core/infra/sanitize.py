@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 import sys
 import traceback
-from typing import Any
+from types import TracebackType
 
 # Matches Google API key patterns: AIza followed by 35 alphanumeric/dash/underscore chars
 _KEY_PATTERN = re.compile(r"AIza[0-9A-Za-z_-]{35}")
@@ -31,7 +31,7 @@ def sanitize(text: str) -> str:
     and replaces them with [REDACTED].
 
     Args:
-        text: Any string that might contain an API key.
+        text: A string that might contain an API key.
 
     Returns:
         The text with all matching key patterns replaced.
@@ -39,7 +39,7 @@ def sanitize(text: str) -> str:
     return _KEY_PATTERN.sub("[REDACTED]", text)
 
 
-def safe_print(*args: Any) -> None:
+def safe_print(*args: object) -> None:
     """Print to stdout after sanitizing all arguments.
 
     Use this instead of print() for any output that could potentially
@@ -62,7 +62,7 @@ def install_exception_hook() -> None:
     def _safe_hook(
         exc_type: type[BaseException],
         exc_val: BaseException,
-        exc_tb: Any,
+        exc_tb: TracebackType | None,
     ) -> None:
         lines = traceback.format_exception(exc_type, exc_val, exc_tb)
         sanitized = sanitize("".join(lines))

@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 from core.adapter.helpers import build_base_parser, emit_output, extract_text
 from core.infra.client import api_call
 from core.infra.config import load_config
+from core.transport.base import Content, GeminiResponse
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -46,7 +47,7 @@ def run(
     session: str | None = None,
     continue_session: bool = False,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute text generation.
 
@@ -63,7 +64,7 @@ def run(
     resolved_model = model or router.select_model("text")
 
     # Build contents array
-    contents: list[dict[str, Any]] = []
+    contents: list[Content] = []
 
     if session or continue_session:
         from core.state.session_state import SessionState
@@ -79,7 +80,7 @@ def run(
 
     contents.append({"role": "user", "parts": [{"text": prompt}]})
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": contents,
         "generationConfig": {
             "maxOutputTokens": max_tokens,
@@ -89,9 +90,12 @@ def run(
     if system:
         body["systemInstruction"] = {"parts": [{"text": system}]}
 
-    response = api_call(
-        f"models/{resolved_model}:generateContent",
-        body=body,
+    response = cast(
+        GeminiResponse,
+        api_call(
+            f"models/{resolved_model}:generateContent",
+            body=body,
+        ),
     )
 
     # Extract text from response (raises ValueError on safety blocks)

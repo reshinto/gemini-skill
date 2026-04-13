@@ -24,21 +24,22 @@ spec table.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import AsyncIterator
+from pathlib import Path
 from unittest import mock
 
 import pytest
 
 from core.infra.errors import APIError, AuthError
-from core.transport.base import BackendUnavailableError, Transport
+from core.transport.base import BackendUnavailableError, StreamChunk, Transport
 
 
 def _make_backend(
     name: str = "primary",
     *,
     supports: bool = True,
-    api_call_return: Any = None,
-    api_call_side_effect: Any = None,
+    api_call_return: object | None = None,
+    api_call_side_effect: object | None = None,
 ) -> mock.Mock:
     """Build a Mock that satisfies the Transport Protocol shape.
 
@@ -375,7 +376,7 @@ class TestStreamDispatch:
 
 
 class TestUploadDispatch:
-    def test_upload_dispatches_to_primary_on_success(self, tmp_path: Any) -> None:
+    def test_upload_dispatches_to_primary_on_success(self, tmp_path: Path) -> None:
         from core.transport.coordinator import TransportCoordinator
 
         primary = _make_backend("sdk", supports=True)
@@ -476,9 +477,9 @@ def _make_async_backend(
     name: str = "sdk",
     *,
     supports: bool = True,
-    api_call_return: Any = None,
-    api_call_side_effect: Any = None,
-    upload_return: Any = None,
+    api_call_return: object | None = None,
+    api_call_side_effect: object | None = None,
+    upload_return: object | None = None,
 ) -> mock.Mock:
     """Build a Mock that satisfies the AsyncTransport Protocol shape.
 
@@ -496,7 +497,7 @@ def _make_async_backend(
         side_effect=api_call_side_effect,
     )
 
-    async def _empty_stream() -> Any:
+    async def _empty_stream() -> AsyncIterator[StreamChunk]:
         if False:  # pragma: no cover
             yield  # type: ignore[unreachable]
 
@@ -542,7 +543,7 @@ class TestAsyncDispatch:
         primary = _make_backend("sdk")
         coord = TransportCoordinator(primary=primary, fallback=None)
 
-        async def drain() -> list[Any]:
+        async def drain() -> list[StreamChunk]:
             gen = coord.execute_stream_async(
                 model="gemini",
                 body={"contents": []},
@@ -554,7 +555,7 @@ class TestAsyncDispatch:
         with pytest.raises(BackendUnavailableError, match="async"):
             asyncio.run(drain())
 
-    def test_execute_upload_async_raises_when_no_async_primary(self, tmp_path: Any) -> None:
+    def test_execute_upload_async_raises_when_no_async_primary(self, tmp_path: Path) -> None:
         import asyncio
 
         from core.transport.coordinator import TransportCoordinator
@@ -685,7 +686,7 @@ class TestAsyncDispatch:
 
         primary = _make_backend("sdk")
 
-        async def _stream() -> Any:
+        async def _stream() -> AsyncIterator[StreamChunk]:
             yield {"candidates": [{"content": {"parts": [{"text": "a"}]}}]}
             yield {"candidates": [{"content": {"parts": [{"text": "b"}]}}]}
 
@@ -711,7 +712,7 @@ class TestAsyncDispatch:
         async_primary = _make_async_backend("sdk", supports=False)
         coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
 
-        async def drain() -> list[Any]:
+        async def drain() -> list[StreamChunk]:
             return [
                 c
                 async for c in coord.execute_stream_async(
@@ -727,7 +728,7 @@ class TestAsyncDispatch:
             await drain()
 
     @pytest.mark.asyncio
-    async def test_execute_upload_async_routes_to_async_primary(self, tmp_path: Any) -> None:
+    async def test_execute_upload_async_routes_to_async_primary(self, tmp_path: Path) -> None:
         from core.transport.coordinator import TransportCoordinator
 
         primary = _make_backend("sdk")
@@ -746,7 +747,7 @@ class TestAsyncDispatch:
         async_primary.upload_file.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_execute_upload_async_capability_gate_raises(self, tmp_path: Any) -> None:
+    async def test_execute_upload_async_capability_gate_raises(self, tmp_path: Path) -> None:
         from core.transport.coordinator import TransportCoordinator
 
         primary = _make_backend("sdk")

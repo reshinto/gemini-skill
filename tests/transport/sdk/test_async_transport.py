@@ -23,13 +23,14 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
-from typing import Any
+from typing import cast
 from unittest import mock
 
 import pytest
+from core.types import JSONObject
 
 
-def _make_sdk_response(payload: dict[str, Any]) -> mock.Mock:
+def _make_sdk_response(payload: JSONObject) -> mock.Mock:
     """Build a mock pydantic-shaped SDK response.
 
     Same contract as the sync-transport test helper: expose a callable
@@ -159,12 +160,15 @@ class TestAsyncApiCallDispatch:
         )
         transport = SdkAsyncTransport()
 
-        result = await transport.api_call(
-            endpoint="models/gemini-2.5-flash:countTokens",
-            body={"contents": [{"role": "user", "parts": [{"text": "hello"}]}]},
-            method="POST",
-            api_version="v1beta",
-            timeout=30,
+        result = cast(
+            JSONObject,
+            await transport.api_call(
+                endpoint="models/gemini-2.5-flash:countTokens",
+                body={"contents": [{"role": "user", "parts": [{"text": "hello"}]}]},
+                method="POST",
+                api_version="v1beta",
+                timeout=30,
+            ),
         )
 
         patched_get_client.aio.models.count_tokens.assert_awaited_once()
@@ -179,16 +183,20 @@ class TestAsyncApiCallDispatch:
         )
         transport = SdkAsyncTransport()
 
-        result = await transport.api_call(
-            endpoint="models/embedding-001:embedContent",
-            body={"content": {"parts": [{"text": "hello"}]}},
-            method="POST",
-            api_version="v1beta",
-            timeout=30,
+        result = cast(
+            JSONObject,
+            await transport.api_call(
+                endpoint="models/embedding-001:embedContent",
+                body={"content": {"parts": [{"text": "hello"}]}},
+                method="POST",
+                api_version="v1beta",
+                timeout=30,
+            ),
         )
 
         patched_get_client.aio.models.embed_content.assert_awaited_once()
-        assert result["embedding"]["values"] == [0.1, 0.2]
+        embedding = cast(dict[str, object], result["embedding"])
+        assert embedding["values"] == [0.1, 0.2]
 
     @pytest.mark.asyncio
     async def test_predict_long_running_video(self, patched_get_client: mock.Mock) -> None:
@@ -199,12 +207,15 @@ class TestAsyncApiCallDispatch:
         )
         transport = SdkAsyncTransport()
 
-        result = await transport.api_call(
-            endpoint="models/veo-2.0-generate-001:predictLongRunning",
-            body={"instances": [{"prompt": "a dog on the beach"}]},
-            method="POST",
-            api_version="v1beta",
-            timeout=30,
+        result = cast(
+            JSONObject,
+            await transport.api_call(
+                endpoint="models/veo-2.0-generate-001:predictLongRunning",
+                body={"instances": [{"prompt": "a dog on the beach"}]},
+                method="POST",
+                api_version="v1beta",
+                timeout=30,
+            ),
         )
 
         patched_get_client.aio.models.generate_videos.assert_awaited_once()
@@ -236,12 +247,15 @@ class TestAsyncApiCallDispatch:
         )
         transport = SdkAsyncTransport()
 
-        result = await transport.api_call(
-            endpoint="files/abc",
-            body=None,
-            method="GET",
-            api_version="v1beta",
-            timeout=30,
+        result = cast(
+            JSONObject,
+            await transport.api_call(
+                endpoint="files/abc",
+                body=None,
+                method="GET",
+                api_version="v1beta",
+                timeout=30,
+            ),
         )
 
         patched_get_client.aio.files.get.assert_awaited_once_with(name="files/abc")
@@ -274,12 +288,15 @@ class TestAsyncApiCallDispatch:
         )
         transport = SdkAsyncTransport()
 
-        result = await transport.api_call(
-            endpoint="operations/foo",
-            body=None,
-            method="GET",
-            api_version="v1beta",
-            timeout=30,
+        result = cast(
+            JSONObject,
+            await transport.api_call(
+                endpoint="operations/foo",
+                body=None,
+                method="GET",
+                api_version="v1beta",
+                timeout=30,
+            ),
         )
 
         patched_get_client.aio.operations.get.assert_awaited_once_with(operation="operations/foo")

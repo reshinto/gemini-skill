@@ -18,13 +18,14 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 from unittest import mock
 
 import pytest
+from core.types import JSONObject
 
 
-def _make_sdk_response(payload: dict[str, Any]) -> mock.Mock:
+def _make_sdk_response(payload: JSONObject) -> mock.Mock:
     """Build a mock pydantic-shaped SDK response.
 
     The normalize layer calls ``sdk_obj.model_dump(exclude_none=True)`` on
@@ -301,11 +302,12 @@ class TestApiCallFiles:
         # endpoints whose payload doesn't match the candidates-shaped envelope
         # (collection listings, file metadata), tests cast to a plain dict
         # so mypy --strict doesn't flag the runtime keys we know are present.
-        result = cast(dict[str, Any], SdkTransport().api_call("files", method="GET"))
+        result = cast(JSONObject, SdkTransport().api_call("files", method="GET"))
         patched_get_client.files.list.assert_called_once()
         assert "files" in result
-        assert len(result["files"]) == 2
-        assert result["files"][0]["mimeType"] == "text/plain"
+        files = cast(list[dict[str, object]], result["files"])
+        assert len(files) == 2
+        assert files[0]["mimeType"] == "text/plain"
 
     def test_files_get(self, patched_get_client: mock.Mock) -> None:
         from core.transport.sdk.transport import SdkTransport
@@ -313,7 +315,7 @@ class TestApiCallFiles:
         patched_get_client.files.get.return_value = _make_sdk_response(
             {"name": "files/abc", "mime_type": "text/plain", "size_bytes": "42"}
         )
-        result = cast(dict[str, Any], SdkTransport().api_call("files/abc", method="GET"))
+        result = cast(JSONObject, SdkTransport().api_call("files/abc", method="GET"))
         patched_get_client.files.get.assert_called_once_with(name="files/abc")
         assert result["mimeType"] == "text/plain"
         assert result["sizeBytes"] == "42"
@@ -339,7 +341,7 @@ class TestApiCallCaches:
             "contents": [{"role": "user", "parts": [{"text": "cache me"}]}],
             "ttl": "300s",
         }
-        result = cast(dict[str, Any], SdkTransport().api_call("cachedContents", body=body))
+        result = cast(JSONObject, SdkTransport().api_call("cachedContents", body=body))
         call = patched_get_client.caches.create.call_args
         assert call.kwargs["model"] == "gemini-2.5-flash"
         assert result["name"] == "cachedContents/abc"
@@ -417,7 +419,7 @@ class TestApiCallOperations:
         patched_get_client.operations.get.return_value = _make_sdk_response(
             {"name": "operations/abc", "done": True}
         )
-        result = cast(dict[str, Any], SdkTransport().api_call("operations/abc", method="GET"))
+        result = cast(JSONObject, SdkTransport().api_call("operations/abc", method="GET"))
         # SDK uses operation= kwarg, not name=
         call = patched_get_client.operations.get.call_args
         assert call.kwargs.get("operation") == "operations/abc" or call.kwargs.get("name") == "operations/abc"
@@ -735,7 +737,7 @@ class TestWrapCollection:
         # the wrapper falls through to an empty list so the adapter sees
         # the same envelope shape as a successful empty listing.
         patched_get_client.files.list.return_value = None
-        result = cast(dict[str, Any], SdkTransport().api_call("files", method="GET"))
+        result = cast(JSONObject, SdkTransport().api_call("files", method="GET"))
         assert result == {"files": []}
 
 
@@ -942,7 +944,7 @@ class TestStreamCloseOnEarlyExit:
         from collections.abc import Generator
 
         gen = cast(
-            "Generator[Any, None, None]",
+            "Generator[JSONObject, None, None]",
             SdkTransport().stream_generate_content("gemini-2.5-flash", body=body),
         )
         next(gen)  # consume one chunk

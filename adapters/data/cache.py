@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any
 
 from core.adapter.helpers import add_execute_flag, build_base_parser, check_dry_run, emit_json
 from core.infra.sanitize import safe_print
@@ -46,7 +45,7 @@ def run(
     ttl: str = "3600s",
     model: str | None = None,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute cache management operations."""
     if action == "create":
@@ -83,7 +82,7 @@ def _create(
     )
     resolved_model = model or router.select_model("cache")
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "model": f"models/{resolved_model}",
         "contents": [{"role": "user", "parts": [{"text": content}]}],
         "ttl": ttl,
@@ -96,7 +95,8 @@ def _create(
 def _list_caches() -> None:
     """List all context caches."""
     response = api_call("cachedContents", method="GET")
-    caches = response.get("cachedContents", [])
+    caches_value = response.get("cachedContents")
+    caches = caches_value if isinstance(caches_value, list) else []
     emit_json({"count": len(caches), "caches": caches})
 
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import base64
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 from core.adapter.helpers import (
     add_execute_flag,
@@ -25,6 +25,7 @@ from core.adapter.helpers import (
 )
 from core.infra.client import api_call
 from core.infra.config import load_config
+from core.transport.base import GeminiResponse
 
 _AUDIO_MIME_MAP = {
     "audio/wav": ".wav",
@@ -51,7 +52,7 @@ def run(
     model: str | None = None,
     output_dir: str | None = None,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute music generation."""
     if check_dry_run(execute, f"generate music: {prompt}"):
@@ -65,12 +66,12 @@ def run(
     )
     resolved_model = model or router.select_model("music_gen")
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"responseModalities": ["AUDIO", "TEXT"]},
     }
 
-    response = api_call(f"models/{resolved_model}:generateContent", body=body)
+    response = cast(GeminiResponse, api_call(f"models/{resolved_model}:generateContent", body=body))
     parts = extract_parts(response)
 
     for part in parts:

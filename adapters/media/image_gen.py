@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import base64
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 from core.adapter.helpers import (
     add_execute_flag,
@@ -29,6 +29,7 @@ from core.adapter.helpers import (
 )
 from core.infra.client import api_call
 from core.infra.config import load_config
+from core.transport.base import GeminiResponse
 
 _IMAGE_MIME_MAP = {
     "image/png": ".png",
@@ -95,7 +96,7 @@ def run(
     aspect_ratio: str | None = None,
     image_size: str | None = None,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute image generation."""
     if check_dry_run(execute, f"generate image: {prompt}"):
@@ -110,11 +111,11 @@ def run(
     )
     resolved_model = model or router.select_model("image_gen")
 
-    generation_config: dict[str, Any] = {"responseModalities": ["IMAGE", "TEXT"]}
+    generation_config: dict[str, object] = {"responseModalities": ["IMAGE", "TEXT"]}
     # Only attach imageConfig when at least one flag is set. Omitting
     # the key entirely (instead of sending an empty dict) keeps the
     # legacy request shape byte-identical for the 99% path.
-    image_config: dict[str, Any] = {}
+    image_config: dict[str, object] = {}
     if aspect_ratio is not None:
         image_config["aspectRatio"] = aspect_ratio
     if image_size is not None:
@@ -122,12 +123,12 @@ def run(
     if image_config:
         generation_config["imageConfig"] = image_config
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": generation_config,
     }
 
-    response = api_call(f"models/{resolved_model}:generateContent", body=body)
+    response = cast(GeminiResponse, api_call(f"models/{resolved_model}:generateContent", body=body))
     parts = extract_parts(response)
 
     for part in parts:

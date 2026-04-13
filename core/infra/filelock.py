@@ -73,12 +73,15 @@ class FileLock:
 
     def _try_lock(self) -> None:
         """Attempt a non-blocking lock. Raises OSError if unavailable."""
+        fd = self._fd
+        if fd is None:
+            raise RuntimeError("File descriptor not initialized before locking")
         if sys.platform == "win32":  # pragma: no cover
             import msvcrt
-            msvcrt.locking(self._fd, msvcrt.LK_NBLCK, 1)
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
         else:
             import fcntl
-            fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     def _release(self) -> None:
         """Release the lock and close the file descriptor."""

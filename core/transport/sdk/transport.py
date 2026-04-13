@@ -53,7 +53,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import ClassVar, Literal, cast
+from typing import ClassVar, cast
 
 from core.infra.errors import APIError, AuthError
 from core.infra.sanitize import sanitize
@@ -209,7 +209,7 @@ class SdkTransport:
     # as a per-instance annotation that lacks a default, which would be a
     # type error. The Literal narrowing means callers can pattern-match
     # on the value with exhaustiveness checking.
-    name: ClassVar[Literal["sdk"]] = "sdk"
+    name: ClassVar[str] = "sdk"
 
     # Capabilities the SDK is KNOWN to support at google-genai==1.33.0.
     # Updated when the pinned version is bumped and the parity audit is

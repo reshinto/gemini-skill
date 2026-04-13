@@ -41,9 +41,9 @@ from __future__ import annotations
 import getpass
 import sys
 import warnings
-from typing import Any
 
 from core.cli.installer.venv import InstallError
+from core.types import SettingsBuffer
 
 # Heuristic prefix for a "normal" Google API key. Not a reject
 # filter — just a WARN signal. Google can and does rotate key
@@ -54,7 +54,7 @@ _EXPECTED_PREFIX: str = "AIzaSy"
 
 
 def prompt_gemini_api_key(
-    settings_buffer: dict[str, Any],
+    settings_buffer: SettingsBuffer,
     *,
     yes: bool,
     interactive: bool,
@@ -75,12 +75,13 @@ def prompt_gemini_api_key(
             False when piped (CI) — skip the prompt.
     """
     # Ensure the env block exists so subsequent writes are unconditional.
+    env_value = settings_buffer.get("env")
     env: dict[str, str]
-    if "env" not in settings_buffer or not isinstance(settings_buffer["env"], dict):
+    if env_value is None or not isinstance(env_value, dict):
         env = {}
         settings_buffer["env"] = env
     else:
-        env = settings_buffer["env"]
+        env = env_value
 
     # Non-interactive paths leave the buffer alone. The generic merge
     # downstream handles the default.

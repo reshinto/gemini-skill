@@ -107,7 +107,7 @@ _SNAKE_TO_CAMEL: Mapping[str, str] = {
 def _translate_keys(value: object) -> object:
     """Recursively walk a JSON-ish structure renaming dict keys.
 
-    Any key found in ``_SNAKE_TO_CAMEL`` is replaced with its camelCase
+    Every key found in ``_SNAKE_TO_CAMEL`` is replaced with its camelCase
     counterpart. Keys not in the table pass through unchanged — this lets
     already-camelCase responses (from the raw HTTP backend, for example)
     flow through this function as a no-op so both transports can share the

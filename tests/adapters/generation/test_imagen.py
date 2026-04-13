@@ -15,6 +15,7 @@ no live network.
 from __future__ import annotations
 
 import base64
+from collections.abc import Iterator
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -53,7 +54,7 @@ def patched_client() -> MagicMock:
 
 
 @pytest.fixture(autouse=True)
-def _reset_client_cache() -> None:
+def _reset_client_cache() -> Iterator[None]:
     """Drop any SDK client lru_cache so each test constructs fresh."""
     from core.transport.sdk import client_factory
 

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import time
-from typing import Any
 
 from core.adapter.helpers import add_execute_flag, build_base_parser, check_dry_run, emit_output
 from core.infra.client import api_call
@@ -42,7 +41,7 @@ def run(
     resume: str | None = None,
     max_wait: int | None = None,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute deep research."""
     config = load_config()
@@ -69,13 +68,17 @@ def run(
     )
 
     # Create interaction via Interactions API
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "input": prompt,
         "agent": "deep-research-pro-preview-12-2025",
         "background": True,
     }
     interaction = api_call("interactions", body=body)
-    interaction_id = interaction.get("id", "")
+    interaction_id_value = interaction.get("id")
+    if not isinstance(interaction_id_value, str) or not interaction_id_value:
+        safe_print("[ERROR] Interactions API did not return an interaction id.")
+        return
+    interaction_id = interaction_id_value
 
     safe_print(f"Research started: {interaction_id}")
 
@@ -104,12 +107,14 @@ def _poll_interaction(interaction_id: str, max_wait: int, config: Config) -> Non
     )
 
 
-def _emit_result(interaction: dict[str, Any], config: Config) -> None:
+def _emit_result(interaction: dict[str, object], config: Config) -> None:
     """Extract and emit the research result."""
-    outputs = interaction.get("outputs", [])
-    if outputs:
-        text = outputs[-1].get("text", "")
-        if text:
-            emit_output(text, output_dir=config.output_dir)
-            return
+    outputs = interaction.get("outputs")
+    if isinstance(outputs, list) and outputs:
+        last_output = outputs[-1]
+        if isinstance(last_output, dict):
+            text = last_output.get("text")
+            if isinstance(text, str) and text:
+                emit_output(text, output_dir=config.output_dir)
+                return
     safe_print("[WARNING] No text output in completed interaction.")

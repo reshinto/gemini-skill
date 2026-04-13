@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Any
+from collections.abc import Mapping
+from typing import cast
 
 from core.adapter.helpers import build_base_parser, emit_json, emit_output, extract_parts
 from core.infra.client import api_call
 from core.infra.config import load_config
+from core.transport.base import GeminiResponse
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -27,7 +29,7 @@ def get_parser() -> argparse.ArgumentParser:
 def run(
     prompt: str,
     model: str | None = None,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute computer use interaction."""
     from core.routing.router import Router
@@ -39,21 +41,24 @@ def run(
     )
     resolved_model = model or router.select_model("computer_use")
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "tools": [{"computerUse": {}}],
     }
 
-    response = api_call(
-        f"models/{resolved_model}:generateContent",
-        body=body,
+    response = cast(
+        GeminiResponse,
+        api_call(
+            f"models/{resolved_model}:generateContent",
+            body=body,
+        ),
     )
 
     parts = extract_parts(response)
 
     # Collect actions and text
-    actions = []
-    text_parts = []
+    actions: list[Mapping[str, object]] = []
+    text_parts: list[str] = []
     for part in parts:
         if "text" in part:
             text_parts.append(part["text"])

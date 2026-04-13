@@ -21,10 +21,10 @@ import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from core.infra.atomic_write import atomic_write_json
 from core.infra.filelock import FileLock
+from core.transport.base import UsageMetadata
 
 _COST_FILENAME = "cost_today.json"
 _LOCK_FILENAME = "cost.lock"
@@ -125,7 +125,7 @@ class CostTracker:
     def record_actual_cost(
         self,
         pricing: dict[str, float],
-        usage_metadata: dict[str, Any],
+        usage_metadata: UsageMetadata,
     ) -> float:
         """Record actual cost from API response usageMetadata.
 

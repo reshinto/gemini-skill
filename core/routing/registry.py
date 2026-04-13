@@ -14,7 +14,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
-from typing import Any
+from typing import TypedDict, cast
 
 from core.infra.errors import CapabilityUnavailableError, ModelNotFoundError
 
@@ -33,10 +33,10 @@ class Registry:
 
     def __init__(self, root_dir: Path) -> None:
         self._root = Path(root_dir)
-        self._models = self._load_json("models.json", "models")
-        self._capabilities = self._load_json("capabilities.json", "capabilities")
+        self._models = self._load_models()
+        self._capabilities = self._load_capabilities()
 
-    def _load_json(self, filename: str, key: str) -> dict[str, Any]:
+    def _load_section(self, filename: str, key: str) -> dict[str, object]:
         """Load a registry JSON file and extract the top-level key.
 
         Returns empty dict on missing file, invalid JSON, or missing key.
@@ -47,10 +47,21 @@ class Registry:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, dict) and key in data:
-                return data[key]
+                section = data[key]
+                if isinstance(section, dict):
+                    return cast(dict[str, object], section)
         except (json.JSONDecodeError, OSError):
             pass
         return {}
+
+    def _load_models(self) -> dict[str, ModelInfo]:
+        return cast(dict[str, ModelInfo], self._load_section("models.json", "models"))
+
+    def _load_capabilities(self) -> dict[str, CapabilityInfo]:
+        return cast(
+            dict[str, CapabilityInfo],
+            self._load_section("capabilities.json", "capabilities"),
+        )
 
     # --- Model operations ---
 
@@ -58,7 +69,7 @@ class Registry:
         """Return all registered model IDs."""
         return list(self._models.keys())
 
-    def get_model(self, model_id: str) -> dict[str, Any]:
+    def get_model(self, model_id: str) -> ModelRecord:
         """Get full model info by ID.
 
         Returns a deep copy of the model dict with an added 'id' field.
@@ -69,10 +80,9 @@ class Registry:
         if model_id not in self._models:
             raise ModelNotFoundError(f"Model not found in registry: {model_id}")
         model = copy.deepcopy(self._models[model_id])
-        model["id"] = model_id
-        return model
+        return cast(ModelRecord, {**model, "id": model_id})
 
-    def get_model_pricing(self, model_id: str) -> dict[str, float]:
+    def get_model_pricing(self, model_id: str) -> ModelPricing:
         """Get pricing info for a model.
 
         Returns dict with input_per_1m, output_per_1m, cached_per_1m.
@@ -85,7 +95,7 @@ class Registry:
             raise ModelNotFoundError(
                 f"Model {model_id} has no pricing data in the registry"
             )
-        return model["pricing"]
+        return cast(ModelPricing, model["pricing"])
 
     def models_for_capability(self, capability: str) -> list[str]:
         """Return model IDs that support a given capability."""
@@ -107,7 +117,7 @@ class Registry:
         """Return all registered capability names."""
         return list(self._capabilities.keys())
 
-    def get_capability(self, name: str) -> dict[str, Any]:
+    def get_capability(self, name: str) -> CapabilityInfo:
         """Get full capability info by name.
 
         Returns a deep copy of the capability dict.
@@ -120,3 +130,36 @@ class Registry:
                 f"Capability not found in registry: {name}"
             )
         return copy.deepcopy(self._capabilities[name])
+
+
+class ModelPricing(TypedDict):
+    input_per_1m: float
+    output_per_1m: float
+    cached_per_1m: float
+
+
+class ModelInfo(TypedDict):
+    display_name: str
+    description: str
+    status: str
+    api_version: str
+    capabilities: list[str]
+    pricing: ModelPricing
+
+
+class ModelRecord(ModelInfo):
+    id: str
+
+
+class CapabilityInfo(TypedDict, total=False):
+    command: str
+    adapter: str
+    status: str
+    api_version: str
+    default_model: str | None
+    mutating: bool
+    mutating_actions: list[str]
+    privacy_sensitive: bool
+    preview: bool
+    reference: str
+    doc_url: str

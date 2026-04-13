@@ -37,9 +37,9 @@ import secrets
 import socket
 import ssl
 import time
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from pathlib import Path
-from typing import Any
+from typing import cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -47,6 +47,7 @@ from core.auth.auth import resolve_key
 from core.infra.errors import APIError
 from core.infra.sanitize import sanitize
 from core.transport._validation import validate_mime_type as _validate_mime_type
+from core.types import JSONObject
 
 # Gemini API base URL — all requests are relative to this
 BASE_URL = "https://generativelanguage.googleapis.com"
@@ -65,12 +66,12 @@ _BACKOFF_BASE = 1  # seconds — backoff sequence: 1, 2, 4
 
 def api_call(
     endpoint: str,
-    body: dict[str, Any] | None = None,
+    body: Mapping[str, object] | None = None,
     method: str = "POST",
     api_version: str = "v1beta",
     timeout: int = 30,
     api_key: str | None = None,
-) -> dict[str, Any]:
+) -> JSONObject:
     """Make an authenticated request to the Gemini API.
 
     Args:
@@ -103,10 +104,10 @@ def api_call(
 
 def stream_generate_content(
     model: str,
-    body: dict[str, Any],
+    body: Mapping[str, object],
     api_version: str = "v1beta",
     timeout: int = 30,
-) -> Generator[dict[str, Any], None, None]:
+) -> Generator[JSONObject, None, None]:
     """Stream generateContent responses via SSE.
 
     Yields parsed JSON chunks from the SSE stream. Skips non-data lines
@@ -140,7 +141,9 @@ def stream_generate_content(
             continue
         json_str = line[6:]  # Strip "data: " prefix
         try:
-            yield json.loads(json_str)
+            chunk = json.loads(json_str)
+            if isinstance(chunk, dict):
+                yield cast(JSONObject, chunk)
         except json.JSONDecodeError:
             continue
 
@@ -150,7 +153,7 @@ def upload_file(
     mime_type: str,
     display_name: str | None = None,
     timeout: int = 120,
-) -> dict[str, Any]:
+) -> JSONObject:
     """Upload a file to the Gemini Files API.
 
     Uses the upload/v1beta/files endpoint with multipart body containing
@@ -182,9 +185,9 @@ def upload_file(
     parts: list[bytes] = []
 
     # Metadata part
-    metadata: dict[str, Any] = {"file": {}}
+    metadata: JSONObject = {"file": {}}
     if display_name:
-        metadata["file"]["displayName"] = display_name
+        metadata["file"] = {"displayName": display_name}
 
     parts.append(f"--{boundary}\r\n".encode())
     parts.append(b"Content-Type: application/json; charset=UTF-8\r\n\r\n")
@@ -209,7 +212,10 @@ def upload_file(
     request = Request(url, data=body, headers=headers, method="POST")
 
     with urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read())
+        payload = json.loads(response.read())
+        if isinstance(payload, dict):
+            return cast(JSONObject, payload)
+        return {}
 
 
 def download_file_bytes(
@@ -263,7 +269,7 @@ def _execute_with_retry(
     request: Request,
     timeout: int,
     method: str,
-) -> dict[str, Any]:
+) -> JSONObject:
     """Execute a request with retry logic for transient errors.
 
     Retry policy:
@@ -276,7 +282,10 @@ def _execute_with_retry(
     for attempt in range(_MAX_RETRIES + 1):
         try:
             with urlopen(request, timeout=timeout) as response:
-                return json.loads(response.read())
+                payload = json.loads(response.read())
+                if isinstance(payload, dict):
+                    return cast(JSONObject, payload)
+                return {}
 
         except ssl.SSLCertVerificationError as e:
             # Sanitize the message: SSLCertVerificationError.__str__ can echo
@@ -314,6 +323,8 @@ def _execute_with_retry(
             # contain a key if a future refactor regressed the header-only
             # auth path. Defense in depth.
             raise APIError(sanitize(f"Network error: {e}")) from e
+
+    raise APIError("Request retry loop exited unexpectedly.")
 
 
 def _extract_error_message(error: HTTPError) -> str:

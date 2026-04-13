@@ -34,7 +34,7 @@ file that is not a pure re-export.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import cast
 
 from core.transport import (
     BASE_URL,
@@ -42,6 +42,7 @@ from core.transport import (
     upload_file,
 )
 from core.transport import api_call as _facade_api_call
+from core.types import JSONObject
 
 __all__ = ["BASE_URL", "api_call", "stream_generate_content", "upload_file"]
 
@@ -53,7 +54,7 @@ def api_call(
     api_version: str = "v1beta",
     timeout: int = 30,
     api_key: str | None = None,
-) -> dict[str, Any]:
+) -> JSONObject:
     """Legacy ``api_call`` signature with the ``api_key`` bypass.
 
     When ``api_key`` is None, forwards to the public facade in
@@ -90,10 +91,13 @@ def api_call(
             timeout=timeout,
             api_key=api_key,
         )
-    return _facade_api_call(  # type: ignore[return-value]
-        endpoint=endpoint,
-        body=body,
-        method=method,
-        api_version=api_version,
-        timeout=timeout,
+    return cast(
+        JSONObject,
+        _facade_api_call(
+            endpoint=endpoint,
+            body=body,
+            method=method,
+            api_version=api_version,
+            timeout=timeout,
+        ),
     )

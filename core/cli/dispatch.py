@@ -187,8 +187,10 @@ def _extract_action_token(args: list[str]) -> str | None:
     return None
 
 
-def _is_mutating_invocation(cap: dict[str, object], args: list[str]) -> bool:
+def _is_mutating_invocation(cap: object, args: list[str]) -> bool:
     """Resolve whether this specific invocation is mutating."""
+    if not isinstance(cap, dict):
+        return False
     action = _extract_action_token(args)
     mutating_actions = cap.get("mutating_actions")
     if isinstance(mutating_actions, list):

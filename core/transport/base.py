@@ -40,7 +40,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator, Mapping
 from pathlib import Path
-from typing import Literal, Protocol, TypedDict, runtime_checkable
+from typing import ClassVar, Literal, Protocol, TypedDict, runtime_checkable
 
 from core.infra.errors import GeminiSkillError
 
@@ -120,12 +120,16 @@ class Part(TypedDict, total=False):
     keys is set in a real response, but TypedDict cannot model that
     constraint — the adapters check which key is present at runtime."""
 
+    id: str
+    toolType: str
+    thoughtSignature: str
     text: str
     inlineData: InlineData
     functionCall: FunctionCall
     functionResponse: FunctionResponse
     executableCode: ExecutableCode
     codeExecutionResult: CodeExecutionResult
+    computerUseAction: Mapping[str, object]
 
 
 class Content(TypedDict, total=False):
@@ -147,6 +151,7 @@ class GroundingChunk(TypedDict, total=False):
     """One source the model grounded its answer on (search / maps / files)."""
 
     web: Mapping[str, object]
+    maps: Mapping[str, object]
     retrievedContext: Mapping[str, object]
 
 
@@ -250,7 +255,7 @@ class Transport(Protocol):
     a future backend wrapped another for instrumentation).
     """
 
-    name: Literal["sdk", "raw_http"]
+    name: ClassVar[str]
 
     def supports(self, capability: str) -> bool:
         """Return True iff this backend is KNOWN to handle ``capability``.
@@ -301,7 +306,7 @@ class AsyncTransport(Protocol):
     capability) is SDK-only anyway.
     """
 
-    name: Literal["sdk"]
+    name: ClassVar[str]
 
     def supports(self, capability: str) -> bool:
         """Return True iff this async backend handles ``capability``.

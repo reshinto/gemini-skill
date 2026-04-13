@@ -31,8 +31,10 @@ from __future__ import annotations
 import argparse
 import inspect
 import sys
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any
+from types import TracebackType
+from typing import Protocol, cast
 
 from core.adapter.helpers import build_base_parser
 from core.infra.config import load_config
@@ -52,6 +54,60 @@ IS_ASYNC: bool = True
 _LIVE_MODALITIES: tuple[str, ...] = ("TEXT", "AUDIO")
 
 
+class _LiveServerContentProtocol(Protocol):
+    turn_complete: bool
+
+
+class _LiveMessageProtocol(Protocol):
+    text: str | None
+    server_content: _LiveServerContentProtocol | None
+
+
+class _LiveReceiveStreamProtocol(Protocol):
+    def __aiter__(self) -> AsyncIterator[_LiveMessageProtocol]:
+        ...
+
+    async def __anext__(self) -> _LiveMessageProtocol:
+        ...
+
+    async def aclose(self) -> None:
+        ...
+
+
+class _LiveSessionProtocol(Protocol):
+    async def send_client_content(self, *, turns: list[object]) -> object:
+        ...
+
+    def receive(self) -> AsyncIterator[_LiveMessageProtocol] | _LiveReceiveStreamProtocol:
+        ...
+
+
+class _LiveConnectContextManagerProtocol(Protocol):
+    async def __aenter__(self) -> _LiveSessionProtocol:
+        ...
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> object:
+        ...
+
+
+class _LiveServiceProtocol(Protocol):
+    def connect(self, *, model: str, config: object) -> _LiveConnectContextManagerProtocol:
+        ...
+
+
+class _LiveAioProtocol(Protocol):
+    live: _LiveServiceProtocol
+
+
+class _LiveClientProtocol(Protocol):
+    aio: _LiveAioProtocol
+
+
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the live adapter."""
     parser = build_base_parser("Realtime bidirectional session with Gemini Live")
@@ -69,14 +125,14 @@ async def run_async(
     prompt: str,
     model: str | None = None,
     modality: str = "TEXT",
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Open a Live session, send the prompt, drain responses to stdout.
 
     The drain loop stops on the first message whose ``server_content``
     carries ``turn_complete=True``. Messages with ``text=None`` (e.g.
     server-side control frames) are skipped without printing a blank
-    line. Any messages queued after turn_complete are ignored — the
+    line. Messages queued after turn_complete are ignored — the
     adapter's contract is one user turn per invocation.
 
     Args:
@@ -106,7 +162,7 @@ async def run_async(
     # ``model_validate`` keeps mypy happy without forcing callers to
     # import the Modality enum.
     live_config = types.LiveConnectConfig.model_validate({"response_modalities": [modality]})
-    client = get_client()
+    client = cast(_LiveClientProtocol, get_client())
 
     async with client.aio.live.connect(model=resolved_model, config=live_config) as session:
         # Send the prompt as a single Content turn. The SDK's

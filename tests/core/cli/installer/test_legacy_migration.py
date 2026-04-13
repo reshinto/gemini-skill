@@ -21,10 +21,9 @@ Behavior:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 from unittest import mock
 
-import pytest
+from core.types import SettingsBuffer
 
 
 def _write_legacy_env(path: Path, content: str) -> None:
@@ -37,7 +36,7 @@ class TestNoLegacyFile:
         from core.cli.installer.legacy_migration import migrate_legacy_env_to_settings
 
         legacy = tmp_path / "legacy.env"
-        buffer: dict[str, Any] = {"env": {"GEMINI_API_KEY": "existing"}}
+        buffer: SettingsBuffer = {"env": {"GEMINI_API_KEY": "existing"}}
         # Function must not raise; buffer unchanged.
         migrate_legacy_env_to_settings(legacy, buffer, yes=True, interactive=False)
         assert buffer == {"env": {"GEMINI_API_KEY": "existing"}}
@@ -52,7 +51,7 @@ class TestMergeIntoBuffer:
             legacy,
             "GEMINI_API_KEY=AIzaSyFromLegacy1234567890123456789\n" "GEMINI_LIVE_TESTS=1\n",
         )
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("builtins.input", return_value="y"):
             migrate_legacy_env_to_settings(legacy, buffer, yes=False, interactive=True)
 
@@ -66,7 +65,7 @@ class TestMergeIntoBuffer:
 
         legacy = tmp_path / "legacy.env"
         _write_legacy_env(legacy, "GEMINI_API_KEY=AIzaSyFromLegacy123456789012345678\n")
-        buffer: dict[str, Any] = {"env": {"GEMINI_API_KEY": "newer-value"}}
+        buffer: SettingsBuffer = {"env": {"GEMINI_API_KEY": "newer-value"}}
         with mock.patch("builtins.input", return_value="y"):
             migrate_legacy_env_to_settings(legacy, buffer, yes=False, interactive=True)
 
@@ -80,7 +79,7 @@ class TestMergeIntoBuffer:
             legacy,
             "# a comment\n" "\n" "GEMINI_LIVE_TESTS=1\n" "   \n" "# another comment\n",
         )
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("builtins.input", return_value="y"):
             migrate_legacy_env_to_settings(legacy, buffer, yes=False, interactive=True)
 
@@ -91,7 +90,7 @@ class TestMergeIntoBuffer:
 
         legacy = tmp_path / "legacy.env"
         _write_legacy_env(legacy, "GEMINI_LIVE_TESTS=1\n")
-        buffer: dict[str, Any] = {}
+        buffer: SettingsBuffer = {}
         with mock.patch("builtins.input", return_value="y"):
             migrate_legacy_env_to_settings(legacy, buffer, yes=False, interactive=True)
 
@@ -104,7 +103,7 @@ class TestLegacyFileDeletion:
 
         legacy = tmp_path / "legacy.env"
         _write_legacy_env(legacy, "GEMINI_LIVE_TESTS=1\n")
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("builtins.input", return_value="y"):
             migrate_legacy_env_to_settings(legacy, buffer, yes=False, interactive=True)
 
@@ -115,7 +114,7 @@ class TestLegacyFileDeletion:
 
         legacy = tmp_path / "legacy.env"
         _write_legacy_env(legacy, "GEMINI_LIVE_TESTS=1\n")
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("builtins.input", return_value="n"):
             migrate_legacy_env_to_settings(legacy, buffer, yes=False, interactive=True)
 
@@ -129,7 +128,7 @@ class TestLegacyFileDeletion:
 
         legacy = tmp_path / "legacy.env"
         _write_legacy_env(legacy, "GEMINI_LIVE_TESTS=1\n")
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("builtins.input", return_value=""):
             migrate_legacy_env_to_settings(legacy, buffer, yes=False, interactive=True)
 
@@ -140,7 +139,7 @@ class TestLegacyFileDeletion:
 
         legacy = tmp_path / "legacy.env"
         _write_legacy_env(legacy, "GEMINI_LIVE_TESTS=1\n")
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("builtins.input", side_effect=RuntimeError("no prompt")):
             migrate_legacy_env_to_settings(legacy, buffer, yes=True, interactive=False)
 
@@ -156,7 +155,7 @@ class TestEmptyLegacyFile:
 
         legacy = tmp_path / "legacy.env"
         _write_legacy_env(legacy, "# nothing here\n\n")
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         migrate_legacy_env_to_settings(legacy, buffer, yes=True, interactive=False)
         assert not legacy.exists()
         assert buffer == {"env": {}}
@@ -175,7 +174,7 @@ class TestInvalidLines:
             "this is not an env line\n"
             "GEMINI_API_KEY=AIzaSyKey1234567890123456789012345678\n",
         )
-        buffer: dict[str, Any] = {"env": {}}
+        buffer: SettingsBuffer = {"env": {}}
         with mock.patch("builtins.input", return_value="y"):
             migrate_legacy_env_to_settings(legacy, buffer, yes=False, interactive=True)
 

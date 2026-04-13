@@ -26,6 +26,7 @@ from core.cli.installer.settings_merge import (
 )
 from core.cli.installer.venv import InstallError
 from core.infra.sanitize import safe_print
+from core.types import SettingsBuffer
 
 # The canonical default env keys the installer writes into
 # ~/.claude/settings.json. Iteration order is preserved in the
@@ -159,7 +160,7 @@ def _setup_user_settings(install_dir: Path, *, yes: bool, interactive: bool) -> 
     # atomic operation — no read-modify-write dance that would
     # open a partial-write window between the merge and an
     # overlay pass.
-    settings_buffer: dict[str, object] = {}
+    settings_buffer: SettingsBuffer = {}
 
     try:
         migrate_legacy_env_to_settings(

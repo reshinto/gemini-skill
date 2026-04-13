@@ -129,7 +129,8 @@ def main(argv: list[str]) -> None:
         from core.infra.client import api_call
 
         response = api_call("models", method="GET")
-        models = response.get("models", [])
+        models_value = response.get("models")
+        models = models_value if isinstance(models_value, list) else []
         safe_print(f"[OK] API reachable ({len(models)} models visible)")
     except Exception as e:
         safe_print(f"[FAIL] API connectivity: {e}")
