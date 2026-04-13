@@ -26,6 +26,7 @@ What you'll learn from this file:
   imports — define new exceptions in the layer that introduces the concept,
   not in the layer that owns the base class.
 """
+
 from __future__ import annotations
 
 from core.infra.errors import GeminiSkillError

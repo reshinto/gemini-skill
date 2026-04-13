@@ -11,6 +11,7 @@ Config directories are created with 0o700 and files with 0o600 permissions
 
 Dependencies: core/infra/atomic_write.py
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -18,7 +19,7 @@ import json
 import os
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from core.infra.atomic_write import atomic_write_json
 
@@ -54,13 +55,20 @@ def _parse_bool_env(name: str, *, default: bool) -> bool:
     whitespace stripped. Everything else is False, including the empty
     string. Missing env vars fall back to the supplied default.
 
+    The ``default`` argument applies ONLY when the variable is unset. Once
+    the variable is present, an unrecognized value is treated as False
+    regardless of ``default`` — that's deliberate: a typo like
+    ``GEMINI_IS_SDK_PRIORITY=ture`` should disable SDK priority loudly via
+    a downstream ConfigError, not silently fall back to the default.
+
     Args:
         name: Environment variable name to read (e.g. ``GEMINI_IS_SDK_PRIORITY``).
-        default: Value to return when the variable is unset.
+        default: Value returned only when the variable is unset.
 
     Returns:
-        True if the env var holds a recognized truthy spelling, otherwise False.
-        Returns ``default`` when the env var is unset.
+        - ``default`` if the env var is unset.
+        - True if the env var holds a recognized truthy spelling.
+        - False for every other set value (including empty string and typos).
     """
     raw = os.environ.get(name)
     if raw is None:
@@ -90,6 +98,14 @@ class Config:
             Sourced from GEMINI_IS_RAWHTTP_PRIORITY. Default False — raw HTTP
             is still always *available*, this flag only controls priority
             ordering (see ``primary_backend`` / ``fallback_backend``).
+
+    Note for direct construction:
+        ``Config(is_sdk_priority=False, is_rawhttp_priority=False)`` is
+        deliberately disallowed and raises ``ConfigError`` from
+        ``__post_init__``. At least one backend must be enabled or the
+        coordinator has nothing to dispatch to. Tests that need a minimal
+        Config should leave both flags at their defaults or pass at least
+        one as True.
     """
 
     default_model: str = "gemini-2.5-flash"
@@ -128,16 +144,19 @@ class Config:
         return "sdk" if self.is_sdk_priority else "raw_http"
 
     @property
-    def fallback_backend(self) -> Literal["sdk", "raw_http"] | None:
+    def fallback_backend(self) -> Literal["raw_http"] | None:
         """Name of the backend used when the primary fails (or None).
 
-        A fallback exists only when *both* backends are enabled. If only one
-        backend is enabled, this returns None and the coordinator runs that
-        single backend with no fallback target.
+        A fallback exists only when *both* backends are enabled. Because SDK
+        always wins as the primary when both flags are true, the fallback can
+        only ever be ``"raw_http"`` — the type signature reflects that, so
+        the coordinator's match arms in later phases are not asked to
+        consider an unreachable ``"sdk"`` case. There is intentionally no
+        "raw HTTP primary with SDK fallback" configuration.
 
         Returns:
             ``"raw_http"`` when SDK is primary AND raw HTTP is also enabled;
-            otherwise None.
+            otherwise None (single-backend mode — no fallback target).
         """
         if self.is_sdk_priority and self.is_rawhttp_priority:
             return "raw_http"
@@ -189,9 +208,10 @@ def load_config(config_dir: Path | None = None) -> Config:
                 # Only the JSON-backed fields are loaded from disk. Backend
                 # priority is env-only so we never let stale config.json
                 # contradict the user's settings.json env block.
-                json_backed_fields = {
-                    f.name for f in dataclasses.fields(cfg)
-                } - {"is_sdk_priority", "is_rawhttp_priority"}
+                json_backed_fields = {f.name for f in dataclasses.fields(cfg)} - {
+                    "is_sdk_priority",
+                    "is_rawhttp_priority",
+                }
                 for fld in json_backed_fields:
                     if fld in data:
                         setattr(cfg, fld, data[fld])

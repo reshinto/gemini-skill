@@ -29,6 +29,7 @@ substring would be silently swallowed). The policy here only ever asks
 ``isinstance(exc, X)`` so behavior is locked to the exception class
 hierarchy, not to whatever the upstream library happens to print today.
 """
+
 from __future__ import annotations
 
 import socket
