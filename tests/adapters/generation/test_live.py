@@ -20,6 +20,27 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+class _FakeReceiveStream:
+    """Async iterator returned by ``_FakeSession.receive``.
+
+    Exposes ``aclose`` so the adapter can explicitly close the stream
+    when it stops on ``turn_complete`` before consuming every message.
+    """
+
+    def __init__(self, messages: list[MagicMock]) -> None:
+        self._iter = iter(messages)
+        self.aclose = AsyncMock()
+
+    def __aiter__(self) -> _FakeReceiveStream:
+        return self
+
+    async def __anext__(self) -> MagicMock:
+        try:
+            return next(self._iter)
+        except StopIteration as exc:
+            raise StopAsyncIteration from exc
+
+
 class _FakeSession:
     """A minimal fake that mimics ``live.connect`` session behavior.
 
@@ -32,15 +53,11 @@ class _FakeSession:
     def __init__(self, messages: list[MagicMock]) -> None:
         self._messages = messages
         self.send_client_content = AsyncMock()
+        self.last_receive_stream: _FakeReceiveStream | None = None
 
     def receive(self) -> Any:
-        messages = self._messages
-
-        async def _gen() -> Any:
-            for msg in messages:
-                yield msg
-
-        return _gen()
+        self.last_receive_stream = _FakeReceiveStream(self._messages)
+        return self.last_receive_stream
 
 
 class _FakeConnectCM:
@@ -240,3 +257,35 @@ class TestLiveRunAsync:
             await run_async(prompt="hi", modality="TEXT")
         out = capsys.readouterr().out
         assert "only-this" in out
+
+    @pytest.mark.asyncio
+    async def test_closes_receive_stream_when_turn_completes(
+        self, patched_client: MagicMock
+    ) -> None:
+        from adapters.generation.live import run_async
+
+        captured_session: dict[str, _FakeSession] = {}
+        original_connect = patched_client.aio.live.connect
+
+        def _spy_connect(**kw: object) -> _FakeConnectCM:
+            cm = original_connect(**kw)
+            captured_session["s"] = cm._session
+            return cm
+
+        patched_client._fake_messages = [
+            _make_message(text="a"),
+            _make_message(turn_complete=True),
+            _make_message(text="ignored"),
+        ]
+        patched_client.aio.live.connect = MagicMock(side_effect=_spy_connect)
+
+        with (
+            patch("adapters.generation.live.get_client", return_value=patched_client),
+            patch("adapters.generation.live.load_config") as mock_cfg,
+        ):
+            mock_cfg.return_value = MagicMock(prefer_preview_models=False, output_dir=None)
+            await run_async(prompt="hi", modality="TEXT")
+
+        session = captured_session["s"]
+        assert session.last_receive_stream is not None
+        session.last_receive_stream.aclose.assert_awaited_once()

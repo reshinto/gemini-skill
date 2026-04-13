@@ -29,6 +29,7 @@ core/adapter/helpers.py, core/infra/config.py
 from __future__ import annotations
 
 import argparse
+import inspect
 import sys
 from pathlib import Path
 from typing import Any
@@ -114,20 +115,28 @@ async def run_async(
         user_turn = types.Content(role="user", parts=[types.Part(text=prompt)])
         await session.send_client_content(turns=[user_turn])
 
-        async for msg in session.receive():
-            # Skip control frames that don't carry text output — a
-            # blank line for every server keepalive would spam stdout
-            # and break Claude Code's token budget.
-            text = getattr(msg, "text", None)
-            if text:
-                # ``end="", flush=True`` matches the existing streaming
-                # adapter's contract — chunks land on stdout as they
-                # arrive so a human reader sees incremental progress.
-                print(text, end="", flush=True)
+        receive_stream = session.receive()
+        try:
+            async for msg in receive_stream:
+                # Skip control frames that don't carry text output — a
+                # blank line for every server keepalive would spam stdout
+                # and break Claude Code's token budget.
+                text = getattr(msg, "text", None)
+                if text:
+                    # ``end="", flush=True`` matches the existing streaming
+                    # adapter's contract — chunks land on stdout as they
+                    # arrive so a human reader sees incremental progress.
+                    print(text, end="", flush=True)
 
-            server_content = getattr(msg, "server_content", None)
-            if server_content is not None and getattr(server_content, "turn_complete", False):
-                break
+                server_content = getattr(msg, "server_content", None)
+                if server_content is not None and getattr(server_content, "turn_complete", False):
+                    break
+        finally:
+            aclose = getattr(receive_stream, "aclose", None)
+            if callable(aclose):
+                maybe_awaitable = aclose()
+                if inspect.isawaitable(maybe_awaitable):
+                    await maybe_awaitable
 
     # Trailing newline so the next shell prompt starts on its own line.
     # Not inside the loop because the streamed text may not end with
