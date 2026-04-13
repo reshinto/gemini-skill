@@ -294,3 +294,217 @@ class TestInstallNoEnvExample:
 
         assert (install_dir / "SKILL.md").exists()
         assert not (install_dir / ".env").exists()
+
+
+class TestVenvWiring:
+    """Phase 5: install_main must orchestrate venv creation + pip install
+    + SDK probe via the core/cli/installer/venv.py helpers.
+
+    Three contracts:
+    1. Venv is created at ``<install_dir>/.venv``.
+    2. ``setup/requirements.txt`` is installed into that venv.
+    3. The SDK is verified importable from inside the venv.
+
+    All three calls are mocked so tests don't touch the real network or
+    create actual venvs (which would balloon test runtime to seconds).
+    """
+
+    def test_install_creates_venv_after_copying_files(self, tmp_path):
+        from core.cli import install_main
+
+        src = _setup_fake_source(tmp_path)
+        # Add a setup/requirements.txt to the fake source so the
+        # installer has something to point pip at.
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = tmp_path / "install"
+
+        with patch.object(install_main, "_get_source_dir", return_value=src), \
+             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
+             patch("core.cli.installer.venv.create_venv") as mock_create, \
+             patch("core.cli.installer.venv.install_requirements") as mock_install_req, \
+             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"):
+            install_main.main([])
+
+        # Venv created at the expected path.
+        mock_create.assert_called_once()
+        venv_target = mock_create.call_args.args[0]
+        assert venv_target == install_dir / ".venv"
+
+        # pip install was called against the same venv with the
+        # requirements file from the install dir (NOT the source dir,
+        # because the file was just copied as part of _OPERATIONAL_DIRS).
+        mock_install_req.assert_called_once()
+        req_call_args = mock_install_req.call_args.args
+        assert req_call_args[0] == install_dir / ".venv"
+
+    def test_install_verifies_sdk_after_pip_install(self, tmp_path):
+        from core.cli import install_main
+
+        src = _setup_fake_source(tmp_path)
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = tmp_path / "install"
+
+        with patch.object(install_main, "_get_source_dir", return_value=src), \
+             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
+             patch("core.cli.installer.venv.create_venv"), \
+             patch("core.cli.installer.venv.install_requirements"), \
+             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0") as mock_verify:
+            install_main.main([])
+
+        mock_verify.assert_called_once_with(install_dir / ".venv")
+
+    def test_venv_failure_does_not_abort_install(self, tmp_path, capsys):
+        """If venv creation or pip install fails, the installer should
+        warn loudly but leave the file copy intact — the user can
+        re-run install once the venv issue is resolved, and the
+        existing raw HTTP backend still works without google-genai."""
+        from core.cli import install_main
+        from core.cli.installer.venv import InstallError
+
+        src = _setup_fake_source(tmp_path)
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = tmp_path / "install"
+
+        with patch.object(install_main, "_get_source_dir", return_value=src), \
+             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
+             patch("core.cli.installer.venv.create_venv"), \
+             patch("core.cli.installer.venv.install_requirements",
+                   side_effect=InstallError("pip exit 1")):
+            install_main.main([])
+
+        # File copy still happened.
+        assert (install_dir / "SKILL.md").exists()
+        # Warning was surfaced to the user.
+        captured = capsys.readouterr()
+        assert "venv" in captured.out.lower() or "sdk" in captured.out.lower()
+        assert "pip exit 1" in captured.out or "raw HTTP" in captured.out
+
+    def test_install_prints_sdk_version_summary(self, tmp_path, capsys):
+        """End-of-install summary must include the installed SDK version
+        so users see what they got."""
+        from core.cli import install_main
+
+        src = _setup_fake_source(tmp_path)
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = tmp_path / "install"
+
+        with patch.object(install_main, "_get_source_dir", return_value=src), \
+             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
+             patch("core.cli.installer.venv.create_venv"), \
+             patch("core.cli.installer.venv.install_requirements"), \
+             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"):
+            install_main.main([])
+
+        captured = capsys.readouterr()
+        assert "1.33.0" in captured.out
+
+    def test_install_skips_venv_when_no_requirements_file(self, tmp_path):
+        """If the source repo does not ship a setup/requirements.txt
+        (e.g. a stripped-down test fixture), the installer should
+        skip the venv step entirely rather than pretending to install."""
+        from core.cli import install_main
+
+        src = _setup_fake_source(tmp_path)
+        # No requirements.txt — _setup_fake_source does NOT create one
+        # by default.
+        install_dir = tmp_path / "install"
+
+        with patch.object(install_main, "_get_source_dir", return_value=src), \
+             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
+             patch("core.cli.installer.venv.create_venv") as mock_create:
+            install_main.main([])
+
+        mock_create.assert_not_called()
+
+
+class TestVenvPreservation:
+    """On overwrite, the existing ``.venv`` directory must be preserved
+    so re-running install (e.g. to update files after a git pull) is
+    a fast no-op for the venv step instead of a multi-second rebuild.
+
+    The contract: file copy nukes everything EXCEPT ``.venv``. The
+    venv installer then re-runs ``install_requirements`` against the
+    preserved venv, which is a no-op when the pinned version is
+    already installed (no --upgrade flag).
+    """
+
+    def test_overwrite_preserves_existing_venv(self, tmp_path):
+        from core.cli import install_main
+
+        src = _setup_fake_source(tmp_path)
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = tmp_path / "install"
+
+        # Pre-create an "existing install" with a venv directory
+        # holding a marker file. After overwrite, the marker must
+        # still be there.
+        install_dir.mkdir()
+        (install_dir / "SKILL.md").write_text("# old version")
+        (install_dir / ".venv").mkdir()
+        (install_dir / ".venv" / "marker").write_text("preserved")
+
+        with patch.object(install_main, "_get_source_dir", return_value=src), \
+             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
+             patch.object(install_main, "_prompt", return_value="o"), \
+             patch("core.cli.installer.venv.create_venv") as mock_create, \
+             patch("core.cli.installer.venv.install_requirements"), \
+             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"):
+            install_main.main([])
+
+        # The .venv marker must still exist after overwrite.
+        assert (install_dir / ".venv" / "marker").exists()
+        assert (install_dir / ".venv" / "marker").read_text() == "preserved"
+        # And create_venv should NOT have been called — the existing
+        # venv was preserved, no rebuild needed.
+        mock_create.assert_not_called()
+        # SKILL.md should be the new content from the fresh source.
+        assert (install_dir / "SKILL.md").read_text() == "# SKILL"
+
+    def test_fresh_install_creates_venv(self, tmp_path):
+        """Sanity: a fresh install with no pre-existing venv DOES
+        create one. Pin the contract in the other direction."""
+        from core.cli import install_main
+
+        src = _setup_fake_source(tmp_path)
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = tmp_path / "install"
+
+        with patch.object(install_main, "_get_source_dir", return_value=src), \
+             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
+             patch("core.cli.installer.venv.create_venv") as mock_create, \
+             patch("core.cli.installer.venv.install_requirements"), \
+             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"):
+            install_main.main([])
+
+        mock_create.assert_called_once()
+
+    def test_overwrite_removes_subdirectory_entries(self, tmp_path):
+        """Coverage for the directory branch of _clean_install_dir_preserve_venv:
+        overwrite an install where the existing dir contains both files
+        AND subdirectories — both must be removed, .venv must stay."""
+        from core.cli import install_main
+
+        src = _setup_fake_source(tmp_path)
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = tmp_path / "install"
+        install_dir.mkdir()
+        (install_dir / "SKILL.md").write_text("old")
+        # A pre-existing subdirectory that's NOT .venv — must be removed.
+        (install_dir / "old_subdir").mkdir()
+        (install_dir / "old_subdir" / "stale.py").write_text("# stale")
+        # The venv directory — must be preserved.
+        (install_dir / ".venv").mkdir()
+        (install_dir / ".venv" / "marker").write_text("keep")
+
+        with patch.object(install_main, "_get_source_dir", return_value=src), \
+             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
+             patch.object(install_main, "_prompt", return_value="o"), \
+             patch("core.cli.installer.venv.create_venv"), \
+             patch("core.cli.installer.venv.install_requirements"), \
+             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"):
+            install_main.main([])
+
+        # The stale subdir must be gone (rmtree branch).
+        assert not (install_dir / "old_subdir").exists()
+        # The venv must still be there.
+        assert (install_dir / ".venv" / "marker").read_text() == "keep"

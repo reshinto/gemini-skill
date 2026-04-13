@@ -8,8 +8,14 @@ disable-model-invocation: true
 
 Run: `python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" <command> [args]`
 
+The launcher self-routes: if the skill-local virtual environment exists at `${CLAUDE_SKILL_DIR}/.venv`, it re-execs into `${CLAUDE_SKILL_DIR}/.venv/bin/python` so the dual-backend SDK is loaded; otherwise it runs under whichever Python invoked it (the raw HTTP backend works without google-genai installed).
+
 See `${CLAUDE_SKILL_DIR}/reference/index.md` for the full command map.
 For commands with flags or `--execute`, read `${CLAUDE_SKILL_DIR}/reference/<command>.md` first.
+
+## How transport works
+
+All commands route through `scripts/gemini_run.py` which dispatches to the right adapter. The adapter calls a single `api_call` / `stream_generate_content` / `upload_file` facade that picks the right backend automatically based on `GEMINI_IS_SDK_PRIORITY` / `GEMINI_IS_RAWHTTP_PRIORITY` environment variables. **You do not need to know which backend is active** — every command has identical CLI surface, identical output shape, and identical error format regardless of whether the SDK or raw HTTP path handled the call.
 
 ## Rules
 
