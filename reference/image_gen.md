@@ -76,5 +76,5 @@ Each generation counts toward your Gemini API quota. Nano Banana is designed for
 ## Related
 
 - Live smoke test (dry-run, no billing): [tests/integration/test_image_gen_live.py](../tests/integration/test_image_gen_live.py)
-- Live real-API test against Nano Banana 2 (billable, extra opt-in via `GEMINI_LIVE_IMAGE_GEN=1`): [tests/integration/test_image_gen_nano_banana_2_live.py](../tests/integration/test_image_gen_nano_banana_2_live.py)
+- Live real-API test against Nano Banana 2 (billable; runs whenever `GEMINI_LIVE_TESTS=1` — filter out with `pytest -k "not nano_banana"` to skip): [tests/integration/test_image_gen_nano_banana_2_live.py](../tests/integration/test_image_gen_nano_banana_2_live.py)
 - Upstream API docs: https://ai.google.dev/gemini-api/docs/image-generation
