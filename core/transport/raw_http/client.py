@@ -238,9 +238,14 @@ def _execute_with_retry(
                 return json.loads(response.read())
 
         except ssl.SSLCertVerificationError as e:
+            # Sanitize the message: SSLCertVerificationError.__str__ can echo
+            # certificate subject / SAN fields, and a misconfigured proxy
+            # could conceivably embed secret material there.
             raise APIError(
-                f"SSL certificate verification failed: {e}. "
-                "On macOS, run: /Applications/Python\\ 3.x/Install\\ Certificates.command",
+                sanitize(
+                    f"SSL certificate verification failed: {e}. "
+                    "On macOS, run: /Applications/Python\\ 3.x/Install\\ Certificates.command"
+                ),
                 status_code=None,
             ) from e
 
@@ -263,7 +268,11 @@ def _execute_with_retry(
             if attempt < _MAX_RETRIES:
                 time.sleep(_BACKOFF_BASE * (2**attempt))
                 continue
-            raise APIError(f"Network error: {e}") from e
+            # Sanitize: a ConnectionError from a custom transport wrapper
+            # could include the request URL in str(e), which in turn could
+            # contain a key if a future refactor regressed the header-only
+            # auth path. Defense in depth.
+            raise APIError(sanitize(f"Network error: {e}")) from e
 
 
 def _extract_error_message(error: HTTPError) -> str:

@@ -6,8 +6,8 @@ plus the ``GeminiResponse`` / ``StreamChunk`` / ``FileMetadata`` TypedDicts
 that flow through the coordinator. These tests pin the structural contract
 so a future PR cannot quietly remove a method or rename a key.
 
-The ``BackendUnavailableError`` test from Phase 1 slice 1 is preserved here
-so all base-module assertions live in one file.
+All ``BackendUnavailableError`` assertions live here alongside the Protocol
+and TypedDict tests so the base-module contract is tested in one file.
 """
 
 from __future__ import annotations

@@ -9,10 +9,10 @@ class once per process and dispatches calls into it.
 Why a wrapper class instead of "just use the functions directly"? The
 coordinator needs polymorphism — at runtime it holds a
 ``primary: Transport`` and a ``fallback: Transport | None`` and calls the
-same method names regardless of which backend is in either slot. A class is
-the cheapest way to expose the same shape from both the SDK backend and the
-raw HTTP backend without forcing the coordinator to branch on
-``isinstance(backend, types.ModuleType)``.
+same method names regardless of which backend is in either slot. A class
+is the cheapest way to expose the same shape from both the SDK backend
+(``core/transport/sdk/transport.py``) and the raw HTTP backend without
+forcing the coordinator to branch on ``isinstance(backend, types.ModuleType)``.
 
 All retry, SSE, multipart, error-extraction, and mime-validation logic lives
 in ``client.py`` and is unchanged by the move. This file contains zero
@@ -54,10 +54,7 @@ class RawHttpTransport:
     The Protocol contract (see ``core/transport/base.py::Transport``) is
     satisfied structurally — there is no need to inherit from ``Transport``
     because Python's ``@runtime_checkable`` Protocol verifies method
-    presence rather than class hierarchy. We could add ``Transport`` as a
-    base class for documentation, but doing so would force a runtime import
-    cycle (transport.base imports from infra.errors, infra.errors does not
-    import from transport, and we want to keep it that way).
+    presence rather than class hierarchy.
     """
 
     name: Literal["raw_http"] = "raw_http"
@@ -75,6 +72,15 @@ class RawHttpTransport:
         Every argument flows through unchanged — this method exists purely
         to satisfy the Transport Protocol shape so the coordinator can
         polymorphically dispatch into either backend.
+
+        Note: the underlying ``client.api_call`` accepts an optional
+        ``api_key`` parameter that lets callers bypass ``resolve_key()``
+        and inject a key directly. That parameter is intentionally NOT
+        exposed on the Transport Protocol — auth resolution is the
+        responsibility of the backend's own client factory, not the
+        coordinator's dispatch surface. Callers that need the explicit-key
+        path use ``core.infra.client.api_call`` directly via the shim,
+        bypassing the coordinator entirely.
 
         Args:
             endpoint: REST path relative to ``BASE_URL`` (e.g.

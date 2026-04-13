@@ -141,6 +141,14 @@ def _translate_keys(value: object) -> object:
 def _validate_envelope(envelope: object) -> None:
     """Sanity-check that an object looks like a GeminiResponse envelope.
 
+    This guard is **opt-in**: none of the public translators
+    (``sdk_response_to_rest_envelope``, ``sdk_stream_chunk_to_envelope``,
+    ``sdk_file_to_metadata``) call it on the hot path. Callers that want
+    drift detection in CI should invoke it explicitly inside a debug
+    wrapper or behind a ``GEMINI_DEBUG_VALIDATE_ENVELOPE`` env-var check.
+    Wiring it into the hot path is intentionally left to a later commit
+    so the cost is opt-in rather than paid by every production request.
+
     This is a lightweight runtime guard — NOT a full schema validator. It
     catches the two failure modes that matter at the transport boundary:
 

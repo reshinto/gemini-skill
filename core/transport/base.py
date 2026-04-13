@@ -150,13 +150,27 @@ class GroundingChunk(TypedDict, total=False):
     retrievedContext: Mapping[str, object]
 
 
+class SearchEntryPoint(TypedDict, total=False):
+    """The renderable HTML widget Google requires you to display whenever
+    search-grounding results are surfaced. ``renderedContent`` holds the
+    HTML snippet itself.
+
+    A separate TypedDict (rather than ``Mapping[str, object]``) so the
+    ``rendered_content`` → ``renderedContent`` translation in
+    ``core/transport/normalize.py`` has a typed home and mypy can catch
+    field drift if Google adds or renames a key."""
+
+    renderedContent: str
+    sdkBlob: str
+
+
 class GroundingMetadata(TypedDict, total=False):
     """Grounding evidence returned alongside a candidate when search /
     maps / file-search tools were active."""
 
     webSearchQueries: list[str]
     groundingChunks: list[GroundingChunk]
-    searchEntryPoint: Mapping[str, object]
+    searchEntryPoint: SearchEntryPoint
 
 
 class Candidate(TypedDict, total=False):

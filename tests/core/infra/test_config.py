@@ -131,6 +131,19 @@ class TestConfigSaving:
         cfg2 = load_config(config_dir=tmp_path)
         assert cfg2.cost_limit_daily_usd == 20.0
 
+    def test_save_strips_backend_priority_flags(self, tmp_path):
+        """Backend priority is env-only; save_config must NOT serialize the
+        flags or hand-editing config.json would silently disagree with
+        load_config (which always re-reads them from the env)."""
+        from core.infra.config import load_config, save_config
+
+        cfg = load_config(config_dir=tmp_path)
+        save_config(cfg, config_dir=tmp_path)
+
+        on_disk = json.loads((tmp_path / "config.json").read_text())
+        assert "is_sdk_priority" not in on_disk
+        assert "is_rawhttp_priority" not in on_disk
+
     @pytest.mark.skipif(os.name == "nt", reason="POSIX permissions not available on Windows")
     def test_save_sets_secure_permissions(self, tmp_path):
         from core.infra.config import load_config, save_config

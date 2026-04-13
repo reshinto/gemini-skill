@@ -657,6 +657,112 @@ class TestSslErrorHandling:
                 api_call("models", method="GET")
 
 
+class TestErrorMessageSanitization:
+    """Every code path that surfaces an upstream error string must pass the
+    string through ``sanitize()`` so an echoed-back API key is redacted
+    before it lands in an APIError, log line, or traceback. These tests pin
+    that the sanitize() call actually fires on each path — without them, a
+    future refactor could silently delete the call and only a live test
+    against a misbehaving upstream would catch the regression.
+    """
+
+    _FAKE_KEY = "AIzaSyTestKey12345678901234567890123456"  # AIza + 35 chars = 39 total
+
+    def test_4xx_error_body_with_embedded_key_is_redacted(self):
+        """A 400 response whose JSON error message echoes back the API key
+        must be sanitized before APIError carries it. Pins the sanitize()
+        call inside _extract_error_message's structured-JSON branch."""
+        import io
+        from urllib.error import HTTPError
+        from core.infra.client import api_call
+        from core.infra.errors import APIError
+
+        body = (
+            b'{"error": {"message": "Invalid request from key ' + self._FAKE_KEY.encode() + b'"}}'
+        )
+        err = HTTPError("http://x", 400, "Bad Request", {}, io.BytesIO(body))
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
+            with pytest.raises(APIError) as exc_info:
+                api_call("models", method="GET")
+
+        rendered = str(exc_info.value)
+        assert self._FAKE_KEY not in rendered
+        assert "[REDACTED]" in rendered
+
+    def test_4xx_error_fallback_path_with_embedded_key_is_redacted(self):
+        """A 400 whose body is malformed JSON falls through to the second
+        return path of _extract_error_message (HTTP {code} {reason}). Pins
+        the sanitize() call on that fallback path. We embed the key in the
+        ``reason`` string so the fallback branch has something to redact."""
+        import io
+        from urllib.error import HTTPError
+        from core.infra.client import api_call
+        from core.infra.errors import APIError
+
+        err = HTTPError(
+            "http://x",
+            400,
+            f"Bad Request {self._FAKE_KEY}",
+            {},
+            io.BytesIO(b"not valid json"),
+        )
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
+            with pytest.raises(APIError) as exc_info:
+                api_call("models", method="GET")
+
+        rendered = str(exc_info.value)
+        assert self._FAKE_KEY not in rendered
+        assert "[REDACTED]" in rendered
+
+    def test_ssl_error_with_embedded_key_is_redacted(self):
+        """SSLCertVerificationError.__str__ may embed certificate fields
+        that an attacker controls. Pins the sanitize() call on the SSL
+        branch in _execute_with_retry."""
+        import ssl
+        from core.infra.client import api_call
+        from core.infra.errors import APIError
+
+        err = ssl.SSLCertVerificationError(
+            f"cert verify failed: subject contained {self._FAKE_KEY}"
+        )
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+        ):
+            with pytest.raises(APIError) as exc_info:
+                api_call("models", method="GET")
+
+        rendered = str(exc_info.value)
+        assert self._FAKE_KEY not in rendered
+        assert "[REDACTED]" in rendered
+
+    def test_network_error_with_embedded_key_is_redacted(self):
+        """A ConnectionError whose ``str()`` representation contains a key
+        (e.g. from a custom transport wrapper) must be sanitized. Pins the
+        sanitize() call on the network-error branch."""
+        from core.infra.client import api_call
+        from core.infra.errors import APIError
+
+        err = ConnectionError(f"connection reset, attempted url with {self._FAKE_KEY}")
+        with (
+            patch("core.transport.raw_http.client.urlopen", side_effect=err),
+            patch("core.transport.raw_http.client.resolve_key", return_value="fake-key"),
+            patch("time.sleep"),  # skip the backoff delays
+        ):
+            with pytest.raises(APIError) as exc_info:
+                api_call("models", method="GET")
+
+        rendered = str(exc_info.value)
+        assert self._FAKE_KEY not in rendered
+        assert "[REDACTED]" in rendered
+
+
 class TestMimeTypeValidation:
     """upload_file() must reject unsafe MIME types."""
 

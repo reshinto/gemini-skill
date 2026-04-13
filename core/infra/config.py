@@ -232,6 +232,14 @@ def save_config(config: Config, config_dir: Path | None = None) -> None:
     Creates the config directory (0o700) and file (0o600) if they
     do not exist. Uses atomic write via temp file + os.replace().
 
+    The backend priority flags (``is_sdk_priority`` / ``is_rawhttp_priority``)
+    are deliberately stripped from the serialized output. Those values
+    live in the process environment (Claude Code injects them from
+    ``~/.claude/settings.json``) and ``load_config`` always re-reads them
+    from there, so writing them to ``config.json`` would only invite
+    confusion if a user hand-edited the file expecting their change to
+    take effect.
+
     Args:
         config: The Config instance to save.
         config_dir: Directory for config.json. If None, uses default location.
@@ -241,6 +249,11 @@ def save_config(config: Config, config_dir: Path | None = None) -> None:
 
     config_dir = Path(config_dir)
     config_file = config_dir / _CONFIG_FILENAME
-    data = json.dumps(asdict(config), indent=2)
+    payload = asdict(config)
+    # Strip env-only fields so config.json on disk matches the contract
+    # of load_config() (which never reads these keys from the file).
+    payload.pop("is_sdk_priority", None)
+    payload.pop("is_rawhttp_priority", None)
+    data = json.dumps(payload, indent=2)
 
     atomic_write_json(config_file, data)
