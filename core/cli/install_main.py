@@ -1,19 +1,43 @@
 """Install the gemini-skill to ~/.claude/skills/gemini/.
 
-Copies operational files only (no docs, no tests). Merges .env on
-subsequent installs (non-destructive). Sets secure permissions
-(0o700 on dirs, 0o600 on files).
+Copies operational files only (no docs, no tests). Phase 5 adds:
+- Skill-local venv creation + pinned google-genai install
+- Interactive GEMINI_API_KEY prompt (before the generic merge)
+- Generic settings.json merge of the default env keys
+- One-time legacy ~/.claude/skills/gemini/.env → settings.json
+  migration
 
-Dependencies: core/infra/sanitize.py
+Dependencies: core/infra/sanitize.py, core/cli/installer/*.
 """
 
 from __future__ import annotations
 
 import os
 import shutil
+import sys
 from pathlib import Path
 
+from core.cli.installer.api_key_prompt import prompt_gemini_api_key
+from core.cli.installer.legacy_migration import migrate_legacy_env_to_settings
+from core.cli.installer.settings_merge import (
+    InstallAborted,
+    SettingsFileCorrupted,
+    merge_settings_env,
+)
+from core.cli.installer.venv import InstallError
 from core.infra.sanitize import safe_print
+
+# The canonical default env keys the installer writes into
+# ~/.claude/settings.json. Iteration order is preserved in the
+# resulting JSON so reviewers diffing a freshly-installed file see a
+# deterministic key ordering. Kept at module top so tests and other
+# installer submodules can import it without a circular risk.
+_DEFAULT_ENV_KEYS: dict[str, str] = {
+    "GEMINI_API_KEY": "",
+    "GEMINI_IS_SDK_PRIORITY": "true",
+    "GEMINI_IS_RAWHTTP_PRIORITY": "false",
+    "GEMINI_LIVE_TESTS": "0",
+}
 
 # Operational files/dirs to copy from the source repo
 _OPERATIONAL_FILES = ["SKILL.md", "VERSION"]
@@ -22,6 +46,15 @@ _OPERATIONAL_DIRS = ["core", "adapters", "reference", "registry", "scripts"]
 # installer (Phase 5) reads to install google-genai. Must ship with the
 # install so re-running install or update can re-resolve the same pin.
 _SETUP_FILES = ["setup/update.py", "setup/requirements.txt"]
+
+
+def _is_interactive_stdin() -> bool:
+    """Return True iff stdin is a tty.
+
+    Wrapped in a function (not inlined) so tests can patch it to
+    simulate CI / non-tty environments without touching real stdin.
+    """
+    return sys.stdin.isatty()
 
 
 def main(argv: list[str]) -> None:
@@ -36,8 +69,15 @@ def main(argv: list[str]) -> None:
        the SDK backend reachable). On venv failure, print a warning
        and continue — the file copy is still valid and the raw HTTP
        backend will work without google-genai.
-    5. Print the install summary including the SDK version.
+    5. Phase 5 follow-up: migrate any legacy
+       ``~/.claude/skills/gemini/.env`` into the in-memory settings
+       buffer, prompt for ``GEMINI_API_KEY`` interactively, then
+       merge the defaults into ``~/.claude/settings.json``.
+    6. Print the install summary including the SDK version.
     """
+    yes_flag = "--yes" in argv or "-y" in argv
+    interactive = _is_interactive_stdin()
+
     source_dir = _get_source_dir()
     install_dir = _get_install_dir()
 
@@ -57,7 +97,10 @@ def main(argv: list[str]) -> None:
         _clean_install_dir_preserve_venv(install_dir)
 
     _clean_install(source_dir, install_dir)
-    _setup_env_file(source_dir, install_dir)
+    # Phase 5: the skill-local .env file is deprecated. Env vars now
+    # live in ~/.claude/settings.json (merged by the helpers below).
+    # Legacy .env files at the install dir are picked up by the
+    # migration step below and deleted.
 
     # Phase 5: create the skill-local venv + install pinned google-genai.
     # Failures here do NOT abort the install — the file copy succeeded
@@ -65,9 +108,103 @@ def main(argv: list[str]) -> None:
     # legacy single-backend path that's been working since v0.1.
     sdk_version = _setup_venv(install_dir)
 
+    # Phase 5 follow-up: write the skill's env vars into
+    # ~/.claude/settings.json. This block runs even when venv setup
+    # failed above, because settings.json determines backend
+    # selection for the raw HTTP path too.
+    _setup_user_settings(install_dir, yes=yes_flag, interactive=interactive)
+
     safe_print(f"Installed to {install_dir}")
     if sdk_version is not None:
         safe_print(f"SDK installed: google-genai {sdk_version}")
+
+
+def _setup_user_settings(install_dir: Path, *, yes: bool, interactive: bool) -> None:
+    """Migrate legacy .env, prompt for API key, merge into settings.json.
+
+    The three helpers are layered so each one contributes to an
+    in-memory buffer that's handed to the merge step as a single
+    atomic ``pre_resolved`` override:
+
+    1. ``migrate_legacy_env_to_settings`` reads any legacy
+       ``~/.claude/skills/gemini/.env`` and seeds the buffer with
+       its values.
+    2. ``prompt_gemini_api_key`` runs the special-case API-key
+       interactive flow and adds the user-typed value to the
+       buffer.
+    3. ``merge_settings_env`` receives the buffer as ``pre_resolved``
+       and writes the combined (legacy + prompt + defaults) result
+       to ``~/.claude/settings.json`` in a single atomic operation.
+
+    The single-write contract closes the partial-write window that
+    an earlier two-step design had between the default merge and a
+    separate overlay pass.
+
+    Error handling is granular:
+    - ``SettingsFileCorrupted``: re-raised so the install exits
+      non-zero. The user must fix their settings.json by hand.
+    - ``InstallAborted``: re-raised so a user-initiated quit
+      actually exits the installer instead of being demoted to a
+      warning.
+    - Other ``InstallError``: warned and continued — the rest of
+      the install is still usable.
+    """
+    settings_path = Path.home() / ".claude" / "settings.json"
+    legacy_env = install_dir / ".env"
+
+    # Build a pre-resolved override map from the two user-choice
+    # sources (legacy migration + interactive API-key prompt). Both
+    # helpers mutate this in-memory buffer, which we then hand to
+    # ``merge_settings_env`` so the whole merge + write is ONE
+    # atomic operation — no read-modify-write dance that would
+    # open a partial-write window between the merge and an
+    # overlay pass.
+    settings_buffer: dict[str, object] = {}
+
+    try:
+        migrate_legacy_env_to_settings(
+            legacy_env, settings_buffer, yes=yes, interactive=interactive
+        )
+        prompt_gemini_api_key(settings_buffer, yes=yes, interactive=interactive)
+
+        # Extract the env subdict to pass as pre_resolved. Filter to
+        # string values only — the JSON settings format only allows
+        # string env values anyway, and a non-string sneaking in
+        # would trip the merge_settings_env type check.
+        pre_resolved: dict[str, str] = {}
+        buffer_env = settings_buffer.get("env")
+        if isinstance(buffer_env, dict):
+            for k, v in buffer_env.items():
+                if isinstance(k, str) and isinstance(v, str):
+                    pre_resolved[k] = v
+
+        merge_settings_env(
+            settings_path,
+            _DEFAULT_ENV_KEYS,
+            yes=yes,
+            interactive=interactive,
+            pre_resolved=pre_resolved,
+        )
+    except SettingsFileCorrupted as exc:
+        # Hard abort: the user's settings.json is corrupted and the
+        # installer deliberately refuses to overwrite it. Re-raise
+        # so ``setup/install.py`` exits non-zero instead of
+        # continuing with whatever partial state exists.
+        safe_print(f"[ERROR] {exc}")
+        raise
+    except InstallAborted as exc:
+        # User pressed ``q`` during a conflict prompt. Surface the
+        # exact message and re-raise so the process exits non-zero —
+        # a user-initiated abort should NOT be silently demoted to
+        # a warning.
+        safe_print(f"[ABORT] {exc}")
+        raise
+    except InstallError as exc:
+        # Catch-all for other installer errors (e.g. the venv
+        # module's errors bubbling through some unrelated path).
+        # These are recoverable: the file copy succeeded and the
+        # rest of the install is usable, so we warn and continue.
+        safe_print(f"[WARN] settings.json merge failed: {exc}")
 
 
 def _setup_venv(install_dir: Path) -> str | None:
@@ -128,20 +265,29 @@ def _get_install_dir() -> Path:
     return Path.home() / ".claude" / "skills" / "gemini"
 
 
+_PRESERVE_ON_OVERWRITE: frozenset[str] = frozenset({".venv", ".env"})
+
+
 def _clean_install_dir_preserve_venv(install_dir: Path) -> None:
-    """Empty ``install_dir`` of every entry EXCEPT ``.venv``.
+    """Empty ``install_dir`` of every entry EXCEPT preserved ones.
 
     Used on overwrite to preserve the skill-local virtual environment
-    across re-installs. The contract: after this function returns,
-    ``install_dir`` exists, ``install_dir/.venv`` is untouched, and
-    every other top-level entry has been removed (recursively for
-    subdirectories).
+    and the legacy .env file across re-installs:
+
+    - ``.venv`` is preserved so re-running install is a fast no-op
+      for the venv step (the pinned-version contract means pip is
+      idempotent when the version is already installed).
+    - ``.env`` is preserved so the Phase 5 follow-up's legacy
+      migration can pick up any values the user set under the old
+      skill-local .env model and merge them into settings.json.
+      Without this, overwriting would delete the legacy file
+      before the migration step ran.
 
     Args:
         install_dir: The skill install directory. Must exist.
     """
     for entry in install_dir.iterdir():
-        if entry.name == ".venv":
+        if entry.name in _PRESERVE_ON_OVERWRITE:
             continue
         if entry.is_dir() and not entry.is_symlink():
             shutil.rmtree(entry)
@@ -176,59 +322,6 @@ def _clean_install(source_dir: Path, install_dir: Path) -> None:
             dest = install_dir / rel_path
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest)
-
-
-def _setup_env_file(source_dir: Path, install_dir: Path) -> None:
-    """Create or merge the .env file in the install directory."""
-    env_example = source_dir / ".env.example"
-    env_file = install_dir / ".env"
-
-    if not env_example.exists():
-        return
-
-    if not env_file.exists():
-        shutil.copy2(env_example, env_file)
-    else:
-        _merge_env(env_file, env_example)
-
-    try:
-        os.chmod(str(env_file), 0o600)
-    except OSError:
-        pass
-
-
-def _merge_env(env_file: Path, env_example: Path) -> None:
-    """Non-destructive merge: append new keys from example, never touch existing."""
-    existing_content = env_file.read_text(encoding="utf-8")
-    example_content = env_example.read_text(encoding="utf-8")
-
-    existing_keys = _extract_keys(existing_content)
-    example_keys = _extract_keys(example_content)
-
-    new_keys = example_keys - existing_keys
-    if not new_keys:
-        return
-
-    with env_file.open("a", encoding="utf-8") as f:
-        f.write("\n# Added by gemini-skill install\n")
-        for line in example_content.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            key = stripped.split("=", 1)[0].strip()
-            if key in new_keys:
-                f.write(f"{line}\n")
-
-
-def _extract_keys(content: str) -> set[str]:
-    """Extract env var keys from .env content."""
-    keys: set[str] = set()
-    for line in content.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        keys.add(line.split("=", 1)[0].strip())
-    return keys
 
 
 def _prompt(message: str) -> str:

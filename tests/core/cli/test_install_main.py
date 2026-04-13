@@ -1,4 +1,5 @@
 """Tests for core/cli/install_main.py."""
+
 from __future__ import annotations
 
 import os
@@ -33,11 +34,14 @@ def _setup_fake_source(tmp_path: Path) -> Path:
 class TestInstallClean:
     def test_clean_install(self, tmp_path):
         from core.cli import install_main
+
         src = _setup_fake_source(tmp_path)
         install_dir = tmp_path / "install"
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+        ):
             install_main.main([])
 
         assert (install_dir / "SKILL.md").exists()
@@ -46,45 +50,70 @@ class TestInstallClean:
         assert (install_dir / "adapters" / "__init__.py").exists()
         assert (install_dir / "setup" / "update.py").exists()
 
-    def test_creates_env_from_example(self, tmp_path):
+    def test_creates_settings_json_with_env_keys(self, tmp_path, monkeypatch):
+        """Phase 5: install writes env vars into ~/.claude/settings.json
+        instead of a skill-local .env file. Assert the new contract."""
+        import json
         from core.cli import install_main
+
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        (tmp_path / "home" / ".claude").mkdir(parents=True)
+
         src = _setup_fake_source(tmp_path)
         install_dir = tmp_path / "install"
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch.object(install_main, "_is_interactive_stdin", return_value=False),
+        ):
             install_main.main([])
 
-        env_file = install_dir / ".env"
-        assert env_file.exists()
-        assert "GEMINI_API_KEY" in env_file.read_text()
+        settings_path = tmp_path / "home" / ".claude" / "settings.json"
+        assert settings_path.exists()
+        data = json.loads(settings_path.read_text())
+        assert "GEMINI_API_KEY" in data["env"]
+        # The skill-local .env file is NO LONGER created.
+        assert not (install_dir / ".env").exists()
 
     @pytest.mark.skipif(os.name == "nt", reason="POSIX perms only")
-    def test_env_file_has_600_perms(self, tmp_path):
+    def test_settings_json_has_600_perms(self, tmp_path, monkeypatch):
+        """Phase 5: the settings.json atomic write sets 0o600 perms
+        via core/infra/atomic_write.py. Pin the permission contract."""
         from core.cli import install_main
+
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        (tmp_path / "home" / ".claude").mkdir(parents=True)
+
         src = _setup_fake_source(tmp_path)
         install_dir = tmp_path / "install"
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch.object(install_main, "_is_interactive_stdin", return_value=False),
+        ):
             install_main.main([])
 
-        env_file = install_dir / ".env"
-        mode = stat.S_IMODE(env_file.stat().st_mode)
+        settings_path = tmp_path / "home" / ".claude" / "settings.json"
+        mode = stat.S_IMODE(settings_path.stat().st_mode)
         assert mode == 0o600
 
 
 class TestInstallReinstall:
     def test_overwrites_existing(self, tmp_path, capsys):
         from core.cli import install_main
+
         src = _setup_fake_source(tmp_path)
         install_dir = tmp_path / "install"
         install_dir.mkdir()
         (install_dir / "old_file").write_text("old")
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
-             patch.object(install_main, "_prompt", return_value="o"):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch.object(install_main, "_prompt", return_value="o"),
+        ):
             install_main.main([])
 
         assert not (install_dir / "old_file").exists()
@@ -92,105 +121,51 @@ class TestInstallReinstall:
 
     def test_skip_preserves_existing(self, tmp_path, capsys):
         from core.cli import install_main
+
         src = _setup_fake_source(tmp_path)
         install_dir = tmp_path / "install"
         install_dir.mkdir()
         (install_dir / "old_file").write_text("old")
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
-             patch.object(install_main, "_prompt", return_value="s"):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch.object(install_main, "_prompt", return_value="s"),
+        ):
             install_main.main([])
 
         assert (install_dir / "old_file").exists()
 
 
-class TestEnvMerge:
-    def test_merge_adds_new_keys(self, tmp_path):
-        from core.cli.install_main import _merge_env
-        env = tmp_path / ".env"
-        env.write_text("OLD_KEY=value\n")
-        example = tmp_path / ".env.example"
-        example.write_text("OLD_KEY=\nNEW_KEY=\n")
-
-        _merge_env(env, example)
-        content = env.read_text()
-        assert "OLD_KEY=value" in content
-        assert "NEW_KEY=" in content
-
-    def test_merge_preserves_existing_values(self, tmp_path):
-        from core.cli.install_main import _merge_env
-        env = tmp_path / ".env"
-        env.write_text("KEY=my-secret-value\n")
-        example = tmp_path / ".env.example"
-        example.write_text("KEY=\n")
-
-        _merge_env(env, example)
-        assert "my-secret-value" in env.read_text()
-
-    def test_merge_no_changes_when_same(self, tmp_path):
-        from core.cli.install_main import _merge_env
-        env = tmp_path / ".env"
-        env.write_text("KEY=value\n")
-        example = tmp_path / ".env.example"
-        example.write_text("KEY=\n")
-
-        original = env.read_text()
-        _merge_env(env, example)
-        assert env.read_text() == original
-
-
-class TestExtractKeys:
-    def test_extracts_simple_keys(self):
-        from core.cli.install_main import _extract_keys
-        content = "KEY_A=value\nKEY_B=other\n"
-        assert _extract_keys(content) == {"KEY_A", "KEY_B"}
-
-    def test_skips_comments_and_blanks(self):
-        from core.cli.install_main import _extract_keys
-        content = "# comment\n\nKEY=value\n"
-        assert _extract_keys(content) == {"KEY"}
-
-    def test_skips_lines_without_equals(self):
-        from core.cli.install_main import _extract_keys
-        content = "no equals here\nKEY=value\n"
-        assert _extract_keys(content) == {"KEY"}
+# NOTE: TestEnvMerge and TestExtractKeys were removed in the Phase 5
+# follow-up slice. The ``_setup_env_file`` / ``_merge_env`` /
+# ``_extract_keys`` helpers were deleted along with the tests because
+# the skill-local .env file is deprecated — env vars now live in
+# ~/.claude/settings.json via core/cli/installer/settings_merge.py.
 
 
 class TestSourceAndInstallDir:
     def test_get_source_dir(self):
         from core.cli.install_main import _get_source_dir
+
         src = _get_source_dir()
         assert (src / "core").exists()
 
     def test_get_install_dir(self):
         from core.cli.install_main import _get_install_dir
+
         install_dir = _get_install_dir()
         assert ".claude/skills/gemini" in str(install_dir)
 
 
-class TestEnvFileExists:
-    def test_merges_when_env_already_exists(self, tmp_path):
-        from core.cli import install_main
-        src = _setup_fake_source(tmp_path)
-        install_dir = tmp_path / "install"
-        install_dir.mkdir(parents=True)
-        (install_dir / ".env").write_text("OLD=value\n")
-
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
-             patch.object(install_main, "_prompt", return_value="s"):
-            # Skip to avoid overwriting, but .env merge runs unconditionally
-            # via a direct setup call
-            install_main._setup_env_file(src, install_dir)
-
-        content = (install_dir / ".env").read_text()
-        assert "OLD=value" in content
+# TestEnvFileExists removed — _setup_env_file deleted along with
+# every other skill-local .env helper in the Phase 5 follow-up.
 
 
 class TestChmodFailures:
     def test_install_dir_chmod_failure(self, tmp_path, monkeypatch):
         from core.cli import install_main
+
         src = _setup_fake_source(tmp_path)
         install_dir = tmp_path / "install"
 
@@ -205,39 +180,52 @@ class TestChmodFailures:
 
         monkeypatch.setattr(os, "chmod", failing_chmod)
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+        ):
             install_main.main([])
 
         assert (install_dir / "SKILL.md").exists()
 
-    def test_env_file_chmod_failure(self, tmp_path, monkeypatch):
+    def test_settings_chmod_failure_is_tolerated(self, tmp_path, monkeypatch):
+        """Phase 5: the settings.json write goes through
+        core/infra/atomic_write.py which swallows chmod failures
+        (some filesystems don't support POSIX perms). The install
+        must still complete successfully even when chmod raises."""
         from core.cli import install_main
+
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        (tmp_path / "home" / ".claude").mkdir(parents=True)
+
         src = _setup_fake_source(tmp_path)
         install_dir = tmp_path / "install"
 
         original_chmod = os.chmod
-        calls = [0]
 
         def selective_chmod(path, mode, **kwargs):
-            calls[0] += 1
-            # Only fail on the .env chmod (second call or when mode == 0o600)
+            # Fail only on 0o600 (file chmod) — allow 0o700 (dir chmod).
             if mode == 0o600:
                 raise OSError("perm denied")
             return original_chmod(path, mode, **kwargs)
 
         monkeypatch.setattr(os, "chmod", selective_chmod)
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch.object(install_main, "_is_interactive_stdin", return_value=False),
+        ):
             install_main.main([])
 
-        assert (install_dir / ".env").exists()
+        settings_path = tmp_path / "home" / ".claude" / "settings.json"
+        assert settings_path.exists()
 
 
 class TestCleanInstallDirCollision:
     def test_existing_subdir_removed(self, tmp_path):
         from core.cli import install_main
+
         src = _setup_fake_source(tmp_path)
         install_dir = tmp_path / "install"
         install_dir.mkdir()
@@ -250,29 +238,13 @@ class TestCleanInstallDirCollision:
         assert (install_dir / "core" / "__init__.py").exists()
 
 
-class TestMergeEnvWithComments:
-    def test_merge_skips_comment_lines_in_new_keys(self, tmp_path):
-        from core.cli.install_main import _merge_env
-        env = tmp_path / ".env"
-        env.write_text("EXISTING=old\n")
-        example = tmp_path / ".env.example"
-        example.write_text(
-            "# This is a comment\n"
-            "EXISTING=\n"
-            "\n"
-            "NEW_KEY=\n"
-            "# Another comment\n"
-        )
-        _merge_env(env, example)
-        content = env.read_text()
-        assert "NEW_KEY=" in content
-        # Comments not copied
-        assert "This is a comment" not in content
+# TestMergeEnvWithComments removed — see note above TestSourceAndInstallDir.
 
 
 class TestPrompt:
     def test_prompt_wraps_input(self):
         from core.cli.install_main import _prompt
+
         with patch("builtins.input", return_value="user-response"):
             result = _prompt("Question: ")
         assert result == "user-response"
@@ -281,6 +253,7 @@ class TestPrompt:
 class TestInstallNoEnvExample:
     def test_no_env_example(self, tmp_path):
         from core.cli import install_main
+
         src = tmp_path / "source"
         src.mkdir()
         (src / "SKILL.md").write_text("# SKILL")
@@ -288,8 +261,10 @@ class TestInstallNoEnvExample:
         # no .env.example
         install_dir = tmp_path / "install"
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+        ):
             install_main.main([])
 
         assert (install_dir / "SKILL.md").exists()
@@ -318,11 +293,13 @@ class TestVenvWiring:
         (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
         install_dir = tmp_path / "install"
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
-             patch("core.cli.installer.venv.create_venv") as mock_create, \
-             patch("core.cli.installer.venv.install_requirements") as mock_install_req, \
-             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch("core.cli.installer.venv.create_venv") as mock_create,
+            patch("core.cli.installer.venv.install_requirements") as mock_install_req,
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+        ):
             install_main.main([])
 
         # Venv created at the expected path.
@@ -344,11 +321,15 @@ class TestVenvWiring:
         (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
         install_dir = tmp_path / "install"
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
-             patch("core.cli.installer.venv.create_venv"), \
-             patch("core.cli.installer.venv.install_requirements"), \
-             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0") as mock_verify:
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch("core.cli.installer.venv.create_venv"),
+            patch("core.cli.installer.venv.install_requirements"),
+            patch(
+                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
+            ) as mock_verify,
+        ):
             install_main.main([])
 
         mock_verify.assert_called_once_with(install_dir / ".venv")
@@ -365,11 +346,15 @@ class TestVenvWiring:
         (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
         install_dir = tmp_path / "install"
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
-             patch("core.cli.installer.venv.create_venv"), \
-             patch("core.cli.installer.venv.install_requirements",
-                   side_effect=InstallError("pip exit 1")):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch("core.cli.installer.venv.create_venv"),
+            patch(
+                "core.cli.installer.venv.install_requirements",
+                side_effect=InstallError("pip exit 1"),
+            ),
+        ):
             install_main.main([])
 
         # File copy still happened.
@@ -388,11 +373,13 @@ class TestVenvWiring:
         (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
         install_dir = tmp_path / "install"
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
-             patch("core.cli.installer.venv.create_venv"), \
-             patch("core.cli.installer.venv.install_requirements"), \
-             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch("core.cli.installer.venv.create_venv"),
+            patch("core.cli.installer.venv.install_requirements"),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+        ):
             install_main.main([])
 
         captured = capsys.readouterr()
@@ -409,9 +396,11 @@ class TestVenvWiring:
         # by default.
         install_dir = tmp_path / "install"
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
-             patch("core.cli.installer.venv.create_venv") as mock_create:
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch("core.cli.installer.venv.create_venv") as mock_create,
+        ):
             install_main.main([])
 
         mock_create.assert_not_called()
@@ -443,12 +432,14 @@ class TestVenvPreservation:
         (install_dir / ".venv").mkdir()
         (install_dir / ".venv" / "marker").write_text("preserved")
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
-             patch.object(install_main, "_prompt", return_value="o"), \
-             patch("core.cli.installer.venv.create_venv") as mock_create, \
-             patch("core.cli.installer.venv.install_requirements"), \
-             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch.object(install_main, "_prompt", return_value="o"),
+            patch("core.cli.installer.venv.create_venv") as mock_create,
+            patch("core.cli.installer.venv.install_requirements"),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+        ):
             install_main.main([])
 
         # The .venv marker must still exist after overwrite.
@@ -469,11 +460,13 @@ class TestVenvPreservation:
         (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
         install_dir = tmp_path / "install"
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
-             patch("core.cli.installer.venv.create_venv") as mock_create, \
-             patch("core.cli.installer.venv.install_requirements"), \
-             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch("core.cli.installer.venv.create_venv") as mock_create,
+            patch("core.cli.installer.venv.install_requirements"),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+        ):
             install_main.main([])
 
         mock_create.assert_called_once()
@@ -496,15 +489,214 @@ class TestVenvPreservation:
         (install_dir / ".venv").mkdir()
         (install_dir / ".venv" / "marker").write_text("keep")
 
-        with patch.object(install_main, "_get_source_dir", return_value=src), \
-             patch.object(install_main, "_get_install_dir", return_value=install_dir), \
-             patch.object(install_main, "_prompt", return_value="o"), \
-             patch("core.cli.installer.venv.create_venv"), \
-             patch("core.cli.installer.venv.install_requirements"), \
-             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"):
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch.object(install_main, "_prompt", return_value="o"),
+            patch("core.cli.installer.venv.create_venv"),
+            patch("core.cli.installer.venv.install_requirements"),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+        ):
             install_main.main([])
 
         # The stale subdir must be gone (rmtree branch).
         assert not (install_dir / "old_subdir").exists()
         # The venv must still be there.
         assert (install_dir / ".venv" / "marker").read_text() == "keep"
+
+
+# TestOverlayBufferOnSettings removed — the Phase 5 squash review
+# collapsed the two-step merge + overlay design into a single
+# atomic write via the ``pre_resolved`` kwarg on merge_settings_env.
+# The overlay helper no longer exists.
+
+
+class TestSettingsJsonWiring:
+    """Phase 5 follow-up: install_main calls api_key_prompt +
+    merge_settings_env + migrate_legacy_env_to_settings in the
+    correct order with a real tmp settings.json path."""
+
+    def test_settings_merge_runs_after_venv_setup(self, tmp_path, monkeypatch):
+        """End-to-end: install into tmp_path with a tmp HOME so we
+        never touch the real ~/.claude/settings.json. Assert the
+        merge helpers produced a file with the default keys."""
+        import json
+        from core.cli import install_main
+
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        (tmp_path / "home" / ".claude").mkdir(parents=True)
+
+        src = _setup_fake_source(tmp_path)
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = tmp_path / "install"
+
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch("core.cli.installer.venv.create_venv"),
+            patch("core.cli.installer.venv.install_requirements"),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+            patch.object(install_main, "_is_interactive_stdin", return_value=False),
+        ):
+            # yes=False but non-interactive stdin → auto-skip prompts.
+            install_main.main([])
+
+        settings_path = tmp_path / "home" / ".claude" / "settings.json"
+        assert settings_path.exists()
+        data = json.loads(settings_path.read_text())
+        # Every default key must be present in env.
+        assert "env" in data
+        assert "GEMINI_API_KEY" in data["env"]
+        assert data["env"]["GEMINI_IS_SDK_PRIORITY"] == "true"
+        assert data["env"]["GEMINI_IS_RAWHTTP_PRIORITY"] == "false"
+        assert data["env"]["GEMINI_LIVE_TESTS"] == "0"
+
+    def test_malformed_settings_json_raises_hard(self, tmp_path, monkeypatch, capsys):
+        """A malformed ~/.claude/settings.json causes the install to
+        abort — SettingsFileCorrupted is re-raised from
+        ``_setup_user_settings`` so the user's corrupted file is
+        never silently tolerated. File copy stays intact (happened
+        before the error)."""
+        from core.cli import install_main
+        from core.cli.installer.settings_merge import SettingsFileCorrupted
+
+        home = tmp_path / "home"
+        monkeypatch.setenv("HOME", str(home))
+        (home / ".claude").mkdir(parents=True)
+        (home / ".claude" / "settings.json").write_text("not json {")
+
+        src = _setup_fake_source(tmp_path)
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = tmp_path / "install"
+
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch("core.cli.installer.venv.create_venv"),
+            patch("core.cli.installer.venv.install_requirements"),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+            patch.object(install_main, "_is_interactive_stdin", return_value=False),
+        ):
+            with pytest.raises(SettingsFileCorrupted):
+                install_main.main([])
+
+        captured = capsys.readouterr()
+        assert "[ERROR]" in captured.out
+        assert "settings.json" in captured.out
+        # File copy still happened before the error bubbled up.
+        assert (install_dir / "SKILL.md").exists()
+
+    def test_generic_install_error_is_demoted_to_warn(self, tmp_path, monkeypatch, capsys):
+        """A non-abort, non-corrupted InstallError (e.g. a helper
+        raising because of an unexpected edge case) is caught by the
+        generic except clause and demoted to a [WARN] line so the
+        rest of the install still completes."""
+        from core.cli import install_main
+        from core.cli.installer.venv import InstallError
+
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        (tmp_path / "home" / ".claude").mkdir(parents=True)
+
+        src = _setup_fake_source(tmp_path)
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = tmp_path / "install"
+
+        # Force merge_settings_env to raise a plain InstallError that
+        # is neither SettingsFileCorrupted nor InstallAborted — that
+        # takes the catch-all branch.
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch("core.cli.installer.venv.create_venv"),
+            patch("core.cli.installer.venv.install_requirements"),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+            patch.object(install_main, "_is_interactive_stdin", return_value=False),
+            patch(
+                "core.cli.install_main.merge_settings_env",
+                side_effect=InstallError("unexpected edge case"),
+            ),
+        ):
+            install_main.main([])
+
+        captured = capsys.readouterr()
+        assert "[WARN]" in captured.out
+        assert "unexpected edge case" in captured.out
+        # File copy still completed.
+        assert (install_dir / "SKILL.md").exists()
+
+    def test_user_quit_during_prompt_raises_hard(self, tmp_path, monkeypatch, capsys):
+        """If the user chooses ``q`` during a conflict prompt, the
+        install exits non-zero. The quit must NOT be demoted to a
+        warning."""
+        import json as _json
+        from core.cli import install_main
+        from core.cli.installer.settings_merge import InstallAborted
+
+        home = tmp_path / "home"
+        monkeypatch.setenv("HOME", str(home))
+        (home / ".claude").mkdir(parents=True)
+        # Pre-existing settings.json with a conflict so the prompt fires.
+        (home / ".claude" / "settings.json").write_text(
+            _json.dumps({"env": {"GEMINI_IS_SDK_PRIORITY": "false"}})
+        )
+
+        src = _setup_fake_source(tmp_path)
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = tmp_path / "install"
+
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch("core.cli.installer.venv.create_venv"),
+            patch("core.cli.installer.venv.install_requirements"),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+            patch.object(install_main, "_is_interactive_stdin", return_value=True),
+            # The API-key prompt runs before the generic merge. Leave
+            # the key empty so it doesn't matter, then script the
+            # input() calls: the first is the u/k choice (absent-key
+            # path skips this), getpass returns empty, and then the
+            # conflict prompt for GEMINI_IS_SDK_PRIORITY gets "q".
+            patch("getpass.getpass", return_value=""),
+            patch("builtins.input", return_value="q"),
+        ):
+            with pytest.raises(InstallAborted):
+                install_main.main([])
+
+        captured = capsys.readouterr()
+        assert "[ABORT]" in captured.out
+
+    def test_legacy_env_is_migrated(self, tmp_path, monkeypatch):
+        """If a legacy ~/.claude/skills/gemini/.env exists at install
+        time, its values are merged into settings.json and the file
+        is offered for deletion (auto-deleted in non-interactive)."""
+        import json
+        from core.cli import install_main
+
+        home = tmp_path / "home"
+        monkeypatch.setenv("HOME", str(home))
+        (home / ".claude" / "skills" / "gemini").mkdir(parents=True)
+        legacy_env = home / ".claude" / "skills" / "gemini" / ".env"
+        legacy_env.write_text("GEMINI_LIVE_TESTS=1\n")
+
+        src = _setup_fake_source(tmp_path)
+        (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
+        install_dir = home / ".claude" / "skills" / "gemini"
+
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch.object(install_main, "_prompt", return_value="o"),
+            patch("core.cli.installer.venv.create_venv"),
+            patch("core.cli.installer.venv.install_requirements"),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+            patch.object(install_main, "_is_interactive_stdin", return_value=False),
+        ):
+            install_main.main([])
+
+        # The legacy value was picked up by the migration and stored
+        # in settings.json env.
+        settings_path = home / ".claude" / "settings.json"
+        data = json.loads(settings_path.read_text())
+        assert data["env"]["GEMINI_LIVE_TESTS"] == "1"
+        # The legacy file was auto-deleted (non-interactive mode).
+        assert not legacy_env.exists()
