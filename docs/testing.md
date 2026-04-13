@@ -158,6 +158,36 @@ Exclude them from a normal unit-test run (they're already gated, this is just ex
 pytest -m "not live"
 ```
 
+### Dual-backend matrix (Phase 8)
+
+Every live test is backend-agnostic by design — the same assertions must pass whether the coordinator routes via the SDK backend or raw HTTP. Run the suite once per backend by flipping the two priority flags:
+
+```bash
+# SDK primary (default)
+GEMINI_LIVE_TESTS=1 GEMINI_API_KEY=... \
+  GEMINI_IS_SDK_PRIORITY=true GEMINI_IS_RAWHTTP_PRIORITY=false \
+  pytest tests/integration -m live
+
+# Raw HTTP primary
+GEMINI_LIVE_TESTS=1 GEMINI_API_KEY=... \
+  GEMINI_IS_SDK_PRIORITY=false GEMINI_IS_RAWHTTP_PRIORITY=true \
+  pytest tests/integration -m live
+```
+
+The matrix runs automatically on `workflow_dispatch` in CI via the
+`live-integration` job. It's intentionally gated to manual runs so
+PRs from forks can never exfiltrate the `GEMINI_API_KEY` secret.
+
+Both runs share the `tests/integration/conftest.py` helpers:
+- `runner_python` / `runner_script` / `repo_root` fixtures for consistent subprocess paths.
+- `backend_env` fixture builds an env dict the CI cell's priority flags propagate into.
+- `run_gemini(args, env=..., timeout=...)` centralized subprocess helper.
+- `current_primary_backend(env)` resolves the configured primary per the Config rules.
+
+Running both doubles the cost — for local iteration just pick one backend.
+To skip a specific expensive test (like image generation) inside a matrix
+run, use pytest's `-k 'not nano_banana'` filter.
+
 ### What each test does
 
 Each file is **self-contained** — no shared conftest, no cross-file state — and runs exactly **one** subprocess call to `scripts/gemini_run.py` with a minimal prompt.

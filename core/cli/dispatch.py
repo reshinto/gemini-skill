@@ -91,8 +91,13 @@ def main(argv: list[str]) -> None:
     # callers do not need to pass the dispatcher-only flag manually.
     normalized_args = _inject_privacy_opt_in_if_needed(command, remaining)
 
-    # Enforce registry-driven policy before invoking the adapter
-    _enforce_policy(command, normalized_args)
+    # ``--help`` / ``-h`` bypasses every policy gate. Argparse handles
+    # help rendering + exit; blocking help on mutating or privacy-
+    # sensitive commands would make those commands undiscoverable
+    # without first flipping flags users don't yet understand.
+    if "--help" not in normalized_args and "-h" not in normalized_args:
+        # Enforce registry-driven policy before invoking the adapter.
+        _enforce_policy(command, normalized_args)
 
     # Strip policy-only flags before handing off to the adapter
     adapter_args = [a for a in normalized_args if a != _PRIVACY_OPT_IN_FLAG]
@@ -201,13 +206,19 @@ def _is_mutating_invocation(cap: object, args: list[str]) -> bool:
 def _validate_adapter_protocol(command: str, adapter_module: ModuleType) -> None:
     """Verify an adapter module implements AdapterProtocol.
 
-    Checks for the presence of get_parser and run attributes. Exits
-    with a clear error if the contract is violated.
+    Every adapter needs ``get_parser``. Sync adapters expose ``run``;
+    async adapters (those declaring ``IS_ASYNC = True``) expose
+    ``run_async`` instead. Accepting either keeps the 19 existing
+    sync adapters unchanged while letting Phase 7's ``live`` adapter
+    declare only the async entry point.
     """
-    if not (hasattr(adapter_module, "get_parser") and hasattr(adapter_module, "run")):
+    has_parser = hasattr(adapter_module, "get_parser")
+    has_sync_run = hasattr(adapter_module, "run")
+    has_async_run = hasattr(adapter_module, "run_async")
+    if not has_parser or not (has_sync_run or has_async_run):
         safe_print(
             f"[ERROR] Adapter '{command}' does not implement AdapterProtocol. "
-            "Missing get_parser() or run()."
+            "Missing get_parser() or run()/run_async()."
         )
         sys.exit(1)
 
