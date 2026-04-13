@@ -16,13 +16,13 @@ Every test in this file mocks google.genai.Client. There is no live network.
 
 from __future__ import annotations
 
-from unittest import mock
+from collections.abc import Iterator
 
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def _reset_client_factory():
+def _reset_client_factory() -> Iterator[None]:
     """Drop the client_factory lru_cache so each test gets a fresh instance."""
     from core.transport.sdk import client_factory
 
@@ -34,17 +34,24 @@ def _reset_client_factory():
 class TestSdkTransportSkeleton:
     """The Transport-shape contract the coordinator relies on."""
 
-    def test_name_is_sdk(self):
+    def test_name_is_sdk(self) -> None:
         from core.transport.sdk.transport import SdkTransport
 
         assert SdkTransport.name == "sdk"
         assert SdkTransport().name == "sdk"
 
-    def test_satisfies_transport_protocol(self):
+    def test_satisfies_transport_protocol(self) -> None:
         from core.transport.base import Transport
         from core.transport.sdk.transport import SdkTransport
 
         assert isinstance(SdkTransport(), Transport)
+
+    def test_supported_capabilities_is_frozenset(self) -> None:
+        """Guard against future test authors swapping the registry for a
+        mutable ``set`` — the closed-world contract relies on immutability."""
+        from core.transport.sdk.transport import SdkTransport
+
+        assert isinstance(SdkTransport._SUPPORTED_CAPABILITIES, frozenset)
 
 
 class TestSdkTransportSupports:
@@ -77,7 +84,7 @@ class TestSdkTransportSupports:
             "deep_research",
         ],
     )
-    def test_supported_capabilities_return_true(self, capability):
+    def test_supported_capabilities_return_true(self, capability: str) -> None:
         from core.transport.sdk.transport import SdkTransport
 
         assert SdkTransport().supports(capability) is True
@@ -86,14 +93,30 @@ class TestSdkTransportSupports:
         "capability",
         ["maps", "music_gen", "computer_use", "file_search"],
     )
-    def test_unsupported_capabilities_return_false(self, capability):
+    def test_unsupported_capabilities_return_false(self, capability: str) -> None:
         """These four are not exposed by google-genai 1.33.0 — coordinator
         routes them deterministically to raw HTTP without probing the SDK."""
         from core.transport.sdk.transport import SdkTransport
 
         assert SdkTransport().supports(capability) is False
 
-    def test_unknown_capability_returns_false(self):
+    @pytest.mark.parametrize(
+        "capability",
+        [
+            "nonexistent-capability-xyz",
+            "",  # empty string must not bypass the closed-world default
+            "TEXT",  # case-sensitivity guard — uppercase aliases are NOT supported
+            "text ",  # trailing whitespace must not match "text"
+            " text",  # leading whitespace must not match "text"
+            "text\x00",  # null byte injection guard
+        ],
+    )
+    def test_adversarial_capability_strings_return_false(self, capability: str) -> None:
+        """Closed-world default: anything not exactly in the registry returns
+        False, including empty strings, case mismatches, whitespace-padded
+        values, and null-byte-suffixed strings. This is the routing-bypass
+        guard that keeps the coordinator's deterministic-fallback contract
+        from being subverted by sloppy capability strings."""
         from core.transport.sdk.transport import SdkTransport
 
-        assert SdkTransport().supports("nonexistent-capability-xyz") is False
+        assert SdkTransport().supports(capability) is False

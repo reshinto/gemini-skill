@@ -135,7 +135,12 @@ class SdkTransport:
             True if ``capability`` is in ``_SUPPORTED_CAPABILITIES``,
             False otherwise (including unknown capability names).
         """
-        return capability in self._SUPPORTED_CAPABILITIES
+        # Access the registry through the class object, not ``self``. The
+        # frozenset is a class-level constant; going through ``self`` would
+        # make a future subclass that shadows the attribute silently bypass
+        # the contract this method enforces. Class-direct access also
+        # mirrors the canonical plan's pseudocode verbatim.
+        return capability in SdkTransport._SUPPORTED_CAPABILITIES
 
     # ------------------------------------------------------------------
     # Transport protocol methods (stubs filled in by Phase 2 slices 2b/2c)
