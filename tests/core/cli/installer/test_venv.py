@@ -54,18 +54,24 @@ class TestCreateVenv:
         from core.cli.installer.venv import create_venv
 
         target = tmp_path / "skill" / ".venv"
-        with mock.patch("core.cli.installer.venv.venv.EnvBuilder") as MockBuilder:
-            mock_instance = mock.Mock()
-            MockBuilder.return_value = mock_instance
+        fake_python = "/usr/local/bin/python3.13"
+
+        with (
+            mock.patch(
+                "core.cli.installer.venv._preferred_bootstrap_python",
+                return_value=[fake_python],
+            ),
+            mock.patch("core.cli.installer.venv.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = mock.Mock(returncode=0, stdout="", stderr="")
             create_venv(target)
 
-        # EnvBuilder must be constructed with pip enabled so the venv
-        # can install the runtime dependency without an extra step.
-        MockBuilder.assert_called_once()
-        kwargs = MockBuilder.call_args.kwargs
-        assert kwargs.get("with_pip") is True
-        # And the create() call must point at the target path.
-        mock_instance.create.assert_called_once_with(str(target))
+        assert target.parent.exists()
+        mock_run.assert_called_once_with(
+            [fake_python, "-m", "venv", str(target)],
+            capture_output=True,
+            text=True,
+        )
 
     def test_creates_parent_directory_if_missing(self, tmp_path: Path) -> None:
         """The skill install dir is the parent of .venv. The installer
@@ -75,9 +81,16 @@ class TestCreateVenv:
         from core.cli.installer.venv import create_venv
 
         target = tmp_path / "fresh" / "skill" / ".venv"
-        with mock.patch("core.cli.installer.venv.venv.EnvBuilder") as MockBuilder:
-            mock_instance = mock.Mock()
-            MockBuilder.return_value = mock_instance
+        fake_python = "/usr/local/bin/python3.13"
+
+        with (
+            mock.patch(
+                "core.cli.installer.venv._preferred_bootstrap_python",
+                return_value=[fake_python],
+            ),
+            mock.patch("core.cli.installer.venv.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = mock.Mock(returncode=0, stdout="", stderr="")
             create_venv(target)
 
         assert target.parent.exists()
@@ -138,7 +151,9 @@ class TestInstallRequirements:
         req.write_text("google-genai==1.33.0\n")
 
         with mock.patch("core.cli.installer.venv.subprocess.run") as mock_run:
-            mock_run.return_value = mock.Mock(returncode=1, stdout="", stderr="pip resolver error")
+            mock_run.return_value = mock.Mock(
+                returncode=1, stdout="", stderr="pip resolver error"
+            )
             with pytest.raises(InstallError, match="pip install failed"):
                 install_requirements(venv_dir, req)
 
@@ -158,7 +173,9 @@ class TestVerifySdkImportable:
 
         venv_dir = tmp_path / ".venv"
         with mock.patch("core.cli.installer.venv.subprocess.run") as mock_run:
-            mock_run.return_value = mock.Mock(returncode=0, stdout="1.33.0\n", stderr="")
+            mock_run.return_value = mock.Mock(
+                returncode=0, stdout="1.33.0\n", stderr=""
+            )
             version = verify_sdk_importable(venv_dir)
 
         assert version == "1.33.0"
@@ -181,7 +198,9 @@ class TestVerifySdkImportable:
             with pytest.raises(InstallError, match="SDK not importable"):
                 verify_sdk_importable(venv_dir)
 
-    def test_probe_asserts_import_resolved_from_inside_venv(self, tmp_path: Path) -> None:
+    def test_probe_asserts_import_resolved_from_inside_venv(
+        self, tmp_path: Path
+    ) -> None:
         """Defense in depth: the probe code must include an assertion
         that ``sys.executable`` (inside the venv subprocess) lives
         under the venv path. Otherwise a buggy venv setup that fell

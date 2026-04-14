@@ -12,7 +12,7 @@ Dependencies: core/infra/sanitize.py, core/cli/installer/*.
 
 from __future__ import annotations
 
-import os
+import subprocess
 import shutil
 import sys
 from pathlib import Path
@@ -91,7 +91,9 @@ def main(
     interactive = _is_interactive_stdin()
 
     resolved_source_dir = source_dir if source_dir is not None else _get_source_dir()
-    resolved_install_dir = install_dir if install_dir is not None else _get_install_dir()
+    resolved_install_dir = (
+        install_dir if install_dir is not None else _get_install_dir()
+    )
 
     if resolved_install_dir.exists():
         safe_print(f"Skill already installed at {resolved_install_dir}")
@@ -261,13 +263,22 @@ def _setup_venv(install_dir: Path) -> str | None:
     from core.cli.installer.venv import InstallError
 
     try:
-        # Preserve an existing venv across overwrite installs — only
-        # create when the target doesn't already exist. This is the
-        # other half of the venv-preservation contract: the file copy
-        # leaves .venv untouched (see _clean_install_dir_preserve_venv)
-        # AND the venv setup step doesn't blow it away by recreating.
+        # If an existing venv is present but its interpreter is broken,
+        # delete it and recreate from scratch instead of preserving
+        # permanent broken state across reinstalls.
+        if venv_target.exists():
+            python_bin = venv_helper.venv_python_path(venv_target)
+            probe = subprocess.run(
+                [str(python_bin), "-V"],
+                capture_output=True,
+                text=True,
+            )
+            if probe.returncode != 0:
+                shutil.rmtree(venv_target, ignore_errors=True)
+
         if not venv_target.exists():
             venv_helper.create_venv(venv_target)
+
         venv_helper.install_requirements(venv_target, requirements)
         return venv_helper.verify_sdk_importable(venv_target)
     except InstallError as exc:
@@ -395,7 +406,9 @@ def _write_install_manifest(install_dir: Path) -> None:
     files = _iter_manifest_files(install_dir)
     manifest = generate_checksums(install_dir, files)
     write_checksums_file(manifest, manifest_path)
-    safe_print(f"Install manifest written: {len(manifest)} files in {_CHECKSUMS_FILENAME}")
+    safe_print(
+        f"Install manifest written: {len(manifest)} files in {_CHECKSUMS_FILENAME}"
+    )
 
 
 def verify_install_integrity(install_dir: Path) -> list[str]:
