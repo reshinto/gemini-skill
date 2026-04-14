@@ -144,9 +144,7 @@ class TestConfigSaving:
         assert "is_sdk_priority" not in on_disk
         assert "is_rawhttp_priority" not in on_disk
 
-    @pytest.mark.skipif(
-        os.name == "nt", reason="POSIX permissions not available on Windows"
-    )
+    @pytest.mark.skipif(os.name == "nt", reason="POSIX permissions not available on Windows")
     def test_save_sets_secure_permissions(self, tmp_path):
         from core.infra.config import load_config, save_config
 
@@ -335,9 +333,7 @@ class TestParseBoolEnv:
             assert _parse_bool_env("ANY_FLAG", default=True) is True
             assert _parse_bool_env("ANY_FLAG", default=False) is False
 
-    @pytest.mark.parametrize(
-        "raw", ["true", "True", "TRUE", "1", "yes", "Yes", " true "]
-    )
+    @pytest.mark.parametrize("raw", ["true", "True", "TRUE", "1", "yes", "Yes", " true "])
     def test_truthy_values(self, raw):
         from core.infra.config import _parse_bool_env
 
