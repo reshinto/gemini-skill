@@ -191,6 +191,156 @@ def _wrap_sdk_errors() -> Iterator[None]:
         raise APIError(sanitize(str(exc)), status_code=0) from None
 
 
+# ----------------------------------------------------------------------
+# Module-level body translation helpers (shared by sync + async transports)
+# ----------------------------------------------------------------------
+#
+# These helpers are pure functions — they never touch the SDK client
+# instance, they just reshape legacy REST-style body dicts into the
+# kwargs google-genai expects. They live at module level (not on the
+# class) for two reasons:
+#
+# 1. ``SdkAsyncTransport`` in ``async_transport.py`` needs exactly these
+#    transformations for every call. Calling them as module-level
+#    functions avoids instantiating a throwaway ``SdkTransport()`` on
+#    every async hot-path dispatch — which was the pattern before the
+#    Phase 11 extraction and which the python review flagged as HIGH.
+#
+# 2. Pure functions are trivially unit-testable in isolation without
+#    constructing a transport instance (which would eagerly call
+#    ``get_client()`` and try to import google.genai).
+#
+# The class methods below (``SdkTransport._build_generate_content_kwargs``
+# etc.) remain as thin delegators so existing test code that calls
+# ``instance._build_*`` keeps working — a single source of truth with
+# backward compatibility.
+
+
+def _build_generate_content_kwargs(
+    body: dict[str, object],
+) -> tuple[object, object | None]:
+    """Translate a legacy generateContent body into (contents, config).
+
+    The legacy body uses camelCase top-level keys. google-genai's
+    ``GenerateContentConfig`` declares aliases for every camelCase
+    REST field (verified at the pinned 1.33.0 version), so we can
+    ``model_validate(camelCase_dict)`` directly — pydantic accepts
+    either form because the model has ``populate_by_name=True``.
+
+    The four top-level *sibling* keys (``systemInstruction``, ``tools``,
+    ``safetySettings``, ``cachedContent``) plus the nested
+    ``generationConfig`` dict are folded into a single dict before
+    validation because the SDK puts them all on ``GenerateContentConfig``.
+
+    Args:
+        body: Legacy REST-shaped request body (camelCase keys).
+
+    Returns:
+        A 2-tuple of (contents, config) ready to pass to
+        ``client.models.generate_content`` or its async twin. ``config``
+        is ``None`` when the body carries no generation config at all.
+    """
+    contents = body.get("contents", [])
+
+    # Start from the nested generationConfig dict (if present) and
+    # fold in the four sibling keys the SDK expects on the same config.
+    cfg_dict: dict[str, object] = {}
+    gen_cfg = body.get("generationConfig")
+    if isinstance(gen_cfg, dict):
+        cfg_dict.update(gen_cfg)
+    for sibling in ("systemInstruction", "tools", "safetySettings", "cachedContent"):
+        if sibling in body:
+            cfg_dict[sibling] = body[sibling]
+
+    if not cfg_dict:
+        return contents, None
+
+    # Lazy import — keeps the module importable without google-genai.
+    from google.genai import types
+
+    config = types.GenerateContentConfig.model_validate(cfg_dict)
+    return contents, config
+
+
+def _build_embed_content_config(body: dict[str, object]) -> object | None:
+    """Build an EmbedContentConfig from legacy body fields.
+
+    Args:
+        body: Legacy REST-shaped embed request body.
+
+    Returns:
+        An ``EmbedContentConfig`` instance, or ``None`` if the body
+        carries no embed-specific config keys.
+    """
+    cfg_dict: dict[str, object] = {}
+    if "outputDimensionality" in body:
+        cfg_dict["outputDimensionality"] = body["outputDimensionality"]
+    if "taskType" in body:
+        cfg_dict["taskType"] = body["taskType"]
+    if not cfg_dict:
+        return None
+    from google.genai import types
+
+    return types.EmbedContentConfig.model_validate(cfg_dict)
+
+
+def _extract_video_prompt(body: dict[str, object]) -> str:
+    """Extract the prompt string from a Veo predictLongRunning body.
+
+    The vertex-style body shape is ``{"instances": [{"prompt": "..."}]}``,
+    which the legacy adapter passes through unchanged. Falls back to a
+    top-level ``prompt`` key if the instances wrapper is missing.
+
+    Args:
+        body: Legacy REST-shaped Veo request body.
+
+    Returns:
+        The prompt string, or an empty string if no prompt is present.
+    """
+    instances = body.get("instances")
+    if isinstance(instances, list) and instances:
+        first = instances[0]
+        if isinstance(first, dict):
+            prompt = first.get("prompt")
+            if isinstance(prompt, str):
+                return prompt
+    # Fallback: top-level prompt key
+    prompt = body.get("prompt")
+    if isinstance(prompt, str):
+        return prompt
+    return ""
+
+
+def _wrap_collection(key: str, items: object) -> GeminiResponse:
+    """Normalize a list-returning SDK call into ``{<key>: [<items>]}``.
+
+    ``client.files.list()`` and friends return an iterable of pydantic
+    File objects; the legacy raw HTTP backend returns
+    ``{"files": [<dict>, ...]}``. This helper bridges the two shapes.
+
+    Args:
+        key: The envelope key (e.g. ``"files"``, ``"cachedContents"``).
+        items: The iterable returned by the SDK collection call.
+
+    Returns:
+        A ``GeminiResponse``-typed dict with ``key`` mapped to a list
+        of normalized envelope dicts. Returns ``{key: []}`` if ``items``
+        is not iterable.
+    """
+    result: list[dict[str, object]] = []
+    # Use hasattr() to check iterability instead of try/except TypeError
+    # so a TypeError raised for ANOTHER reason (e.g. a future SDK signature
+    # change inside the items object) propagates naturally instead of being
+    # silently swallowed and returned as an empty list.
+    if not hasattr(items, "__iter__"):
+        return cast(GeminiResponse, {key: []})
+    iterator = iter(items)
+    for item in iterator:
+        envelope = sdk_response_to_rest_envelope(item)
+        result.append(cast(dict[str, object], envelope))
+    return cast(GeminiResponse, {key: result})
+
+
 class SdkTransport:
     """google-genai SDK backend implementing the ``Transport`` protocol.
 
@@ -573,98 +723,26 @@ class SdkTransport:
     def _build_generate_content_kwargs(
         self, body: dict[str, object]
     ) -> tuple[object, object | None]:
-        """Translate a legacy generateContent body into (contents, config).
+        """Delegate to the module-level ``_build_generate_content_kwargs``.
 
-        The legacy body uses camelCase top-level keys. google-genai's
-        ``GenerateContentConfig`` declares aliases for every camelCase
-        REST field (verified at the pinned 1.33.0 version), so we can
-        ``model_validate(camelCase_dict)`` directly — pydantic accepts
-        either form because the model has ``populate_by_name=True``.
-
-        The four top-level *sibling* keys (``systemInstruction``, ``tools``,
-        ``safetySettings``, ``cachedContent``) plus the nested
-        ``generationConfig`` dict are folded into a single dict before
-        validation because the SDK puts them all on ``GenerateContentConfig``.
+        Kept as a thin instance method so existing callers that hold an
+        ``SdkTransport`` reference (tests, shim code) still work after
+        the Phase 11 extraction to module level. See the module-level
+        function for the actual implementation.
         """
-        contents = body.get("contents", [])
-
-        # Start from the nested generationConfig dict (if present) and
-        # fold in the four sibling keys the SDK expects on the same config.
-        cfg_dict: dict[str, object] = {}
-        gen_cfg = body.get("generationConfig")
-        if isinstance(gen_cfg, dict):
-            cfg_dict.update(gen_cfg)
-        for sibling in ("systemInstruction", "tools", "safetySettings", "cachedContent"):
-            if sibling in body:
-                cfg_dict[sibling] = body[sibling]
-
-        if not cfg_dict:
-            return contents, None
-
-        # Lazy import — keeps the module importable without google-genai.
-        from google.genai import types
-
-        config = types.GenerateContentConfig.model_validate(cfg_dict)
-        return contents, config
+        return _build_generate_content_kwargs(body)
 
     def _build_embed_content_config(self, body: dict[str, object]) -> object | None:
-        """Build an EmbedContentConfig from legacy body fields."""
-        cfg_dict: dict[str, object] = {}
-        if "outputDimensionality" in body:
-            cfg_dict["outputDimensionality"] = body["outputDimensionality"]
-        if "taskType" in body:
-            cfg_dict["taskType"] = body["taskType"]
-        if not cfg_dict:
-            return None
-        from google.genai import types
-
-        return types.EmbedContentConfig.model_validate(cfg_dict)
+        """Delegate to the module-level ``_build_embed_content_config``."""
+        return _build_embed_content_config(body)
 
     def _extract_video_prompt(self, body: dict[str, object]) -> str:
-        """Extract the prompt string from a Veo predictLongRunning body.
-
-        The vertex-style body shape is ``{"instances": [{"prompt": "..."}]}``,
-        which the legacy adapter passes through unchanged.
-        """
-        instances = body.get("instances")
-        if isinstance(instances, list) and instances:
-            first = instances[0]
-            if isinstance(first, dict):
-                prompt = first.get("prompt")
-                if isinstance(prompt, str):
-                    return prompt
-        # Fallback: top-level prompt key
-        prompt = body.get("prompt")
-        if isinstance(prompt, str):
-            return prompt
-        return ""
+        """Delegate to the module-level ``_extract_video_prompt``."""
+        return _extract_video_prompt(body)
 
     def _wrap_collection(self, key: str, items: object) -> GeminiResponse:
-        """Normalize a list-returning SDK call into ``{<key>: [<items>]}``.
-
-        ``client.files.list()`` and friends return an iterable of pydantic
-        File objects; the legacy raw HTTP backend returns
-        ``{"files": [<dict>, ...]}``. This helper bridges the two shapes.
-        """
-        result: list[dict[str, object]] = []
-        # Use hasattr() to check iterability instead of try/except TypeError
-        # so a TypeError raised for ANOTHER reason (e.g. a future SDK signature
-        # change inside the items object) propagates naturally instead of being
-        # silently swallowed and returned as an empty list. The hasattr check
-        # is exactly the contract Python uses internally to decide if iter()
-        # will succeed for a non-builtin type.
-        if not hasattr(items, "__iter__"):
-            return cast(GeminiResponse, {key: []})
-        # ``items`` is typed ``object`` for the lazy-import-friendliness
-        # discussed at module top, but the hasattr() guard above proves
-        # to the human reader that ``iter()`` will not raise here. mypy
-        # cannot narrow object→Iterable from hasattr, so the call-overload
-        # ignore below stays.
-        iterator = iter(items)
-        for item in iterator:
-            envelope = sdk_response_to_rest_envelope(item)
-            result.append(cast(dict[str, object], envelope))
-        return cast(GeminiResponse, {key: result})
+        """Delegate to the module-level ``_wrap_collection``."""
+        return _wrap_collection(key, items)
 
     def stream_generate_content(
         self,

@@ -66,7 +66,13 @@ from core.transport.normalize import (
     sdk_stream_chunk_to_envelope,
 )
 from core.transport.sdk.client_factory import get_client
-from core.transport.sdk.transport import SdkTransport, _wrap_sdk_errors
+from core.transport.sdk.transport import (
+    SdkTransport,
+    _build_embed_content_config,
+    _build_generate_content_kwargs,
+    _extract_video_prompt,
+    _wrap_sdk_errors,
+)
 
 
 class SdkAsyncTransport:
@@ -171,14 +177,15 @@ class SdkAsyncTransport:
         action: str,
         body: dict[str, object],
     ) -> GeminiResponse:
-        """Await the right ``client.aio.models.*`` method for a model action."""
-        # Reuse the sync transport's body translation helpers — they are
-        # pure functions that don't touch the client, so they work equally
-        # well for sync and async call sites.
-        sync = SdkTransport()
+        """Await the right ``client.aio.models.*`` method for a model action.
 
+        Body translation uses the module-level helpers imported at the top
+        of this file — no ``SdkTransport`` instance is constructed on this
+        hot path. The helpers are stateless pure functions shared with the
+        sync transport (single source of truth).
+        """
         if action == "generateContent":
-            contents, config = sync._build_generate_content_kwargs(body)
+            contents, config = _build_generate_content_kwargs(body)
             sdk_resp = await client.aio.models.generate_content(  # type: ignore[attr-defined]
                 model=model, contents=contents, config=config
             )
@@ -192,14 +199,14 @@ class SdkAsyncTransport:
 
         if action == "embedContent":
             contents = body.get("content") or body.get("contents")
-            config = sync._build_embed_content_config(body)
+            config = _build_embed_content_config(body)
             sdk_resp = await client.aio.models.embed_content(  # type: ignore[attr-defined]
                 model=model, contents=contents, config=config
             )
             return sdk_response_to_rest_envelope(sdk_resp)
 
         if action == "predictLongRunning":
-            prompt = sync._extract_video_prompt(body)
+            prompt = _extract_video_prompt(body)
             sdk_resp = await client.aio.models.generate_videos(  # type: ignore[attr-defined]
                 model=model, prompt=prompt
             )
@@ -275,9 +282,8 @@ class SdkAsyncTransport:
         """
         client = get_client()
         body_dict: dict[str, object] = dict(body)
-        sync = SdkTransport()
         with _wrap_sdk_errors():
-            contents, config = sync._build_generate_content_kwargs(body_dict)
+            contents, config = _build_generate_content_kwargs(body_dict)
             sdk_iterator = client.aio.models.generate_content_stream(
                 model=model, contents=contents, config=config
             )

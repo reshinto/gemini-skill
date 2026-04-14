@@ -3198,3 +3198,604 @@ These test files become part of the TDD workflow: write them at step 14 (the `sc
 - [SKILL.md](SKILL.md) — interpreter path
 - [tests/core/infra/test_client.py](tests/core/infra/test_client.py) — regression anchor
 - [adapters/generation/text.py](adapters/generation/text.py) — representative adapter; smoke-test that adapter-level tests still pass unchanged
+
+---
+
+# Phase 11 — Post-merge QA hardening
+
+## Context
+
+Phase 10 landed the dual-backend refactor PR with **1191 pass / 24 skip / 0 fail**, `mypy --strict` clean on 26 files, and 98–99% branch coverage on the new transport surface. Three concrete follow-ups remain from reviewer feedback and the user's explicit post-merge QA request:
+
+- **Ban-`Any` verification + type-hygiene sweep** over the full tree (exploration found zero `Any` usage already — lock it in with a CI grep).
+- **100% line + branch coverage** target on the full production tree (`core/` + `adapters/` + `scripts/` + `setup/`). Current: 98.1% line / 95.6% branch. Gap is concrete and small.
+- **Deferred python review HIGH 2** — extract `SdkTransport` pure helpers to module level so `SdkAsyncTransport` stops instantiating a throwaway `SdkTransport()` on every hot-path call.
+- **Live integration matrix** under both backends (real Gemini API, `GEMINI_LIVE_TESTS=1`).
+- **Manual clean-HOME install smoke test** to exercise the installer end-to-end against a fresh user environment.
+
+This phase is pure QA + polish — no new features, no architectural changes. Goal is a tree that passes every quality gate strictly (no warnings, no gaps) before the PR merges.
+
+## Execution order
+
+The phase is broken into **seven** sub-steps executed sequentially (11.-1 → 11.0 → 11.1 → 11.2 → 11.3 → 11.4 → 11.5). Each has its own exit gate. Do NOT start step N+1 until step N's gate is green. Step 11.-1 (CI fix) is blocking and must land first because every later step depends on green CI to merge.
+
+### 11.-1 — Fix red CI unit-test job (≤10 min, blocking)
+
+Goal: the `test` job on [.github/workflows/ci.yml](.github/workflows/ci.yml) is currently failing with `ModuleNotFoundError: No module named 'pydantic'` during pytest's warning-filter resolution. This must be fixed before any other Phase 11 work lands because subsequent phases need green CI to merge.
+
+**Root cause**: the `test` job's "Install dev dependencies" step only installs `setup/requirements-dev.txt`. It does NOT install `setup/requirements.txt` (the pinned `google-genai==1.33.0` runtime dep). Tests use `Mock(spec=genai.Client)` which requires `import google.genai` to succeed, and `setup/pytest.ini` declares a `filterwarnings` entry that references `pydantic.warnings.PydanticDeprecatedSince212` — pydantic ships as a transitive dep of google-genai, so installing runtime reqs resolves both. This is CR-6 from the original plan ("CI installs google-genai BEFORE Phase 2") which was never actually committed.
+
+**Fix** — [.github/workflows/ci.yml](.github/workflows/ci.yml) lines 30-33, extend the `test` job:
+
+```yaml
+      - name: Install runtime + dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r setup/requirements.txt
+          pip install -r setup/requirements-dev.txt
+```
+
+(Rename step label from "Install dev dependencies" → "Install runtime + dev dependencies" for clarity and parity with the `live-integration` job which already does this correctly at lines 83-86.)
+
+**Do NOT**:
+- Remove the `filterwarnings` entry from `setup/pytest.ini` — it exists to silence a real deprecation warning from `google-genai`'s pydantic usage, and removing it would pollute every test run with the warning.
+- Replace the typed warning filter with a loose `ignore::DeprecationWarning` — we want the narrow filter so other unrelated deprecations still surface.
+
+**Verification** (locally):
+```bash
+# Simulate the CI job's pinned environment
+python3 -m venv /tmp/ci-parity-venv
+source /tmp/ci-parity-venv/bin/activate
+pip install --upgrade pip
+pip install -r setup/requirements.txt
+pip install -r setup/requirements-dev.txt
+pytest -c setup/pytest.ini --tb=short 2>&1 | tail -10
+# Must show "1191 passed, 24 skipped" (or current baseline) with exit 0
+deactivate
+rm -rf /tmp/ci-parity-venv
+```
+
+**Exit gate**:
+- `.github/workflows/ci.yml` test job's install step includes both requirements files
+- CI re-run on the refactor branch goes green (verify in GitHub Actions tab)
+- Commit: `fix(ci): install google-genai runtime dep in unit test job`
+
+### 11.0 — Naming-hygiene sweep (≤45 min)
+
+Goal: enforce the "no single-character or cryptic abbreviations" rule across all production code. Every loop variable, except clause, lambda parameter, and local binding must use a descriptive, full-word name. This rule also applies to *every new file* written in Phase 11 — no exceptions.
+
+**Rule (applies to both this sweep and all future Phase 11 code):**
+
+- Banned: single-character names (`p`, `e`, `f`, `a`, `w`, `x`, `n`, `i`, `k`, `v`, `m`, `d`, ...) anywhere except `_` (intentional discard).
+- Banned: cryptic prefixed abbreviations (`p1`, `ch`, `tmp_p`, `mk_p`, `create_p`, `nxt`, `cfg_p`, `bkt`, ...). "config" not "cfg", "bucket" not "bkt", "temporary_path" not "tmp_p".
+- Allowed: full-word names where meaning is obvious from context (`entry`, `item`, `record`, `path`, `chunk`, `part`, `error`, `line`, `candidate`, `segment`, `option`, `token`, `config`, `response`, `request`).
+- Allowed: established Python idioms where the scope is tiny and context is unambiguous in isolated mathematical or indexing contexts — **but prefer descriptive names even then**. For example: `for index, value in enumerate(items)` is fine; `for i, v in enumerate(items)` is not.
+- Tests are in scope too. The same rule applies.
+
+**Inventory of current violations in production code** (from the Phase 11 read-only sweep; non-exhaustive — implementer must re-scan before applying):
+
+| File | Line | Current | Proposed |
+|---|---|---|---|
+| [core/state/session_state.py:131](core/state/session_state.py#L131) | `sorted(p.stem for p in self._dir.glob("*.json"))` | `sorted(path.stem for path in self._dir.glob("*.json"))` |
+| [core/state/session_state.py:138](core/state/session_state.py#L138) | `max(sessions, key=lambda p: p.stat().st_mtime)` | `max(sessions, key=lambda session_path: session_path.stat().st_mtime)` |
+| [core/cli/installer/api_key_prompt.py:155](core/cli/installer/api_key_prompt.py#L155) | `for w in caught:` | `for warning in caught:` |
+| [core/cli/dispatch.py:103](core/cli/dispatch.py#L103) | `[a for a in normalized_args if a != _PRIVACY_OPT_IN_FLAG]` | `[arg for arg in normalized_args if arg != _PRIVACY_OPT_IN_FLAG]` |
+| [core/infra/sanitize.py:52](core/infra/sanitize.py#L52) | `" ".join(str(a) for a in args)` | `" ".join(str(arg) for arg in args)` |
+| [core/infra/config.py:211](core/infra/config.py#L211) | `{f.name for f in dataclasses.fields(cfg)} - {...}` | `{field.name for field in dataclasses.fields(cfg)} - {...}`; also rename local `cfg` → `config` |
+| [core/cli/health_main.py:123,135](core/cli/health_main.py#L123) | `except Exception as e:` | `except Exception as error:` (2 sites) |
+| [core/cli/update_main.py:46](core/cli/update_main.py#L46) | `except Exception as e:` | `except Exception as error:` |
+| [core/auth/auth.py:156](core/auth/auth.py#L156) | `except HTTPError as e:` | `except HTTPError as http_error:` (match to context) |
+| [core/transport/raw_http/client.py:311](core/transport/raw_http/client.py#L311) | `except HTTPError as e:` | `except HTTPError as http_error:` |
+| [adapters/media/image_gen.py:156](adapters/media/image_gen.py#L156) | `[p["text"] for p in parts if "text" in p]` | `[part["text"] for part in parts if "text" in part]` |
+| [adapters/media/music_gen.py:102](adapters/media/music_gen.py#L102) | same pattern | `[part["text"] for part in parts if "text" in part]` |
+| [adapters/data/files.py:130](adapters/data/files.py#L130) | `for f in files` | `for file_record in files` |
+| [adapters/tools/maps.py:57](adapters/tools/maps.py#L57) | `[p["text"] for p in parts ...]` | `[part["text"] for part in parts ...]` |
+| [adapters/tools/search.py:63](adapters/tools/search.py#L63) | same pattern | `[part["text"] for part in parts ...]` |
+| [adapters/tools/function_calling.py:81](adapters/tools/function_calling.py#L81) | same pattern | `[part["text"] for part in parts ...]` |
+
+Additionally sweep (before committing):
+- `grep -nE '\bfor [a-z] in\b' core/ adapters/ scripts/ setup/ --include="*.py"` → should return only intentional `for _ in` discards
+- `grep -nE '\blambda [a-z]:\b' core/ adapters/ scripts/ setup/ --include="*.py"` → same
+- `grep -nE 'except \w+( as)? as [a-z]\b' core/ adapters/ scripts/ setup/ --include="*.py"` → same
+- `grep -nE '^\s+[a-z]\s*=(?![=])' core/ adapters/ scripts/ setup/ --include="*.py"` → flag any single-letter assignments for review
+
+**Important**: do NOT rename parameter or attribute names on public classes/functions (that would be an API break). Scope is strictly local variables, loop variables, lambda params, and except-clause bindings. If a short name is used in a function signature (e.g. `def foo(n: int)`), treat it separately: change only if safe (private function, no callers depend on keyword-arg name).
+
+**CI enforcement** (new grep, added alongside the Any-ban grep in 11.1):
+
+```bash
+# Production single-character loop vars (exclude _ discard)
+! grep -rnE '\bfor [a-hj-z]\b in\b' core/ adapters/ scripts/ setup/ --include="*.py"
+! grep -rnE '\blambda [a-hj-z]:' core/ adapters/ scripts/ setup/ --include="*.py"
+! grep -rnE ' as [a-hj-z]\s*:' core/ adapters/ scripts/ setup/ --include="*.py"
+```
+
+(Tests excluded from the CI grep to avoid flakiness on mock parameter names, but covered by the naming review in PR code review.)
+
+Exit gate:
+- Full `pytest` green (1191 pass / 24 skip) — every rename must preserve behavior
+- `mypy --strict` still clean
+- The three CI greps above return empty
+- No regressions in coverage
+
+Commit: `refactor(naming): replace single-character variables with descriptive names`
+
+### 11.1 — Type-hygiene sweep (≤30 min)
+
+Goal: close the 5 untyped-signature gaps found during exploration and lock in the zero-`Any` guarantee via a CI grep.
+
+Changes:
+
+- **[core/infra/filelock.py:50](core/infra/filelock.py#L50)** — annotate `__exit__` params:
+  ```python
+  def __exit__(
+      self,
+      exc_type: type[BaseException] | None,
+      exc_val: BaseException | None,
+      exc_tb: TracebackType | None,
+  ) -> None:
+  ```
+  Add `from types import TracebackType` at top (already uses `from __future__ import annotations`, so no runtime impact).
+
+- **[core/infra/timeouts.py:67](core/infra/timeouts.py#L67)** — same treatment for its `__exit__`.
+
+- **[scripts/gemini_run.py](scripts/gemini_run.py)** — annotate the three launcher functions:
+  - `def _check_python_version() -> None:` (line 31)
+  - `def _maybe_reexec_under_venv() -> None:` (line 57)
+  - `def main(argv: Sequence[str] | None = None) -> int:` (line 91) — import `from collections.abc import Sequence`.
+
+- **CI regression grep** (new entry in existing CI workflow or `setup/run_tests.sh`):
+  ```bash
+  ! grep -rn "from typing import.*\bAny\b\|typing\.Any\|: Any\b\|-> Any\b" \
+      core/ adapters/ scripts/ setup/ tests/ \
+      --include="*.py"
+  ```
+  Fail the build if any match. Turns the current "zero `Any`" accident into an enforced invariant.
+
+- **mypy strict extension**: expand the strict-mode file list in `setup/run_tests.sh` (or the Makefile / CI) to cover the full new-refactor surface plus the two context-manager fixes:
+  ```
+  core/transport/ core/auth/auth.py core/infra/config.py core/infra/errors.py \
+  core/infra/checksums.py core/infra/filelock.py core/infra/timeouts.py \
+  core/cli/install_main.py core/cli/update_main.py core/cli/health_main.py \
+  core/cli/dispatch.py core/cli/installer/ \
+  adapters/generation/imagen.py adapters/generation/live.py \
+  adapters/media/image_gen.py adapters/tools/search.py adapters/data/files.py \
+  scripts/gemini_run.py
+  ```
+
+Exit gate:
+- `pytest` still 1191 pass / 24 skip
+- `mypy --strict <expanded file list>` clean
+- CI grep for `Any` returns empty
+
+### 11.2 — Coverage gap closure to 100% (≤3 hrs)
+
+Goal: drive `core/` + `adapters/` + `scripts/` + `setup/` to **100% line AND branch** coverage. Current gap is concrete and itemized.
+
+Strategy: add unit tests surgically, file by file. Do NOT refactor production code to chase coverage — if a branch is genuinely unreachable, restructure the code so it isn't, rather than using `# pragma: no cover`.
+
+Per-file checklist with specific missing lines/branches (from the Phase 11 exploration audit):
+
+**CRITICAL — files with 0% coverage or no dedicated test file**
+
+| File | Current | Needed tests |
+|---|---|---|
+| [scripts/health_check.py](scripts/health_check.py) | 0% (8 stmt) | New `tests/scripts/test_health_check.py` — patch `core.cli.health_main.main`, assert delegation + exit code passthrough |
+| [setup/install.py](setup/install.py) | launcher, no test | New `tests/setup/test_install.py` — patch `core.cli.install_main.main`, assert delegation + exit code; plus `__main__` entry test via `runpy.run_path` |
+| [setup/update.py](setup/update.py) | launcher, no test | New `tests/setup/test_update.py` — mirror of install.py test |
+
+**HIGH — <95% line coverage**
+
+| File | Current | Missing lines | Fix |
+|---|---|---|---|
+| [adapters/media/video_gen.py](adapters/media/video_gen.py) | 89% | 87-89 (no-video-URI path) | Add test: response with `operation.response` but no `generateVideoResponse.generatedSamples` → clean error, not crash |
+| [adapters/experimental/deep_research.py](adapters/experimental/deep_research.py) | 94% | 83-84, 121, 123 | Add tests: initialization failure + already-completed research state |
+| [core/cli/dispatch.py](core/cli/dispatch.py) | 91% | 98, 183-198 | Add tests covering the async dispatch error paths (IS_ASYNC adapter raising, cancellation, non-coroutine return). Branch-coverage fix for line 98. |
+
+**MEDIUM — 95-99% (one-line/one-branch fixes)**
+
+| File | Missing | Fix |
+|---|---|---|
+| [adapters/data/embeddings.py](adapters/data/embeddings.py) | L57 branch | Test case where an embedding entry is missing the `values` field |
+| [adapters/experimental/computer_use.py](adapters/experimental/computer_use.py) | L66 | Add edge test for missing tool action |
+| [adapters/generation/live.py](adapters/generation/live.py) | 168, 184, 186 | Test the `aclose()` path when the stream iterator is not async-closable (branches `176->191`, `192->200`, `194->200`) |
+| [adapters/tools/search.py](adapters/tools/search.py) | 81, 87 | Test `--show-grounding` with response lacking `groundingMetadata`; test empty-query short-circuit branch |
+| [adapters/tools/code_exec.py](adapters/tools/code_exec.py) | 62 | Test fallthrough branch for non-dict part |
+| [adapters/tools/maps.py](adapters/tools/maps.py) | 67 | Test conditional skip branch |
+| [adapters/media/image_gen.py](adapters/media/image_gen.py) | 157->exit | Test cleanup path |
+| [adapters/media/music_gen.py](adapters/media/music_gen.py) | 103 | Test the cleanup/exit branch |
+| [core/cli/update_main.py](core/cli/update_main.py) | L97 | Test the legacy-venv-missing branch |
+| [core/cli/install_main.py](core/cli/install_main.py) | 177->182, 179->178, 309->307 branches | Tests for: already-installed legacy .env path, non-tty stdin install |
+| [core/infra/filelock.py](core/infra/filelock.py) | L79 | Test lock-timeout error path |
+| [core/infra/timeouts.py](core/infra/timeouts.py) | 70, 72 | Test the timeout-exit branches |
+| [core/routing/registry.py](core/routing/registry.py) | 50, 52 | Test tool-registration edge cases |
+| [core/state/file_state.py](core/state/file_state.py) | 56, 58 | Test state transitions (uninitialized → loaded) |
+| [core/state/session_state.py](core/state/session_state.py) | 74, 76 | Test session transitions |
+| [core/state/store_state.py](core/state/store_state.py) | 50, 52 | Test store update branches |
+| [core/transport/raw_http/client.py](core/transport/raw_http/client.py) | 145->138, 218, 288, 327 | Tests for: retry loop edge, body=None POST, upload file-open error, download empty-bytes branch |
+| [scripts/gemini_run.py](scripts/gemini_run.py) | L107 | Test `main()` exit code passthrough via subprocess harness |
+
+Exit gate (the one command that must return green):
+
+```bash
+source .venv/bin/activate && pytest -c setup/pytest.ini \
+  --cov=core --cov=adapters --cov=scripts --cov=setup \
+  --cov-branch --cov-report=term-missing --cov-fail-under=100
+```
+
+When this command exits 0 with `TOTAL ... 100%`, step 11.2 is done.
+
+### 11.3 — Extract SdkTransport helpers to module level (≤1 hr)
+
+Goal: apply the deferred **python HIGH 2** review finding. Stop instantiating throwaway `SdkTransport()` instances on the async hot path.
+
+Concrete changes to **[core/transport/sdk/transport.py](core/transport/sdk/transport.py)**:
+
+Move these four methods to module-level functions (they have zero `self` references):
+- `_build_generate_content_kwargs` (currently L573-608)
+- `_build_embed_content_config` (currently L610-621)
+- `_extract_video_prompt` (currently L623-640)
+- `_wrap_collection` (currently L642-667)
+
+Each becomes:
+```python
+# Module-level (after _wrap_sdk_errors, before SdkTransport class)
+def _build_generate_content_kwargs(body: dict[str, object]) -> tuple[object, object | None]:
+    """Translate legacy generateContent body into (contents, config)."""
+    # existing body, unchanged
+```
+
+Keep the `SdkTransport` class methods as **thin delegators** so existing tests (and any accidental callers of `instance._build_*`) keep working:
+```python
+class SdkTransport:
+    def _build_generate_content_kwargs(
+        self, body: dict[str, object]
+    ) -> tuple[object, object | None]:
+        return _build_generate_content_kwargs(body)  # module-level
+```
+
+Then **[core/transport/sdk/async_transport.py](core/transport/sdk/async_transport.py)**:
+- Remove `sync = SdkTransport()` at `:178` and `:278`
+- Replace `sync._build_generate_content_kwargs(body)` → `_build_generate_content_kwargs(body)` (direct call to module-level)
+- Same for `_build_embed_content_config` and `_extract_video_prompt`
+- Add a single module-level import: `from core.transport.sdk.transport import _build_generate_content_kwargs, _build_embed_content_config, _extract_video_prompt`
+
+Tests:
+- Existing `tests/transport/sdk/test_transport.py` should still pass unchanged (delegation preserves semantics).
+- Add `tests/transport/sdk/test_transport_helpers.py` — dedicated module-level tests for each of the 4 extracted functions, in isolation (no SdkTransport instance). Elevates them from "tested via api_call wrapper" to "unit tested".
+- Update any async_transport tests that mocked `SdkTransport()` to instead patch the module-level functions directly (`patch("core.transport.sdk.transport._build_generate_content_kwargs", ...)`).
+
+Exit gate:
+- `grep -n "SdkTransport()" core/transport/sdk/async_transport.py` returns empty
+- `pytest tests/transport/sdk/` green at 100% line + branch
+- `mypy --strict core/transport/sdk/` clean
+- Full suite still 1191+ pass with the new helper tests added
+
+Commit: `refactor(transport/sdk): extract request-body helpers to module level`
+
+### 11.3b — Documentation rewrite: design rationale, usage, secrets, diagrams (≤4 hrs)
+
+Goal: Turn `docs/` + `README.md` + `SKILL.md` into a coherent reference that explains **what**, **which**, **why**, and **how** for every design decision and command. The current docs cover the mechanics but scatter the rationale and skim over things like "why is SKILL.md so terse?" and "why is it safe to put my API key in settings.json?". This sub-step centralizes that reasoning.
+
+**Scope goals (all of these must be addressed, some by adding new prose, some by reorganizing existing docs):**
+
+1. **Design-pattern catalog** — a new file `docs/design-patterns.md` (or a top-level section in `docs/architecture.md`) naming each pattern used in the skill, where it's implemented, and why it was chosen over alternatives. Required entries:
+   - **Adapter pattern** → `Transport` protocol + `SdkTransport` / `RawHttpTransport` (`core/transport/base.py`, `core/transport/sdk/transport.py`, `core/transport/raw_http/transport.py`). Rationale: same interface, swappable backends, adapters never know which ran.
+   - **Facade pattern** → `core/transport/__init__.py` exports `api_call`, `stream_generate_content`, `upload_file` as a 3-function facade over the coordinator. Rationale: zero churn at 21 adapter call sites.
+   - **Strategy + Policy separation** → `TransportCoordinator` (execution order) vs `policy.is_fallback_eligible` (pure decision function). Rationale: policy is independently unit-testable, no I/O.
+   - **Capability registry** → `SdkTransport._SUPPORTED_CAPABILITIES` frozenset as static declaration vs runtime probe. Rationale: deterministic routing, no string-matching heuristics on error messages.
+   - **Normalization / Anti-corruption layer** → `core/transport/normalize.py` + `_SNAKE_TO_CAMEL` table. Rationale: pydantic field aliases are inconsistent — explicit mapping prevents shape drift between SDK version bumps.
+   - **Coordinator / chain of responsibility** → `TransportCoordinator._execute` try-primary-then-fallback with capability-gate shortcut.
+   - **Lazy import / BackendUnavailableError** → SDK imports are deferred until first use so the raw HTTP backend works without google-genai at all.
+   - **Context manager for error translation** → `_wrap_sdk_errors` maps `google.genai.errors.*` and `google.api_core.exceptions.*` to our taxonomy at every SDK call site.
+   - **Dataclass + computed properties for config** → `core/infra/config.py::Config.primary_backend` / `fallback_backend`.
+   - **TypedDict envelope** → `GeminiResponse` in `core/transport/base.py` — structural typing without runtime overhead.
+   - **Protocol-based duck typing** → `Transport`, `AsyncTransport`, the various `_*Protocol` classes in `adapters/generation/imagen.py` — Rationale: the SDK's real types aren't typeshed-friendly; we declare what we actually use.
+   - **Singleton coordinator** → `_COORDINATOR` in `core/transport/__init__.py` with `reset_coordinator()` test hook. Rationale: config is read once per process.
+   - **Template method in installer** → `core/cli/install_main.py::main` orchestrates + delegates to `core/cli/installer/*` submodules (venv, settings_merge, api_key_prompt, legacy_migration).
+   - **Interactive per-key conflict resolution** → `core/cli/installer/settings_merge.py` walks `_DEFAULT_ENV_KEYS` with a redacted prompt. Rationale: never surprise-overwrite user data.
+   - **Atomic write (`tempfile + os.replace`)** → `core/infra/atomic_write.py`. Rationale: crash-safe config mutations.
+   - **SHA-256 install integrity** → `core/infra/checksums.py`. Rationale: detect tampering / hand-edits on the installed skill.
+
+   For each pattern: **what** (one sentence), **where** (file path + line), **why** (rationale & alternatives rejected), **how** (minimal code excerpt showing the shape). Use a consistent four-section template.
+
+2. **"Why is SKILL.md so terse?" section** — new explainer in `docs/architecture.md` (or the new `docs/design-patterns.md`). Required points:
+   - Claude Code auto-loads SKILL.md into context at session start, so every byte counts against the user's token budget.
+   - Detailed reference lives in `reference/*.md` — loaded ON DEMAND only when the model reads the file for a specific command.
+   - Token optimization rationale: a 10 KB SKILL.md × N sessions/day × M users = measurable monthly cost; terse SKILL.md + JIT reference loads keeps the baseline cost flat regardless of how many commands the skill exposes.
+   - "Principle of least information" — the model only needs to know **that** a command exists and the one-line purpose, not the full parser surface. It reads the reference when it actually needs to emit the command.
+   - Cross-reference: link to `docs/design-patterns.md#facade-pattern` to explain the 3-function facade mirrors this same "minimal surface area" principle.
+
+3. **Secrets storage explainer** — new section in `docs/security.md` titled "How the skill stores secrets and why it's safe". Required content:
+   - **What** is stored: only `GEMINI_API_KEY`. No OAuth tokens, no session cookies, no user data beyond what the user passes to Gemini themselves.
+   - **Where** it's stored:
+     1. Primary: `~/.claude/settings.json` `env` block (user-global, file mode 0o600 via atomic write).
+     2. Fallback (local dev only): `<repo>/.env` — gitignored, never committed.
+     3. Never in project-shared `<repo>/.claude/settings.json` (that's version-controlled).
+     4. Never in source code, never in command-line args, never in URLs.
+   - **How** Claude Code injects the key: reads `~/.claude/settings.json` at session start, exports the `env` block into the subprocess environment. The skill itself calls `os.environ.get("GEMINI_API_KEY")`.
+   - **Wire protocol**: API key is sent via `x-goog-api-key` HTTP header, NEVER in a URL query string (validated by tests — see `tests/transport/test_sdk_auth.py` + `tests/core/infra/test_client.py`).
+   - **Why this is safe**:
+     - `~/.claude/settings.json` has identical security profile to `~/.ssh/config` or `~/.aws/credentials` — user-owned, not synced, plaintext but file-mode-restricted, outside any git repo.
+     - Atomic writes prevent partial-secret leakage during crash.
+     - Per-key interactive conflict resolution means the installer NEVER overwrites an existing key silently.
+     - Secret values are NEVER printed — the settings-merge path redacts as `<REDACTED — see settings.json>` and the installer only prints the byte length on save confirmation.
+     - Exception tracebacks are scrubbed via `core/infra/sanitize.py` regex that matches the `AIza` prefix before any `__str__` renders.
+     - Global exception hook (`core/infra/sanitize.install_exception_hook`) catches unhandled exceptions at process exit and sanitizes them, so even a crash in third-party code can't leak a key.
+     - API key never lands on disk outside the three documented locations above. No caching, no temp files with secrets.
+   - **Threat model**:
+     - **In scope (defended)**: accidental git commit, over-the-shoulder terminal read, log scraping by third-party tools, traceback leakage, URL query-string leakage.
+     - **Out of scope (not our problem)**: local malware already running as the user (defeats any user-readable storage — OS-level credential managers wouldn't help either because malware would just wait for the decrypted value), compromised SDK supply chain (mitigated by pinned `google-genai==1.33.0` + SHA-256 checksum verification).
+     - **Alternatives considered and rejected**:
+       - macOS Keychain / Windows Credential Manager: platform-specific, adds `keyring` dependency, breaks on headless CI. Rejected in favor of user-readable plaintext with atomic writes.
+       - GPG-encrypted config file: forces the user to maintain a GPG key, adds a decryption step on every skill invocation. Rejected for UX.
+       - Environment-variable-only: forces the user to set `GEMINI_API_KEY` in their shell startup, which doesn't survive fresh VSCode launches. Rejected for reliability.
+   - **Rotation**: user edits `~/.claude/settings.json`, fully restarts VSCode (⌘Q). No service restart, no skill reinstall. Documented in the troubleshooting section.
+
+4. **Command explanations (what / which / why / how)** — for every entry under `reference/*.md`, ensure these four sections are present:
+   - **What** — one-sentence purpose.
+   - **Which** — which model(s) serve this capability, pulled from `registry/capabilities.json`.
+   - **Why** — why you'd use this over alternatives (e.g. `text` vs `structured` vs `streaming`, `image_gen` vs `imagen`, `search` vs `maps` grounding).
+   - **How** — usage examples with concrete flag combinations, stdin piping, multi-turn session examples, error handling, and common gotchas.
+
+   Current `reference/*.md` files often have **what** and **how** but skip **which** and **why**. Audit every file and add the missing sections. Special attention:
+   - `reference/text.md` — explain when to use text vs structured vs function_calling.
+   - `reference/image_gen.md` — explain Gemini-native vs Imagen and when to pick which (Imagen for photorealistic, Gemini-native for text-in-image + lower cost).
+   - `reference/search.md` — explain `--show-grounding`, when search grounding costs extra, why you'd opt in.
+   - `reference/embed.md` — explain embedding dimensions and their tradeoffs.
+   - `reference/batch.md` — explain the async nature and when it's worth it (50% cost savings).
+   - `reference/cache.md` — explain context caching economics (when does caching pay off).
+
+5. **Flag catalog** — new `docs/flags-reference.md` listing every CLI flag the skill accepts, grouped by category (privacy, cost, execution, I/O). For each flag: the full name, short form (if any), default, which commands it applies to, and one-paragraph rationale. Cross-linked from every `reference/*.md`.
+
+6. **Model catalog** — new `docs/models-reference.md` listing every model in `registry/models.json` with columns: name, family, cost tier, capabilities, when to pick it over siblings. This is the **which** answer for every command.
+
+7. **"Using this skill" walkthrough** — new `docs/usage-tour.md` (or extend `docs/usage.md`) with end-to-end examples covering:
+   - First-time setup (link to install.md, don't duplicate).
+   - One-shot text generation.
+   - Multi-turn session with `--session`.
+   - Multimodal analysis (PDF + prompt).
+   - Structured output (JSON schema).
+   - Streaming.
+   - Function calling.
+   - Search grounding.
+   - Image gen (both flavors).
+   - Batch processing.
+   - Context caching.
+   - File upload and reference.
+   - Cost tracking interpretation.
+   - Dry-run vs `--execute` discipline.
+   - Session persistence and recovery.
+   - Error codes and recovery steps.
+
+8. **Reorganize + deduplicate** — walk every file in `docs/` and `reference/`. For each:
+   - Check for duplicate content (same paragraph appearing in 2+ places). Move to the canonical location and link.
+   - Check for stale claims (anything that survived the refactor but contradicts the new architecture).
+   - Check for missing cross-links (e.g. `reference/*.md` files that should link back to `docs/architecture.md#dual-backend-transport`).
+   - Verify the `docs/` index (if one exists) lists every file with a one-line summary; if not, create `docs/README.md` as the index.
+   - Merge near-duplicates: if `docs/how-it-works.md` and `docs/architecture.md` overlap, pick a winner and redirect the loser.
+
+9. **Diagrams** — audit every diagram embed. For each diagram:
+   - If it already exists: verify the Mermaid source is still accurate (no stale edges referring to removed modules). Re-render to SVG with `scripts/render_diagrams.sh <name>` which forces `-b white -w 1600`.
+   - If the diagram describes architecture or flow but there's no existing Mermaid source: add a new `.mmd` file under `docs/diagrams/` and render.
+   - New diagrams needed (in addition to the 5 already committed):
+     - `docs/diagrams/secrets-flow.mmd` — data flow of `GEMINI_API_KEY` from `settings.json` → process env → `resolve_key()` → `x-goog-api-key` header, with threat boundaries annotated. Embedded in `docs/security.md` under the new "how secrets are stored" section.
+     - `docs/diagrams/design-patterns-overview.mmd` — class-diagram-style map of the core patterns (Transport protocol, Coordinator, Facade, Capability registry). Embedded in the new `docs/design-patterns.md`.
+     - `docs/diagrams/command-dispatch-flow.mmd` — sequence diagram of a user invocation from Claude Code → SKILL.md → gemini_run.py → dispatch → adapter → facade → coordinator → SDK/raw → Gemini → normalize → adapter → stdout. Embedded in `docs/how-it-works.md`.
+     - `docs/diagrams/token-optimization-flow.mmd` — explains why SKILL.md stays small: "model reads SKILL.md at session start → model decides to invoke gemini → model reads only the specific reference/<command>.md on demand". Embedded in the "why SKILL.md is terse" section.
+   - All new diagrams MUST render via `scripts/render_diagrams.sh` with `-b white` so they are dark-mode-legible.
+
+10. **Navigation / breadcrumb header on every docs page** — current pain point: once a reader clicks from `README.md` into `docs/install.md`, there is no obvious way back. Every file under `docs/` and `reference/` MUST start with a breadcrumb line as its first content (immediately after the H1 title):
+
+    ```markdown
+    # Installation
+
+    [← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+    ---
+
+    ...actual content...
+    ```
+
+    Rules:
+    - `docs/*.md` → breadcrumb links back to `../README.md` + `README.md` (the new docs index) + `../reference/index.md`
+    - `reference/*.md` → breadcrumb links back to `../README.md` + `../docs/README.md` + `index.md` (the reference index)
+    - `docs/diagrams/*.mmd` — not rendered as markdown, skip
+    - Every breadcrumb line ends with a horizontal rule (`---`) for visual separation
+    - Also add a "Next / Previous" footer to every `reference/*.md` linking adjacent commands in alphabetical order so a reader can walk the whole reference without jumping back to the index
+    - `docs/README.md` (the new docs index) lists every `docs/*.md` with a one-line summary AND every `reference/*.md` with a one-line summary — single page the reader can always return to
+    - `README.md` itself gets a prominent "Documentation" section with links to both `docs/README.md` and `reference/index.md` so the navigation tree is fully rooted at README
+
+11. **README.md** — ensure the top-level README:
+    - Opens with a 1-paragraph "what is this, who is it for".
+    - Has a prominent link to `docs/design-patterns.md` for anyone reading the code.
+    - Has a prominent link to `docs/security.md#secrets-storage` for anyone worried about where their key lives.
+    - Keeps the Quick Start short (install + first command) — everything else is in `docs/`.
+    - Links to the `docs/` index.
+
+**Verification for sub-step 11.3b**:
+
+- [ ] `docs/design-patterns.md` exists with all 15+ entries from bullet 1 above
+- [ ] `docs/architecture.md` (or `docs/design-patterns.md`) contains the "why SKILL.md is terse" section
+- [ ] `docs/security.md` contains the "How the skill stores secrets and why it's safe" section with the full threat model
+- [ ] Every `reference/*.md` file has the 4-section WHAT / WHICH / WHY / HOW structure
+- [ ] `docs/flags-reference.md` exists
+- [ ] `docs/models-reference.md` exists
+- [ ] `docs/usage-tour.md` exists with 16 end-to-end examples
+- [ ] `docs/README.md` exists as the docs index
+- [ ] 4 new diagrams rendered to SVG with white background
+- [ ] `scripts/render_diagrams.sh` re-run; `git diff --exit-code docs/diagrams/*.svg` clean
+- [ ] `grep -rn "stdlib-only\|zero dependencies\|urllib-only" docs/ reference/ README.md SKILL.md` returns empty (no stale claims)
+- [ ] README has the two prominent links (design patterns + secrets)
+- [ ] No duplicate paragraphs detected by a manual diff sweep
+- [ ] Delegated to `ecc:doc-updater` subagent for the bulk prose work; `ecc:code-reviewer` verifies accuracy against code
+
+Commit: `docs(phase11): design-pattern catalog + secrets explainer + reorganization`
+
+### 11.4 — Live integration matrix under both backends (≤30 min real-API time + ~10 min human)
+
+Goal: prove the dual-backend claim by running the full live smoke-test suite twice — once with SDK primary, once with raw HTTP primary. Both must be green.
+
+Preconditions:
+- `GEMINI_API_KEY` set in the shell (not just settings.json, because we're running pytest directly).
+- ~$0.50-$1.00 of live API budget (the skill's existing live suite is cheap).
+- Network access to `generativelanguage.googleapis.com`.
+
+Commands:
+
+```bash
+# Run 1: SDK primary, raw HTTP fallback
+source .venv/bin/activate
+GEMINI_LIVE_TESTS=1 \
+  GEMINI_IS_SDK_PRIORITY=true \
+  GEMINI_IS_RAWHTTP_PRIORITY=false \
+  pytest -c setup/pytest.ini tests/integration/ -v 2>&1 | tee /tmp/live-sdk-primary.log
+
+# Run 2: raw HTTP primary, SDK fallback
+GEMINI_LIVE_TESTS=1 \
+  GEMINI_IS_SDK_PRIORITY=false \
+  GEMINI_IS_RAWHTTP_PRIORITY=true \
+  pytest -c setup/pytest.ini tests/integration/ -v 2>&1 | tee /tmp/live-raw-http-primary.log
+```
+
+Verification:
+- Both runs exit 0
+- Each test logs the backend it actually ran via the marker file from [tests/integration/conftest.py](tests/integration/conftest.py); assert:
+  - SDK-primary run → every capability in `_SUPPORTED_CAPABILITIES` (text, multimodal, embed, etc.) routes through SDK
+  - Raw-HTTP-primary run → every capability routes through raw HTTP
+  - Known SDK-unsupported capabilities (maps, music_gen, computer_use, file_search) should route to raw HTTP in the SDK-primary run via the capability-gate shortcut (no fallback log line — that's by design)
+- Flakes are NOT acceptable. If a test fails transiently, re-run it once; a second failure is a real bug.
+
+If any test fails, halt the phase and fix it before moving on. Do NOT open the smoke test PR over a red live matrix.
+
+### 11.5 — Manual clean-HOME install smoke test (≤30 min)
+
+Goal: prove the installer works end-to-end against a fresh user environment that has never seen gemini-skill.
+
+Steps (run from a new terminal window):
+
+1. **Create a temp HOME** so we don't disturb the real `~/.claude`:
+   ```bash
+   export TEST_HOME=$(mktemp -d)
+   export HOME="$TEST_HOME"
+   cd /path/to/somewhere-outside-the-repo
+   ```
+
+2. **Clone or cp the repo into the temp HOME** (simulating a fresh user's workflow):
+   ```bash
+   mkdir -p "$TEST_HOME/src"
+   cp -a /Users/springfield/dev/gemini-skill "$TEST_HOME/src/gemini-skill"
+   cd "$TEST_HOME/src/gemini-skill"
+   ```
+
+3. **Run the installer non-interactively** via `--yes` flag (the interactive path should also be exercised in a separate manual run):
+   ```bash
+   python3 setup/install.py --yes 2>&1 | tee "$TEST_HOME/install.log"
+   ```
+
+4. **Verify the installer output and resulting tree**:
+   ```bash
+   # Installer summary mentions venv, SDK version, settings.json path
+   grep -q "google-genai" "$TEST_HOME/install.log"
+   grep -q ".venv" "$TEST_HOME/install.log"
+
+   # Skill directory exists with the expected layout
+   test -d "$HOME/.claude/skills/gemini"
+   test -f "$HOME/.claude/skills/gemini/SKILL.md"
+   test -x "$HOME/.claude/skills/gemini/.venv/bin/python"
+   test -f "$HOME/.claude/skills/gemini/setup/requirements.txt"
+   test -f "$HOME/.claude/skills/gemini/.checksums.json"
+
+   # Settings.json exists with the env block
+   test -f "$HOME/.claude/settings.json"
+   python3 -c "import json; d=json.load(open('$HOME/.claude/settings.json')); \
+     assert 'env' in d and 'GEMINI_IS_SDK_PRIORITY' in d['env']; print('ok')"
+   ```
+
+5. **Verify SDK import works inside the skill venv**:
+   ```bash
+   "$HOME/.claude/skills/gemini/.venv/bin/python" -c \
+     "import google.genai as g; print('google-genai', g.__version__)"
+   ```
+   Must print `google-genai 1.33.0`.
+
+6. **Verify checksum integrity**:
+   ```bash
+   "$HOME/.claude/skills/gemini/.venv/bin/python" -m core.cli.health_main 2>&1 | grep -i checksum
+   ```
+   Must report checksums OK.
+
+7. **Set a real API key and run `/gemini text "hello"` end-to-end** (this is the smoke test's main proof):
+   ```bash
+   # Edit the temp settings.json to inject a real key
+   python3 -c "
+   import json, os
+   from pathlib import Path
+   p = Path.home() / '.claude' / 'settings.json'
+   d = json.loads(p.read_text())
+   d.setdefault('env', {})['GEMINI_API_KEY'] = os.environ['REAL_GEMINI_KEY']
+   p.write_text(json.dumps(d, indent=2))
+   "
+
+   # Invoke via the same command Claude Code would — going through the venv interpreter
+   GEMINI_API_KEY="$REAL_GEMINI_KEY" \
+     "$HOME/.claude/skills/gemini/.venv/bin/python" \
+     "$HOME/.claude/skills/gemini/scripts/gemini_run.py" text "hello"
+   ```
+   Must print a non-empty Gemini response.
+
+8. **Force the fallback path** to prove dual-backend health:
+   ```bash
+   # Uninstall google-genai from the skill venv, forcing raw HTTP fallback
+   "$HOME/.claude/skills/gemini/.venv/bin/pip" uninstall -y google-genai
+
+   GEMINI_API_KEY="$REAL_GEMINI_KEY" \
+     "$HOME/.claude/skills/gemini/.venv/bin/python" \
+     "$HOME/.claude/skills/gemini/scripts/gemini_run.py" text "hello" 2>&1 | tee /tmp/fallback.log
+   ```
+   Must still print a Gemini response (raw HTTP path), and the log should surface a warning about the SDK being unavailable.
+
+9. **Cleanup**:
+   ```bash
+   rm -rf "$TEST_HOME"
+   unset TEST_HOME HOME  # and start a new shell to restore real $HOME
+   ```
+
+Exit gate: every step 1-8 passes. Document any deviations in the PR description.
+
+## Final aggregate exit gate
+
+Before this Phase 11 work merges into the dual-backend PR (#3):
+
+- [ ] `.github/workflows/ci.yml` test job installs `setup/requirements.txt` AND `setup/requirements-dev.txt`
+- [ ] CI on the refactor branch → green on all Python versions (3.9, 3.11, 3.13)
+- [ ] `pytest -c setup/pytest.ini` → 1191+ pass / 24 skip / 0 fail
+- [ ] `pytest -c setup/pytest.ini --cov=core --cov=adapters --cov=scripts --cov=setup --cov-branch --cov-fail-under=100` → green
+- [ ] `mypy --strict <expanded list>` → clean
+- [ ] CI grep for `typing.Any` usage → empty
+- [ ] CI greps for single-char variable names → empty (production scope)
+- [ ] `grep -n "SdkTransport()" core/transport/sdk/async_transport.py` → empty
+- [ ] Live matrix under both backends → both green
+- [ ] Clean-HOME install smoke test → steps 1-8 pass
+
+## Critical files to open during implementation
+
+- [.github/workflows/ci.yml](.github/workflows/ci.yml) — CI test job needs `requirements.txt` install (step 11.-1)
+- [setup/pytest.ini](setup/pytest.ini) — contains the pydantic warning filter that requires google-genai to be installed
+- [core/transport/sdk/transport.py](core/transport/sdk/transport.py) — source of helpers to extract
+- [core/transport/sdk/async_transport.py](core/transport/sdk/async_transport.py) — where throwaway instances are removed
+- [core/infra/filelock.py](core/infra/filelock.py) — `__exit__` annotation
+- [core/infra/timeouts.py](core/infra/timeouts.py) — `__exit__` annotation
+- [scripts/gemini_run.py](scripts/gemini_run.py) — launcher annotations
+- [scripts/health_check.py](scripts/health_check.py) — needs a dedicated test
+- [setup/install.py](setup/install.py), [setup/update.py](setup/update.py) — launchers needing delegation tests
+- [tests/integration/conftest.py](tests/integration/conftest.py) — backend-marker fixture used by 11.4
+- [tests/transport/sdk/test_transport.py](tests/transport/sdk/test_transport.py) — existing SdkTransport tests that must still pass after extraction
+- [core/cli/dispatch.py](core/cli/dispatch.py) — async dispatch branches needing coverage
+
+## Out of scope for Phase 11
+
+Explicitly NOT done in this phase:
+- Adding a `--parallel` flag on adapters (out-of-scope per original refactor plan)
+- Vertex AI mode (intentionally not supported)
+- Any work that would require architectural changes to hit a missing branch — if a branch is genuinely unreachable with the current API, file a follow-up issue rather than forcing coverage
