@@ -8,7 +8,7 @@ This is the main hub for gemini-skill documentation. Every guide, reference, and
 
 ## Getting Started
 
-- **[Installation](install.md)** — How to set up the skill, install the SDK, and configure your API key.
+- **[Installation](install.md)** — How to set up the skill via `uvx` / `pipx` or from a clone, install the SDK, and configure your API key.
 - **[Usage Tour](usage-tour.md)** — 16 end-to-end examples covering text generation, multimodal analysis, image generation, batch processing, and more.
 - **[Quick Commands](../SKILL.md)** — Terse reference from Claude Code's context (the bare minimum to invoke the skill).
 
@@ -32,6 +32,7 @@ This is the main hub for gemini-skill documentation. Every guide, reference, and
 - **[Python Guide](python-guide.md)** — How to use gemini-skill from Python code (importing adapters, using the transport layer).
 - **[Testing](testing.md)** — How to run unit tests, integration tests, and smoke tests. Coverage targets, CI/CD setup.
 - **[Contributing](contributing.md)** — Code style, PR process, and contribution guidelines.
+- **[Update & Sync](update-sync.md)** — Release checking, reinstall/update paths, GitHub Releases, and PyPI publishing.
 
 ## Command-Specific Guides
 
@@ -94,7 +95,7 @@ Every command has a reference page under `reference/` with the structure:
 
 ### "Something broke"
 - Check: [reference/troubleshooting.md](../reference/troubleshooting.md)
-- Or run: `python3 scripts/gemini_run.py health-check`
+- Or run: `python3 ~/.claude/skills/gemini/scripts/health_check.py`
 
 ---
 
@@ -110,7 +111,7 @@ Every command has a reference page under `reference/` with the structure:
 | [python-guide.md](python-guide.md) | Using the skill from Python code |
 | [testing.md](testing.md) | Running tests |
 | [contributing.md](contributing.md) | Code contribution guidelines |
-| [update-sync.md](update-sync.md) | Keeping the skill up to date |
+| [update-sync.md](update-sync.md) | Keeping the skill up to date and publishing releases |
 
 ### Understanding the Design
 

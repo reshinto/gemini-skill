@@ -1,0 +1,12 @@
+include README.md
+include LICENSE
+include VERSION
+include SKILL.md
+recursive-include core *.py
+recursive-include adapters *.py
+recursive-include reference *.md
+recursive-include registry *.json
+recursive-include scripts *.py *.sh
+include setup/install.py
+include setup/update.py
+include setup/requirements.txt

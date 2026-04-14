@@ -4,7 +4,11 @@
 
 ---
 
-This guide walks through 16 common scenarios, each with a runnable command, expected output, and explanation. All examples assume you've completed [installation](install.md) and have `GEMINI_API_KEY` set.
+This guide walks through 16 common scenarios, each with a runnable command,
+expected output, and explanation. All examples assume you've completed
+[installation](install.md) and either let the installer write
+`GEMINI_API_KEY` into `~/.claude/settings.json` or exported it manually for
+local development.
 
 ---
 
@@ -13,11 +17,14 @@ This guide walks through 16 common scenarios, each with a runnable command, expe
 See [Installation Guide](install.md) for the full setup flow. Quick summary:
 
 ```bash
-# Run the installer
+# Recommended: bootstrap install without cloning
+uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
+
+# Fallback: run the installer from a clone or extracted release tarball
 python3 /path/to/gemini-skill/setup/install.py
 
 # Installer prompts for:
-# - Virtual environment creation
+# - Shared payload copy into ~/.claude/skills/gemini
 # - google-genai SDK installation
 # - API key setup in ~/.claude/settings.json
 ```
@@ -25,10 +32,13 @@ python3 /path/to/gemini-skill/setup/install.py
 After installation, verify with:
 
 ```bash
-python3 scripts/gemini_run.py help
+/gemini help
 ```
 
 Expected output: List of all available commands.
+
+The examples below use `python3 scripts/gemini_run.py ...` syntax because they
+also double as repo-local development examples from a checkout.
 
 ---
 
@@ -485,8 +495,8 @@ python3 scripts/gemini_run.py batch \
 See `reference/troubleshooting.md` for detailed error handling and recovery steps.
 
 Quick reference:
-- **"API key not found"**: Run `health-check` or check `~/.claude/settings.json`
-- **"Backend unavailable"**: `--raw-http-only` forces raw HTTP; `--sdk-only` forces SDK
+- **"API key not found"**: Run `python3 ~/.claude/skills/gemini/scripts/health_check.py` or check `~/.claude/settings.json`
+- **"Backend unavailable"**: Check `GEMINI_IS_SDK_PRIORITY` / `GEMINI_IS_RAWHTTP_PRIORITY` in `~/.claude/settings.json`
 - **"Timeout"**: Increase with `--timeout 60` or check network connectivity
 - **"Rate limit exceeded"**: Reduce request frequency or use batch processing (cheaper)
 - **"File too large"**: Use `--no-cache` or split into multiple requests

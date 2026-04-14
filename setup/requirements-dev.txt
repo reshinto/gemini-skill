@@ -25,3 +25,6 @@ ruff>=0.5
 # pre-implementation step 6 part j; runs on every push and auto-commits any
 # formatting changes before allowing the push to proceed.
 black==24.8.0
+
+# Packaging smoke tests for the clone-free bootstrap installer.
+build>=1.2

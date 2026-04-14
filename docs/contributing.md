@@ -18,6 +18,8 @@ Before contributing, understand the architecture:
 - **Transport** — Dual-backend coordinator (SDK primary + raw HTTP fallback, capability gate, fallback policy)
 - **Router** — Model selection logic
 - **Facade** (`core/transport/__init__.py`) — Unified API (api_call, stream_generate_content, upload_file)
+- **Installer payload manifest** (`core/cli/installer/payload.py`) — Single source of truth for what the bootstrap package, clone installer, and release artifacts ship
+- **Bootstrap installer package** (`gemini_skill_install/`) — `uvx` / `pipx` entry point that materializes the packaged payload and delegates to `install_main`
 
 See [architecture.md](architecture.md) for details.
 
@@ -463,8 +465,45 @@ Update model defaults for specialty tasks:
 1. Edit `setup/requirements.txt`: `google-genai==X.YZ.W`
 2. Run `python3 setup/install.py` to test venv creation
 3. Run live integration suite under both backends (see docs/testing.md dual-backend matrix)
-4. Verify health check reports no drift
-5. Open PR with clear justification for the version bump
+4. Run the bootstrap installer coverage slice and packaging build:
+   ```bash
+   .venv/bin/pytest -c setup/pytest.ini --rootdir="$(pwd)" \
+     tests/setup/test_install.py \
+     tests/gemini_skill_install/test_cli.py
+   python -m build
+   ```
+5. Verify health check reports no drift
+6. Open PR with clear justification for the version bump
+
+### If You Change Installer Payload or Packaging
+
+Update these together:
+
+1. `core/cli/installer/payload.py`
+2. `setup.py`
+3. `.github/workflows/release.yml`
+4. `README.md` and `docs/install.md`
+
+Minimum verification:
+
+```bash
+.venv/bin/pytest -c setup/pytest.ini --rootdir="$(pwd)" \
+  tests/core/cli/test_install_main.py \
+  tests/setup/test_install.py \
+  tests/gemini_skill_install/test_cli.py
+python -m build
+```
+
+### Cutting a Release
+
+1. Bump `VERSION` on `main`
+2. Ensure the GitHub `pypi` environment and PyPI Trusted Publisher are configured
+3. Run:
+   ```bash
+   bash scripts/tag_release.sh
+   ```
+4. Watch `.github/workflows/release.yml`
+5. Verify the GitHub Release and PyPI publication
 
 ## Deprecation Policy
 
