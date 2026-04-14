@@ -55,6 +55,7 @@ Dependencies: stdlib only (venv, subprocess, sys, pathlib).
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import venv
@@ -64,152 +65,110 @@ from core.infra.errors import GeminiSkillError
 
 
 class InstallError(GeminiSkillError):
-    """Raised when a Phase 5 install / venv operation cannot complete.
-
-    The Phase 5 installer wraps every venv / pip / probe failure in
-    this class so the calling installer logic has a single exception
-    type to catch and surface to the user. Inherits from
-    ``GeminiSkillError`` so existing ``format_user_error`` machinery
-    handles it without special-casing.
-    """
+    """Raised when a Phase 5 install / venv operation cannot complete."""
 
 
 def venv_python_path(venv_dir: Path) -> Path:
-    """Return the path to the python interpreter inside ``venv_dir``.
-
-    A venv created by ``venv.EnvBuilder`` places its python binary
-    at one of two well-known locations depending on host OS:
-
-    - POSIX (Linux, macOS): ``<venv>/bin/python``
-    - Windows:              ``<venv>/Scripts/python.exe``
-
-    Centralizing this here means callers never branch on
-    ``sys.platform`` themselves, and a future Windows-only fix only
-    has to land in one place.
-
-    Args:
-        venv_dir: The directory passed to ``create_venv``.
-
-    Returns:
-        Absolute path to the venv's python binary. The function does
-        NOT verify the path exists — that's the caller's job (the
-        ``verify_sdk_importable`` probe will surface a missing-binary
-        error on its first subprocess call).
-    """
+    """Return the path to the python interpreter inside ``venv_dir``."""
     if sys.platform == "win32":
         return venv_dir / "Scripts" / "python.exe"
     return venv_dir / "bin" / "python"
 
 
-def create_venv(target: Path) -> None:
-    """Create a Python venv at ``target`` with pip enabled.
+def _looks_like_uv_managed_python(executable: str) -> bool:
+    """Best-effort detection for uv-managed Python installs."""
+    normalized = executable.replace("\\", "/")
+    return "/.local/share/uv/python/" in normalized or "/uv/python/" in normalized
 
-    Uses ``venv.EnvBuilder(with_pip=True)`` so the resulting venv has
-    pip preinstalled and can install the runtime requirements without
-    a separate bootstrap step. Creates the parent directory if it
-    doesn't exist — a fresh install on a new machine has no parent.
 
-    Args:
-        target: Absolute path where the venv should live, typically
-            ``~/.claude/skills/gemini/.venv``.
+def _preferred_bootstrap_python() -> list[str]:
+    """Return interpreter candidates for creating the runtime venv.
+
+    On macOS, uv-managed Python 3.14 has known failures when stdlib venv
+    bootstraps pip via ensurepip. Prefer a stable local interpreter such as
+    python3.13/python3.12 when available, then fall back to the current
+    interpreter.
     """
+    candidates: list[str] = []
+
+    if (
+        sys.platform == "darwin"
+        and sys.version_info >= (3, 14)
+        and _looks_like_uv_managed_python(sys.executable)
+    ):
+        for name in ("python3.13", "python3.12", "python3.11"):
+            path = shutil.which(name)
+            if path is not None:
+                candidates.append(path)
+
+    candidates.append(sys.executable)
+
+    # de-duplicate while preserving order
+    seen: set[str] = set()
+    unique: list[str] = []
+    for candidate in candidates:
+        if candidate not in seen:
+            seen.add(candidate)
+            unique.append(candidate)
+    return unique
+
+
+def _create_venv_with_interpreter(interpreter: str, target: Path) -> None:
+    """Create a venv using a specific interpreter."""
+    cmd = [interpreter, "-m", "venv", str(target)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        stdout = result.stdout.strip()
+        detail = stderr or stdout
+        raise InstallError(
+            f"virtualenv creation failed using {interpreter!r} (exit {result.returncode})"
+            + (f":\n{detail}" if detail else "")
+        )
+
+
+def create_venv(target: Path) -> None:
+    """Create a Python venv at ``target`` with pip enabled."""
     target.parent.mkdir(parents=True, exist_ok=True)
 
-    try:
-        builder = venv.EnvBuilder(with_pip=True)
-        builder.create(str(target))
-    except subprocess.CalledProcessError as exc:
-        output = ""
-        if exc.output:
-            output = exc.output.decode() if isinstance(exc.output, bytes) else str(exc.output)
-        raise InstallError(
-            "virtualenv creation failed while bootstrapping pip via ensurepip"
-            f" (exit {exc.returncode})" + (f":\n{output.strip()}" if output.strip() else "")
-        ) from exc
-    except Exception as exc:
-        raise InstallError(f"virtualenv creation failed: {exc}") from exc
+    last_error: Exception | None = None
+    for interpreter in _preferred_bootstrap_python():
+        try:
+            # Use an explicit interpreter subprocess rather than EnvBuilder.
+            # This lets us avoid problematic uv-managed 3.14 installs on macOS
+            # by selecting a stable interpreter when available.
+            _create_venv_with_interpreter(interpreter, target)
+            return
+        except Exception as exc:
+            last_error = exc
+            if target.exists():
+                shutil.rmtree(target, ignore_errors=True)
+            continue
+
+    if last_error is not None:
+        raise InstallError(f"virtualenv creation failed: {last_error}") from last_error
+
+    raise InstallError("virtualenv creation failed: no usable interpreter found")
 
 
 def install_requirements(venv_dir: Path, requirements_path: Path) -> None:
-    """Install pinned requirements into the venv via ``pip install -r``.
-
-    Two contract notes:
-
-    1. **The venv's own python is invoked**, not ``sys.executable``.
-       Running the venv interpreter is equivalent to "activating" the
-       venv for pip's purposes — pip writes packages into the venv's
-       ``site-packages`` directory rather than wherever
-       ``sys.executable`` happens to point. This is the canonical
-       Python idiom for installing into an arbitrary venv from a
-       parent process; see PEP 405 / the venv docs.
-
-    2. **No --upgrade flag**. The pinned-version contract means
-       re-running install on an existing venv is a no-op when the
-       pinned version is already present and only acts when the user
-       explicitly bumps the pin in ``setup/requirements.txt``. Adding
-       ``--upgrade`` would silently bump packages every install run,
-       defeating the reproducibility guarantee.
-
-    Args:
-        venv_dir: The directory passed to ``create_venv``.
-        requirements_path: Path to a pip-format requirements file.
-
-    Raises:
-        InstallError: If the requirements file does not exist, or if
-            pip exits with a non-zero return code. The error message
-            includes pip's stderr so the user can see the actual
-            failure (network, dependency conflict, missing wheel).
-    """
+    """Install pinned requirements into the venv via ``pip install -r``."""
     if not requirements_path.is_file():
         raise InstallError(f"requirements file not found: {requirements_path}")
 
     python_bin = venv_python_path(venv_dir)
     cmd = [str(python_bin), "-m", "pip", "install", "-r", str(requirements_path)]
 
-    # ``capture_output=True`` so pip's stdout / stderr are available
-    # for the error message instead of streaming to the parent
-    # terminal. ``text=True`` decodes both as UTF-8 strings.
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        # Surface the actual pip failure in the exception so users see
-        # "couldn't resolve X" instead of a generic "install failed".
         raise InstallError(
             f"pip install failed (exit {result.returncode}):\n{result.stderr.strip()}"
         )
 
 
 def verify_sdk_importable(venv_dir: Path) -> str:
-    """Verify ``google.genai`` is importable from inside the venv.
-
-    Runs a small probe script via the venv's python that:
-
-    1. Imports ``google.genai``.
-    2. Asserts ``sys.executable`` (which inside the subprocess points
-       at the venv's python) lives under the venv path. This catches
-       the failure mode where pip silently installed into system
-       Python while we thought we were installing into the venv.
-    3. Prints ``google.genai.__version__`` so the caller can record
-       the installed version (and surface drift in
-       ``health_main.py``).
-
-    Args:
-        venv_dir: The directory passed to ``create_venv``.
-
-    Returns:
-        The installed ``google-genai`` version string (e.g.
-        ``"1.33.0"``).
-
-    Raises:
-        InstallError: If the probe exits non-zero. The exception
-            message includes the probe's stderr so the user sees
-            why the import failed (missing module, version mismatch,
-            permissions, …).
-    """
+    """Verify ``google.genai`` is importable from inside the venv."""
     python_bin = venv_python_path(venv_dir)
-    # Embed a string literal of the venv path so the assert message
-    # includes the value the probe expected. Using ``str(venv_dir)``
-    # keeps the path normalized to whatever the host OS uses (forward
-    # slashes on POSIX, backslashes on Windows after Path round-trip).
     venv_str = str(venv_dir)
     probe = (
         "import sys, google.genai; "
@@ -222,6 +181,6 @@ def verify_sdk_importable(venv_dir: Path) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise InstallError(
-            f"SDK not importable from venv (exit {result.returncode}):\n" f"{result.stderr.strip()}"
+            f"SDK not importable from venv (exit {result.returncode}):\n{result.stderr.strip()}"
         )
     return result.stdout.strip()

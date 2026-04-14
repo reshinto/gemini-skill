@@ -431,9 +431,6 @@ class TestVenvPreservation:
         (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
         install_dir = tmp_path / "install"
 
-        # Pre-create an "existing install" with a venv directory
-        # holding a marker file. After overwrite, the marker must
-        # still be there.
         install_dir.mkdir()
         (install_dir / "SKILL.md").write_text("# old version")
         (install_dir / ".venv").mkdir()
@@ -443,19 +440,19 @@ class TestVenvPreservation:
             patch.object(install_main, "_get_source_dir", return_value=src),
             patch.object(install_main, "_get_install_dir", return_value=install_dir),
             patch.object(install_main, "_prompt", return_value="o"),
+            patch("core.cli.install_main.subprocess.run") as mock_probe_run,
             patch("core.cli.installer.venv.create_venv") as mock_create,
             patch("core.cli.installer.venv.install_requirements"),
             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
         ):
+            mock_probe_run.return_value = MagicMock(
+                returncode=0, stdout="Python 3.13.8\n", stderr=""
+            )
             install_main.main([])
 
-        # The .venv marker must still exist after overwrite.
         assert (install_dir / ".venv" / "marker").exists()
         assert (install_dir / ".venv" / "marker").read_text() == "preserved"
-        # And create_venv should NOT have been called — the existing
-        # venv was preserved, no rebuild needed.
         mock_create.assert_not_called()
-        # SKILL.md should be the new content from the fresh source.
         assert (install_dir / "SKILL.md").read_text() == "# SKILL"
 
     def test_fresh_install_creates_venv(self, tmp_path):
@@ -479,9 +476,6 @@ class TestVenvPreservation:
         mock_create.assert_called_once()
 
     def test_overwrite_removes_subdirectory_entries(self, tmp_path):
-        """Coverage for the directory branch of _clean_install_dir_preserve_venv:
-        overwrite an install where the existing dir contains both files
-        AND subdirectories — both must be removed, .venv must stay."""
         from core.cli import install_main
 
         src = _setup_fake_source(tmp_path)
@@ -489,10 +483,8 @@ class TestVenvPreservation:
         install_dir = tmp_path / "install"
         install_dir.mkdir()
         (install_dir / "SKILL.md").write_text("old")
-        # A pre-existing subdirectory that's NOT .venv — must be removed.
         (install_dir / "old_subdir").mkdir()
         (install_dir / "old_subdir" / "stale.py").write_text("# stale")
-        # The venv directory — must be preserved.
         (install_dir / ".venv").mkdir()
         (install_dir / ".venv" / "marker").write_text("keep")
 
@@ -500,15 +492,17 @@ class TestVenvPreservation:
             patch.object(install_main, "_get_source_dir", return_value=src),
             patch.object(install_main, "_get_install_dir", return_value=install_dir),
             patch.object(install_main, "_prompt", return_value="o"),
+            patch("core.cli.install_main.subprocess.run") as mock_probe_run,
             patch("core.cli.installer.venv.create_venv"),
             patch("core.cli.installer.venv.install_requirements"),
             patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
         ):
+            mock_probe_run.return_value = MagicMock(
+                returncode=0, stdout="Python 3.13.8\n", stderr=""
+            )
             install_main.main([])
 
-        # The stale subdir must be gone (rmtree branch).
         assert not (install_dir / "old_subdir").exists()
-        # The venv must still be there.
         assert (install_dir / ".venv" / "marker").read_text() == "keep"
 
 
@@ -567,7 +561,8 @@ class TestSettingsBufferFiltering:
 
         with (
             patch(
-                "core.cli.install_main.migrate_legacy_env_to_settings", side_effect=seed_mixed_env
+                "core.cli.install_main.migrate_legacy_env_to_settings",
+                side_effect=seed_mixed_env,
             ),
             patch("core.cli.install_main.prompt_gemini_api_key"),
             patch("core.cli.install_main.merge_settings_env") as mock_merge_settings_env,
@@ -587,7 +582,11 @@ class TestManifestCoverage:
         with (
             patch.object(install_main, "_get_source_dir", return_value=src),
             patch.object(install_main, "_get_install_dir", return_value=install_dir),
-            patch.object(install_main, "_write_install_manifest", side_effect=OSError("disk full")),
+            patch.object(
+                install_main,
+                "_write_install_manifest",
+                side_effect=OSError("disk full"),
+            ),
             patch.object(install_main, "_setup_user_settings"),
         ):
             install_main.main([])
@@ -627,7 +626,8 @@ class TestManifestCoverage:
 
         with (
             patch(
-                "core.cli.install_main.read_checksums_file", return_value={"SKILL.md": "abc"}
+                "core.cli.install_main.read_checksums_file",
+                return_value={"SKILL.md": "abc"},
             ) as mock_read,
             patch(
                 "core.cli.install_main.verify_checksums", return_value=["SKILL.md"]
