@@ -1,37 +1,31 @@
 ---
 name: gemini
-description: Gemini API — text generation, image/video/music generation, embeddings, search grounding, maps grounding, context caching, batch processing, code execution, function calling, file search/RAG, computer use, deep research, and more.
+description: Gemini API access for Claude Code: text, multimodal, structured output, embeddings, plan review, search grounding, media generation, files, caching, and more.
 disable-model-invocation: true
 ---
 
 ## Usage
 
-Run: `python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" <command> [args]`
+Run:
 
-The launcher self-routes: if the skill-local virtual environment exists at `${CLAUDE_SKILL_DIR}/.venv`, it re-execs into `${CLAUDE_SKILL_DIR}/.venv/bin/python` so the dual-backend SDK is loaded; otherwise it runs under whichever Python invoked it (the raw HTTP backend works without google-genai installed).
+`python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" <command> [args]`
 
 See `${CLAUDE_SKILL_DIR}/reference/index.md` for the full command map.
-For commands with flags or `--execute`, read `${CLAUDE_SKILL_DIR}/reference/<command>.md` first.
-
-## How transport works
-
-All commands route through `scripts/gemini_run.py` which dispatches to the right adapter. The adapter calls a single `api_call` / `stream_generate_content` / `upload_file` facade that picks the right backend automatically based on `GEMINI_IS_SDK_PRIORITY` / `GEMINI_IS_RAWHTTP_PRIORITY` environment variables. **You do not need to know which backend is active** — every command has identical CLI surface, identical output shape, and identical error format regardless of whether the SDK or raw HTTP path handled the call.
+See `${CLAUDE_SKILL_DIR}/reference/plan_review.md` for plan review.
 
 ## Rules
 
-- Mutating operations and mutating subcommands require `--execute`. Default is dry-run.
-- Privacy-sensitive commands (search grounding, maps grounding, computer use, deep research) are handled internally by dispatch; callers do not pass a separate privacy flag.
-- Pass user input as single opaque argv values (quoted).
-- Use stdin or temp files for complex/multiline content.
-- Never reconstruct shell commands by concatenating user text.
-- Multi-turn sessions: use `--session <id>` to start/continue, `--continue` for most recent.
-- Large responses (>50KB) and all media generation save to a file and return only the path + metadata.
+- Mutating operations require `--execute`.
+- Pass user input as single quoted argv values.
+- Use `--session <id>` or `--continue` for multi-turn text sessions.
+- Large text responses and generated media save to a file and print the path.
 
 ## Quick commands
 
-- `help` — list all commands
-- `models` — list available models from registry
-- `text "prompt"` — generate text
-- `multimodal "prompt" --file path.pdf` — analyze files
-- `embed "text"` — generate embeddings
-- `image_gen "prompt" --execute` — generate an image
+- `help`
+- `models`
+- `text "prompt"`
+- `multimodal "prompt" --file path.pdf`
+- `plan_review "review this plan"`
+- `embed "text"`
+- `image_gen "prompt" --execute`

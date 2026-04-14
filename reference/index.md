@@ -1,54 +1,55 @@
 # gemini-skill Command Reference
 
-Run any command via: `python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" <command> [args]`
+Use the skill from Claude Code:
 
-## Dual-Backend Transport
+```text
+/gemini <command> [args]
+```
 
-All commands benefit from a unified dual-backend transport layer. The skill automatically routes through either the **SDK backend** (primary) or **raw HTTP backend** (fallback). Both produce identical output; the choice is transparent to users. See [architecture.md](../docs/architecture.md) for details.
+or from the CLI:
+
+```bash
+python3 scripts/gemini_run.py <command> [args]
+```
 
 ## Command Map
 
 | Command | Purpose | Mutating | Preview | Reference |
 |---------|---------|----------|---------|-----------|
-| `text` | Generate text | no | no | [text.md](text.md) |
-| `multimodal` | Multimodal input (image, PDF, audio, video) | no | no | [multimodal.md](multimodal.md) |
-| `structured` | JSON schema-constrained output | no | no | [structured.md](structured.md) |
-| `streaming` | SSE streaming text | no | no | [streaming.md](streaming.md) |
-| `embed` | Generate embeddings | no | no | [embed.md](embed.md) |
-| `token_count` | Count tokens | no | no | [token_count.md](token_count.md) |
-| `function_calling` | Tool/function calling | no | no | [function_calling.md](function_calling.md) |
-| `code_exec` | Sandboxed code execution | no | no | [code_exec.md](code_exec.md) |
-| `search` | Google Search grounding (privacy-sensitive) | no | no | [search.md](search.md) |
-| `maps` | Google Maps grounding (privacy-sensitive) | no | no | [maps.md](maps.md) |
-| `files` | Files API (upload/list/get/download/delete) | some | no | [files.md](files.md) |
-| `cache` | Context caching (create/list/get/delete) | some | no | [cache.md](cache.md) |
-| `batch` | Batch processing (create/list/get/cancel) | some | no | [batch.md](batch.md) |
-| `file_search` | File Search / hosted RAG | some | yes | [file_search.md](file_search.md) |
-| `image_gen` | Image generation (Nano Banana, aspect ratio & size control) | YES | yes | [image_gen.md](image_gen.md) |
-| `imagen` | Image generation (Imagen 3, photoreal, SDK-only) | YES | yes | [imagen.md](imagen.md) |
-| `video_gen` | Video generation (Veo) | YES | yes | [video_gen.md](video_gen.md) |
-| `music_gen` | Music generation (Lyria 3) | YES | yes | [music_gen.md](music_gen.md) |
-| `computer_use` | Computer use (preview, privacy-sensitive) | no | yes | [computer_use.md](computer_use.md) |
-| `live` | Live API realtime sessions (async, SDK-only) | no | yes | [live.md](live.md) |
-| `deep_research` | Deep Research (Interactions API) | YES | yes | [deep_research.md](deep_research.md) |
-| `help` | Show command list | — | — | — |
-| `models` | List available models | — | — | — |
+| `text` | Text generation and multi-turn sessions | no | no | [text.md](text.md) |
+| `streaming` | Streaming text output | no | no | [streaming.md](streaming.md) |
+| `plan_review` | Iterative plan review with verdict output | no | preview | [plan_review.md](plan_review.md) |
+| `multimodal` | Prompt plus files and URLs | no | no | [multimodal.md](multimodal.md) |
+| `structured` | Schema-constrained JSON | no | no | [structured.md](structured.md) |
+| `embed` | Embeddings | no | no | [embed.md](embed.md) |
+| `token_count` | Token counting | no | no | [token_count.md](token_count.md) |
+| `function_calling` | Tool calling | no | no | [function_calling.md](function_calling.md) |
+| `code_exec` | Gemini sandbox execution | no | no | [code_exec.md](code_exec.md) |
+| `search` | Search grounding | no | no | [search.md](search.md) |
+| `maps` | Maps grounding | no | no | [maps.md](maps.md) |
+| `files` | Files API operations | some | no | [files.md](files.md) |
+| `cache` | Cache operations | some | no | [cache.md](cache.md) |
+| `batch` | Batch jobs | some | no | [batch.md](batch.md) |
+| `file_search` | Hosted RAG / File Search | some | yes | [file_search.md](file_search.md) |
+| `image_gen` | Gemini-native image generation | yes | yes | [image_gen.md](image_gen.md) |
+| `imagen` | Imagen 3 generation | yes | yes | [imagen.md](imagen.md) |
+| `video_gen` | Veo generation | yes | yes | [video_gen.md](video_gen.md) |
+| `music_gen` | Lyria generation | yes | yes | [music_gen.md](music_gen.md) |
+| `computer_use` | Computer use preview | no | yes | [computer_use.md](computer_use.md) |
+| `live` | Live API preview | no | yes | [live.md](live.md) |
+| `deep_research` | Deep Research preview | yes | yes | [deep_research.md](deep_research.md) |
 
-## Mutating operations
+## Session Paths
 
-Commands marked **YES** require `--execute` on every invocation. Commands marked `some` have mixed read-only and mutating subcommands; see the per-command reference for which subcommands accept `--execute`.
+- Text-style sessions live at `~/.config/gemini-skill/sessions/<id>.json`.
+- `plan_review` sessions live at `~/.config/gemini-skill/plan-review-sessions/<id>.json`.
 
-## Preview commands
+## Runtime Config Reminder
 
-Preview commands use v1beta API features that may change. Their model IDs are treated as defaults and verified against the live model list at runtime.
+The launcher resolves canonical Gemini env keys from the current working directory before dispatch:
 
-## Sessions
-
-Multi-turn conversations are supported via `--session <id>` and `--continue`:
-
-```bash
-gemini_run.py text --session review "Analyze this code for bugs: ..."
-gemini_run.py text --continue "Focus on the race condition. What's the fix?"
-```
-
-Session state is stored at `~/.config/gemini-skill/sessions/<id>.json`.
+1. `./.env`
+2. `./.claude/settings.local.json`
+3. `./.claude/settings.json`
+4. `~/.claude/settings.json`
+5. existing process env

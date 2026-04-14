@@ -298,7 +298,7 @@ Settings.json contains the API key. A crash during write that leaves a truncated
 
 ## SHA-256 Install Integrity
 
-**What:** At install time, SHA-256 checksums of each installed file are written to ~/.claude/gemini-skill.checksums. On startup, the skill verifies these to detect tampering or accidental edits.
+**What:** At install time, SHA-256 checksums of each installed runtime file are written to `~/.claude/skills/gemini/.checksums.json`. The health check verifies that manifest later to detect tampering or accidental edits.
 
 **Where:** `core/infra/checksums.py` lines 1–200
 

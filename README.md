@@ -1,185 +1,115 @@
 # gemini-skill
 
-A Claude Code skill for broad Gemini REST API access — text generation, multimodal input, image/video/music generation, embeddings, caching, batch processing, search grounding, code execution, file search, and more.
+`gemini-skill` is a Gemini API front end that works in two modes:
+
+- as a Claude Code skill via `/gemini ...`
+- as a direct CLI via `python3 scripts/gemini_run.py ...`
+
+It exposes the same command surface in both modes: text, multimodal analysis, structured output, embeddings, Files API, image/video/music generation, file search, deep research, and iterative plan review.
 
 ## Quick Start
 
-1. **Installation**
+### Install for Claude Code
 
-   See [install.md](install.md) for detailed setup and update paths.
+Recommended:
 
-   ```bash
-   uvx gemini-skill-install
-   ```
+```bash
+uvx gemini-skill-install
+```
 
-   or fallback if there are errors
+Fallback:
 
-   ```bash
-   uvx --python 3.13 gemini-skill-install
-   ```
+```bash
+uvx --python 3.13 gemini-skill-install
+```
 
-   Or with `pipx`:
+Or from a clone:
 
-   ```bash
-   pipx install gemini-skill-install
-   ```
+```bash
+git clone https://github.com/reshinto/gemini-skill.git
+cd gemini-skill
+python3 setup/install.py
+```
 
-   or fallback if there are errors
+The installer copies the runtime payload into `~/.claude/skills/gemini/`, creates or reuses `~/.claude/skills/gemini/.venv`, installs the pinned `google-genai` SDK, and writes the canonical env block into `~/.claude/settings.json`.
 
-   ```bash
-   pipx install --python 3.13 gemini-skill-install
-   ```
+### Configure credentials
 
-2. **Fallback: install from a clone or release tarball**
+The launcher resolves canonical Gemini env keys from the current working directory first, then Claude settings files, then existing process env:
 
-   ```bash
-   git clone https://github.com/reshinto/gemini-skill.git
-   cd gemini-skill
-   python3 setup/install.py
-   ```
+1. `./.env`
+2. `./.claude/settings.local.json`
+3. `./.claude/settings.json`
+4. `~/.claude/settings.json`
+5. existing process env
 
-   Both installer entry points call the same core installer. They:
-   - Copy operational files to `~/.claude/skills/gemini/`
-   - Includes the runtime payload: `SKILL.md`, `VERSION`, `core`, `adapters`, `reference`, `registry`, `scripts`, and `setup/{update.py,requirements.txt}`
-   - Creates `~/.claude/skills/gemini/.venv` with pinned `google-genai`
-   - Verifies install integrity via SHA-256 checksums
-   - Prompts for Gemini API key (hidden input)
-   - Merges env block into `~/.claude/settings.json` (with conflict resolution)
-   - Reuses an existing skill-local `.venv` on overwrite installs
+Supported keys:
 
-3. **Set your Gemini API key** (get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey))
+```text
+GEMINI_API_KEY
+GEMINI_IS_SDK_PRIORITY
+GEMINI_IS_RAWHTTP_PRIORITY
+GEMINI_LIVE_TESTS
+```
 
-   The installer prompts you interactively. If you need to manually edit, add/update the `env` block in `~/.claude/settings.json`:
+For repo-local CLI use:
 
-   ```json
-   {
-     "env": {
-       "GEMINI_API_KEY": "AIzaSy...",
-       "GEMINI_IS_SDK_PRIORITY": "true",
-       "GEMINI_IS_RAWHTTP_PRIORITY": "false",
-       "GEMINI_LIVE_TESTS": "0"
-     }
-   }
-   ```
+```bash
+cp .env.example .env
+```
 
-   Claude Code injects these values into the process env at session start.
+`GEMINI_API_KEY` is the only supported secret name. `GOOGLE_API_KEY` is ignored.
 
-   **Do NOT edit the repo-root `.env`** — that's only for local development from a clone. For the installed skill, use `~/.claude/settings.json` exclusively.
+### Use it from Claude Code
 
-4. **Fully restart Claude Code** (⌘Q on macOS, not "Reload Window"). Skill discovery and env injection happen at IDE launch.
+The skill manifest sets `disable-model-invocation: true`, so Claude Code will not start this skill on its own. Invoke it explicitly first.
 
-5. **Use it in Claude Code**
-   ```
-   /gemini text "Explain quantum computing"
-   ```
+```text
+/gemini text "Explain quantum computing in three sentences"
+/gemini plan_review "Review this implementation plan for gaps and rollout risks"
+```
 
-## Architecture
+### Use it as a direct CLI
 
-![Dual-backend transport architecture](docs/diagrams/architecture-dual-backend.svg)
+From a checkout:
 
-## Features
+```bash
+python3 scripts/gemini_run.py text "hi"
+python3 scripts/gemini_run.py plan_review "Review this migration plan"
+python3 scripts/gemini_run.py plan_review
+```
 
-- Text generation, multimodal input, structured output, function calling
-- Image generation (Nano Banana, Imagen 3), video generation (Veo), music generation (Lyria 3)
-- Embeddings, context caching, batch processing, token counting
-- Google Search grounding, Google Maps grounding, code execution
-- File API, File Search / hosted RAG
-- Deep Research (Interactions API), Computer Use (preview)
-- Live API realtime sessions (async dispatch)
-- Automatic model routing by task type and complexity
-- Two-phase cost tracking (pre-flight estimate + post-response)
-- Multi-turn conversation sessions with Gemini
-- Dual transport backend — google-genai SDK primary + urllib raw HTTP fallback, user never picks
+The last command starts the interactive `plan_review` REPL when stdin is a TTY.
 
-## Prerequisites
+## Core Workflows
 
-- Python 3.9+
-- A Gemini API key
-- `google-genai==1.33.0` (installed automatically by the installer into `~/.claude/skills/gemini/.venv`)
+- `text` for one-shot prompts and multi-turn sessions
+- `plan_review` for iterative plan review, either one-turn or REPL
+- `multimodal` for PDFs, images, audio, video, and URLs
+- `structured` for schema-constrained JSON output
+- `embed`, `token_count`, `files`, `cache`, `batch`, and `file_search`
+- `image_gen`, `imagen`, `video_gen`, and `music_gen`
+- `search`, `maps`, `computer_use`, `deep_research`, and `live`
 
 ## Documentation
 
-**Start here:** [docs/README.md](docs/README.md) — the single index hub for every doc and reference page.
+- [docs/install.md](docs/install.md) — install paths, env precedence, troubleshooting
+- [docs/usage.md](docs/usage.md) — Claude Code skill usage and direct CLI usage
+- [docs/usage-tour.md](docs/usage-tour.md) — end-to-end examples
+- [docs/commands.md](docs/commands.md) — command index by capability family
+- [reference/index.md](reference/index.md) — per-command reference pages
+- [docs/security.md](docs/security.md) — secrets handling, local data storage, privacy notes
+- [docs/how-it-works.md](docs/how-it-works.md) — launcher, dispatch, transport, and output flow
+- [docs/README.md](docs/README.md) — documentation hub
 
-### Most-read pages
+## Backend Routing
 
-- **[Design patterns](docs/design-patterns.md)** — what / where / why / how for every architectural decision in the codebase (Adapter, Facade, Capability registry, Coordinator, Anti-corruption layer, Atomic write, SHA-256 integrity, etc.). Read this first if you're touching the code.
-- **[Security & secrets storage](docs/security.md)** — full threat model + the "How the skill stores secrets and why it's safe" section explaining where `GEMINI_API_KEY` lives, why the chosen storage location is safe, alternatives rejected, and rotation procedure.
-- **[Usage tour](docs/usage-tour.md)** — 16 end-to-end examples (text, multimodal, streaming, function calling, search grounding, image gen, batch, caching, sessions, dry-run vs `--execute`, error recovery).
-- **[Per-command reference](reference/index.md)** — detailed docs for all 22 commands. Every page covers what / which model(s) / why (vs alternatives) / how (concrete usage).
+The launcher and adapters are backend-agnostic. The transport coordinator chooses the SDK or raw HTTP backend from the two routing flags:
 
-### Reference catalogs (single-page lookups)
+- `GEMINI_IS_SDK_PRIORITY=true`
+- `GEMINI_IS_RAWHTTP_PRIORITY=false`
 
-- **[Flags reference](docs/flags-reference.md)** — every CLI flag the skill accepts, grouped by category (privacy, cost, execution, I/O), with rationale.
-- **[Models reference](docs/models-reference.md)** — every model in the registry with cost tier, capabilities, and "when to pick this over siblings".
-
-### Architecture & internals
-
-- [Architecture](docs/architecture.md) — System design, module layout, dual-backend transport diagram, "Why SKILL.md is terse" (token optimization rationale).
-- [How It Works](docs/how-it-works.md) — End-to-end execution trace.
-- [Model Routing](docs/model-routing.md) — Router decision tree.
-- [Capabilities](docs/capabilities.md) — Feature matrix with status and limitations.
-- [Commands](docs/commands.md) — Command index by capability family.
-
-### Operating the skill
-
-- [Installation](docs/install.md) — Setup, troubleshooting, API key configuration.
-- [Usage](docs/usage.md) — Getting started and common workflows.
-- [Update & Sync](docs/update-sync.md) — Install mechanism, release checking, rollback, and release publishing.
-
-### Contributors
-
-- [Contributing](docs/contributing.md) — Adding adapters, code style, PRs, strict typing rule.
-- [Testing](docs/testing.md) — Running tests, writing tests, coverage, live API smoke tests.
-- [Python Design](docs/python-guide.md) — Python 3.9+ floor, no `typing.Any`, idiomatic patterns.
-
-### Diagrams
-
-All diagrams are committed as both Mermaid source (`.mmd`) and rendered SVG with white background under [docs/diagrams/](docs/diagrams/):
-
-- `architecture-dual-backend.svg` — high-level dual-backend transport
-- `coordinator-decision-flow.svg` — fallback eligibility + capability gate
-- `backend-priority-matrix.svg` — env flag truth table
-- `auth-resolution.svg` — `GEMINI_API_KEY` precedence
-- `install-flow.svg` — installer pipeline
-- `secrets-flow.svg` — secret storage data flow + threat boundaries
-- `design-patterns-overview.svg` — class-diagram-style pattern map
-- `command-dispatch-flow.svg` — request lifecycle from `/gemini` to stdout
-- `token-optimization-flow.svg` — why SKILL.md stays small
-
-Regenerate any diagram with `bash scripts/render_diagrams.sh [name]`.
-
-## Releases
-
-Tagged releases (`v*`) run [.github/workflows/release.yml](.github/workflows/release.yml). The
-workflow verifies `VERSION`, builds the GitHub release tarball plus Python
-wheel/sdist artifacts, writes `checksums.txt`, creates the GitHub Release, and
-publishes `gemini-skill-install` to PyPI via Trusted Publishing.
-
-Maintainers can cut a release tag from the current [VERSION](VERSION) with:
-
-```bash
-bash scripts/tag_release.sh
-```
-
-See [docs/update-sync.md](docs/update-sync.md) for the full release flow.
-
-## Backends
-
-By default, the skill uses the **google-genai SDK as the primary backend**, with **urllib raw HTTP as the fallback**. Both backends return identical response shapes via the `normalize` layer — adapters never know which ran.
-
-To invert backend priority (raw HTTP primary, SDK fallback), edit `~/.claude/settings.json`:
-
-```json
-{
-  "env": {
-    "GEMINI_IS_SDK_PRIORITY": "false",
-    "GEMINI_IS_RAWHTTP_PRIORITY": "true"
-  }
-}
-```
-
-Restart Claude Code. Both flags cannot be false (ConfigError), and if both are true, SDK wins.
+Both backends produce the same normalized response shape for callers.
 
 ## License
 

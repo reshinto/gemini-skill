@@ -30,6 +30,10 @@ class AuthError(GeminiSkillError):
     """Raised when the API key is missing, invalid, or cannot be resolved."""
 
 
+class EnvironmentResolutionError(GeminiSkillError):
+    """Raised when runtime env bootstrap cannot parse an env source."""
+
+
 class ModelNotFoundError(GeminiSkillError):
     """Raised when the requested model does not exist or is unavailable."""
 

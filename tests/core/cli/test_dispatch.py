@@ -39,6 +39,15 @@ class TestDispatchMain:
             main(["embed", "hello text"])
         mock_run.assert_called_once()
 
+    def test_plan_review_command_routes_to_plan_review_adapter(self):
+        from core.cli.dispatch import main
+
+        with patch("adapters.generation.plan_review.run") as mock_run:
+            main(["plan_review", "review this plan"])
+        mock_run.assert_called_once()
+        kwargs = mock_run.call_args.kwargs
+        assert kwargs["proposal"] == "review this plan"
+
     def test_image_gen_command_routes(self):
         from core.cli.dispatch import main
 
@@ -238,6 +247,7 @@ class TestDispatchAllAdapters:
         "command,adapter_path",
         [
             ("text", "adapters.generation.text"),
+            ("plan_review", "adapters.generation.plan_review"),
             ("multimodal", "adapters.generation.multimodal"),
             ("structured", "adapters.generation.structured"),
             ("streaming", "adapters.generation.streaming"),
