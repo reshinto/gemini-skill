@@ -54,9 +54,7 @@ def _make_backend(
     backend.name = name
     backend.supports = mock.Mock(return_value=supports)
     backend.api_call = mock.Mock(
-        return_value=(
-            api_call_return if api_call_return is not None else {"candidates": []}
-        ),
+        return_value=(api_call_return if api_call_return is not None else {"candidates": []}),
         side_effect=api_call_side_effect,
     )
     backend.stream_generate_content = mock.Mock(return_value=iter([]))
@@ -115,9 +113,7 @@ class TestCapabilityGate:
         from core.transport.coordinator import TransportCoordinator
 
         primary = _make_backend("sdk", supports=False)
-        fallback = _make_backend(
-            "raw_http", api_call_return={"candidates": [{"index": 0}]}
-        )
+        fallback = _make_backend("raw_http", api_call_return={"candidates": [{"index": 0}]})
         coord = TransportCoordinator(primary=primary, fallback=fallback)
 
         result = coord.execute_api_call(
@@ -407,9 +403,7 @@ class TestUploadDispatch:
 
 
 class TestFallbackLogging:
-    def test_eligible_fallback_emits_warning_log(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_eligible_fallback_emits_warning_log(self, caplog: pytest.LogCaptureFixture) -> None:
         """Per CR-3 in the canonical plan, every fallback invocation
         emits one structured WARNING line so silent SDK→raw_http
         degradation is visible in production logs."""
@@ -499,9 +493,7 @@ def _make_async_backend(
     backend.name = name
     backend.supports = mock.Mock(return_value=supports)
     backend.api_call = mock.AsyncMock(
-        return_value=(
-            api_call_return if api_call_return is not None else {"candidates": []}
-        ),
+        return_value=(api_call_return if api_call_return is not None else {"candidates": []}),
         side_effect=api_call_side_effect,
     )
 
@@ -563,9 +555,7 @@ class TestAsyncDispatch:
         with pytest.raises(BackendUnavailableError, match="async"):
             asyncio.run(drain())
 
-    def test_execute_upload_async_raises_when_no_async_primary(
-        self, tmp_path: Path
-    ) -> None:
+    def test_execute_upload_async_raises_when_no_async_primary(self, tmp_path: Path) -> None:
         import asyncio
 
         from core.transport.coordinator import TransportCoordinator
@@ -592,9 +582,7 @@ class TestAsyncDispatch:
             "sdk",
             api_call_return={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]},
         )
-        coord = TransportCoordinator(
-            primary=primary, fallback=None, async_primary=async_primary
-        )
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
 
         result = await coord.execute_api_call_async(
             endpoint="models/gemini:generateContent",
@@ -618,9 +606,7 @@ class TestAsyncDispatch:
             supports=True,
             api_call_return={"candidates": []},
         )
-        coord = TransportCoordinator(
-            primary=primary, fallback=None, async_primary=async_primary
-        )
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
 
         result = await coord.execute_api_call_async(
             endpoint="models/gemini:generateContent",
@@ -639,9 +625,7 @@ class TestAsyncDispatch:
 
         primary = _make_backend("sdk")
         async_primary = _make_async_backend("sdk", supports=False)
-        coord = TransportCoordinator(
-            primary=primary, fallback=None, async_primary=async_primary
-        )
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
 
         with pytest.raises(BackendUnavailableError, match="maps"):
             await coord.execute_api_call_async(
@@ -659,12 +643,8 @@ class TestAsyncDispatch:
         from core.transport.coordinator import TransportCoordinator
 
         primary = _make_backend("sdk")
-        async_primary = _make_async_backend(
-            "sdk", api_call_side_effect=AuthError("bad key")
-        )
-        coord = TransportCoordinator(
-            primary=primary, fallback=None, async_primary=async_primary
-        )
+        async_primary = _make_async_backend("sdk", api_call_side_effect=AuthError("bad key"))
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
 
         with pytest.raises(AuthError):
             await coord.execute_api_call_async(
@@ -689,9 +669,7 @@ class TestAsyncDispatch:
         primary = _make_backend("sdk")
         err = APIError("503 boom", status_code=503)
         async_primary = _make_async_backend("sdk", api_call_side_effect=err)
-        coord = TransportCoordinator(
-            primary=primary, fallback=None, async_primary=async_primary
-        )
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
 
         with pytest.raises(APIError) as excinfo:
             await coord.execute_api_call_async(
@@ -715,9 +693,7 @@ class TestAsyncDispatch:
 
         async_primary = _make_async_backend("sdk")
         async_primary.stream_generate_content = mock.Mock(return_value=_stream())
-        coord = TransportCoordinator(
-            primary=primary, fallback=None, async_primary=async_primary
-        )
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
 
         collected: list[str] = []
         async for chunk in coord.execute_stream_async(
@@ -735,9 +711,7 @@ class TestAsyncDispatch:
 
         primary = _make_backend("sdk")
         async_primary = _make_async_backend("sdk", supports=False)
-        coord = TransportCoordinator(
-            primary=primary, fallback=None, async_primary=async_primary
-        )
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
 
         async def drain() -> list[StreamChunk]:
             return [
@@ -755,16 +729,12 @@ class TestAsyncDispatch:
             await drain()
 
     @pytest.mark.asyncio
-    async def test_execute_upload_async_routes_to_async_primary(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_execute_upload_async_routes_to_async_primary(self, tmp_path: Path) -> None:
         from core.transport.coordinator import TransportCoordinator
 
         primary = _make_backend("sdk")
         async_primary = _make_async_backend("sdk", upload_return={"name": "files/abc"})
-        coord = TransportCoordinator(
-            primary=primary, fallback=None, async_primary=async_primary
-        )
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
 
         src = tmp_path / "x.txt"
         src.write_text("hi")
@@ -778,16 +748,12 @@ class TestAsyncDispatch:
         async_primary.upload_file.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_execute_upload_async_capability_gate_raises(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_execute_upload_async_capability_gate_raises(self, tmp_path: Path) -> None:
         from core.transport.coordinator import TransportCoordinator
 
         primary = _make_backend("sdk")
         async_primary = _make_async_backend("sdk", supports=False)
-        coord = TransportCoordinator(
-            primary=primary, fallback=None, async_primary=async_primary
-        )
+        coord = TransportCoordinator(primary=primary, fallback=None, async_primary=async_primary)
 
         src = tmp_path / "x.txt"
         src.write_text("hi")

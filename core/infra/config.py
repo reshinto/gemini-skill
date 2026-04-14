@@ -143,7 +143,7 @@ class Config:
         return "sdk"
 
     @property
-    def fallback_backend(self) -> Literal["raw_http"] | None:
+    def fallback_backend(self) -> Literal["sdk", "raw_http"]:
         """Name of the backend used when the primary fails.
 
         Ordering rules:
