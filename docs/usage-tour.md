@@ -16,19 +16,6 @@ local development.
 
 See [Installation Guide](install.md) for the full setup flow. Quick summary:
 
-```bash
-# Recommended: bootstrap install without cloning
-uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
-
-# Fallback: run the installer from a clone or extracted release tarball
-python3 /path/to/gemini-skill/setup/install.py
-
-# Installer prompts for:
-# - Shared payload copy into ~/.claude/skills/gemini
-# - google-genai SDK installation
-# - API key setup in ~/.claude/settings.json
-```
-
 After installation, verify with:
 
 ```bash
@@ -51,6 +38,7 @@ python3 scripts/gemini_run.py text "Write a haiku about debugging code"
 ```
 
 Expected output:
+
 ```
 Semicolon lost,
 Call stack tumbles downward,
@@ -495,6 +483,7 @@ python3 scripts/gemini_run.py batch \
 See `reference/troubleshooting.md` for detailed error handling and recovery steps.
 
 Quick reference:
+
 - **"API key not found"**: Run `python3 ~/.claude/skills/gemini/scripts/health_check.py` or check `~/.claude/settings.json`
 - **"Backend unavailable"**: Check `GEMINI_IS_SDK_PRIORITY` / `GEMINI_IS_RAWHTTP_PRIORITY` in `~/.claude/settings.json`
 - **"Timeout"**: Increase with `--timeout 60` or check network connectivity
