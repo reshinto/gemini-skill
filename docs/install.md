@@ -8,9 +8,14 @@
 
 ## Prerequisites
 
-- **Python 3.9 or later**
+- **Stable CPython 3.9 or later**
 - **A Gemini API key** (free; get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey))
 - **Claude Code** running in your Claude Code environment
+
+If you install from a clone or release tarball, `setup/install.py` rejects
+pre-release, free-threaded, and non-CPython runtimes for the SDK venv. When
+possible it automatically re-execs under a compatible `python3.N` found on
+`PATH`.
 
 ## Quick Install
 
@@ -18,6 +23,8 @@
 <sub>Source: [`diagrams/install-flow.mmd`](diagrams/install-flow.mmd) — regenerate with `bash scripts/render_diagrams.sh`</sub>
 
 ### Method 1: Bootstrap installer via `uvx` or `pipx` (recommended)
+
+Install directly from GitHub without cloning:
 
 ```bash
 uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
@@ -29,14 +36,15 @@ Or:
 pipx run --spec git+https://github.com/reshinto/gemini-skill.git gemini-skill-install
 ```
 
-Once the package is published to PyPI, these simplify to:
+Tagged releases also build a PyPI package. After the first published PyPI
+release, these simplify to:
 
 ```bash
 uvx gemini-skill-install
 pipx install gemini-skill-install
 ```
 
-### Method 2: Install script from a clone
+### Method 2: Install from a clone or extracted release tarball
 
 ```bash
 git clone https://github.com/reshinto/gemini-skill.git
@@ -44,48 +52,48 @@ cd gemini-skill
 python3 setup/install.py
 ```
 
-Both installer paths will:
-1. Check Python version
-2. Copy operational files to `~/.claude/skills/gemini/`
-3. Verify install integrity (SHA-256 checksums)
-4. Create `~/.claude/skills/gemini/.venv` and install `google-genai==1.33.0`
-5. Prompt for `GEMINI_API_KEY` interactively (hidden input via getpass)
-6. Merge env keys into `~/.claude/settings.json` with conflict resolution
-7. Print setup confirmation and SDK version
-
-### Method 3: Manual copy (not recommended — skips venv + checksums)
+Release tarballs use the same flow after extraction:
 
 ```bash
-# Copy the skill directory
-mkdir -p ~/.claude/skills/gemini
-cp -r gemini-skill/scripts ~/.claude/skills/gemini/
-cp -r gemini-skill/core ~/.claude/skills/gemini/
-cp -r gemini-skill/adapters ~/.claude/skills/gemini/
-cp -r gemini-skill/registry ~/.claude/skills/gemini/
-cp -r gemini-skill/setup ~/.claude/skills/gemini/
-cp gemini-skill/SKILL.md ~/.claude/skills/gemini/
-
-# Create venv and install google-genai
-python3 -m venv ~/.claude/skills/gemini/.venv
-~/.claude/skills/gemini/.venv/bin/pip install -r gemini-skill/setup/requirements.txt
-
-# Add GEMINI_API_KEY to ~/.claude/settings.json (see API Key Setup below)
-```
-
-### Method 4: Download as tarball
-
-```bash
-# Download a release artifact, then install from the extracted source tree
-tar -xzf gemini-skill-0.1.0.tar.gz
+tar -xzf gemini-skill-<version>.tar.gz
 cd gemini-skill
 python3 setup/install.py
 ```
 
+### Method 3: Manual copy (advanced, not recommended)
+
+Manual copy skips the normal installer safeguards. Use it only if you need to
+debug install internals.
+
+```bash
+mkdir -p ~/.claude/skills/gemini
+cp gemini-skill/SKILL.md gemini-skill/VERSION ~/.claude/skills/gemini/
+cp -r gemini-skill/core gemini-skill/adapters gemini-skill/reference \
+      gemini-skill/registry gemini-skill/scripts ~/.claude/skills/gemini/
+mkdir -p ~/.claude/skills/gemini/setup
+cp gemini-skill/setup/update.py gemini-skill/setup/requirements.txt \
+   ~/.claude/skills/gemini/setup/
+python3 -m venv ~/.claude/skills/gemini/.venv
+~/.claude/skills/gemini/.venv/bin/pip install -r ~/.claude/skills/gemini/setup/requirements.txt
+```
+
+### What the installer does
+
+Both public installer entry points share the same core install logic. They:
+
+1. Validate Python compatibility and, for `setup/install.py`, re-exec under a stable CPython if needed.
+2. Copy the runtime payload into `~/.claude/skills/gemini/`.
+3. Write `.checksums.json` for install-integrity drift detection.
+4. Create or reuse `~/.claude/skills/gemini/.venv`.
+5. Install the pinned `google-genai==1.33.0` from `setup/requirements.txt`.
+6. Prompt for `GEMINI_API_KEY` and merge the env block into `~/.claude/settings.json`.
+
 ## API Key Setup
 
-### Primary: `~/.claude/settings.json` env block
+### Primary: `~/.claude/settings.json`
 
-The recommended and canonical location for the installed skill is the `env` block in `~/.claude/settings.json`:
+The canonical location for the installed skill is the `env` block in
+`~/.claude/settings.json`:
 
 ```json
 {
@@ -98,309 +106,225 @@ The recommended and canonical location for the installed skill is the `env` bloc
 }
 ```
 
-Claude Code injects these values into the process environment at session start. The installer (`setup/install.py`) writes these keys for you interactively. If you need to edit manually:
+`gemini-skill-install` and `setup/install.py` both write these keys for you
+interactively. If you edit the file manually:
 
 ```bash
 $EDITOR ~/.claude/settings.json
-# Add or update the "env" block as shown above
-# Then fully restart VSCode (⌘Q, not Reload Window)
 ```
 
-This file is user-global and **safe for secrets** because it's user-readable only and not version-controlled.
+Then fully restart Claude Code or VS Code. A window reload is not enough.
 
-### Settings.json flavors
+### Local development from a clone
 
-Claude Code recognizes three `settings.json` locations (searched in order):
-
-1. **User-global** (`~/.claude/settings.json`) — where the installer writes. SAFE for secrets.
-2. **Project-shared** (`<repo>/.claude/settings.json`) — typically committed to version control. NEVER put secrets here.
-3. **Project-local** (`<repo>/.claude/settings.local.json`) — gitignored. OK for secrets, but project-specific only.
-
-The installer writes ONLY to the user-global location.
-
-### Local development (repo contributors)
-
-If you're running the skill from a clone for testing, copy `.env.example` to `.env` at repo root:
+If you're running `python3 scripts/gemini_run.py` directly from a checkout, you
+can also use a repo-root `.env`:
 
 ```bash
 cp .env.example .env
 $EDITOR .env
-# Set: GEMINI_API_KEY=your_key_here
 ```
 
-The auth resolver's `env_dir=` fallback reads this file when running `python3 scripts/gemini_run.py` directly from the repo.
+The auth resolver reads that file only for repo-local development.
 
-### Priority order (first-match wins)
+### Resolution order
 
-1. `GEMINI_API_KEY` shell environment variable (set by Claude Code from settings.json, or by your shell)
-2. `GEMINI_API_KEY` from repo-root `.env` file (local-dev fallback only, via `env_dir=`)
-3. Error if neither found
+1. `GEMINI_API_KEY` already present in the process environment
+2. Repo-root `.env` file when running from a clone
+3. Error if neither exists
 
-**Note:** The skill **does not honor `GOOGLE_API_KEY`** — `GEMINI_API_KEY` is the one canonical name. If you have `GOOGLE_API_KEY` set from another tool, set `GEMINI_API_KEY` separately.
+`GOOGLE_API_KEY` is not used by this skill.
 
-## Verify installation
+## Verify Installation
 
-After installing, verify the skill is accessible:
+Inside Claude Code:
 
 ```bash
 /gemini help
 ```
 
-You should see a list of available commands. If you see an error, check:
-
-1. **File permissions:** Ensure `~/.claude/skills/gemini/` is readable
-2. **Python version:** Run `python3 --version` (should be 3.9+)
-3. **API key:** Verify the key is set via environment variable
-
-## Update the skill
-
-If a new version is released:
+For a direct health report from the installed files:
 
 ```bash
-git pull origin main
+python3 ~/.claude/skills/gemini/scripts/health_check.py
+```
+
+That prints backend configuration, pinned vs installed SDK version, and install
+manifest drift status.
+
+## Check for Updates
+
+The installed update launcher checks GitHub Releases and compares the latest tag
+to the installed `VERSION`:
+
+```bash
+python3 ~/.claude/skills/gemini/setup/update.py
+```
+
+Or from a clone:
+
+```bash
 python3 setup/update.py
 ```
 
-The update script:
-- Syncs operational files while preserving your configuration
-- Preserves the skill-local `.venv` (no silent SDK upgrades)
-- Regenerates `.checksums.json` for integrity verification
-- Does NOT modify `~/.claude/settings.json` (your settings are preserved)
+Current behavior:
+
+- prints the installed version
+- prints the latest GitHub release version
+- tells you whether a newer release is available
+
+It **does not yet download or apply the update automatically**.
+
+## Apply a New Release
+
+To install a newer release, rerun the installer from your preferred source:
+
+### If you install from GitHub directly
+
+```bash
+uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
+```
+
+### If you install from PyPI
+
+```bash
+uvx gemini-skill-install
+```
+
+If you installed the bootstrap tool with `pipx`, upgrade it first and then rerun
+the command:
+
+```bash
+pipx upgrade gemini-skill-install
+gemini-skill-install
+```
+
+### If you install from a clone or release tarball
+
+```bash
+python3 setup/install.py
+```
+
+Overwrite installs preserve the existing `.venv` directory and only re-run the
+pinned SDK install when needed.
 
 ## Troubleshooting
 
-### macOS SSL Certificate Error
+### Incompatible Python or free-threaded build
 
-If you see:
+Symptom:
 
-```
-[SSL: CERTIFICATE_VERIFY_FAILED]
-```
-
-This is usually due to macOS not having the latest SSL certificates. Fix it:
-
-```bash
-/Applications/Python\ 3.x/Install\ Certificates.command
+```text
+ImportError: ... _PyType_Freeze
 ```
 
-Or reinstall Python via Homebrew:
+or:
 
-```bash
-brew install python@3.9
+```text
+gemini-skill install needs a stable CPython 3.9+ interpreter
 ```
 
-### Python version mismatch
+The clone/tarball launcher rejects pre-release, free-threaded, and non-CPython
+interpreters because `google-genai` dependencies do not ship compatible wheels
+for those runtimes. Install a stable CPython such as `python3.13` or
+`python3.12` and rerun the installer.
 
-Error:
-```
-gemini-skill requires Python 3.9+. Found: 3.8
-```
+### I edited `settings.json` and Claude Code still says no key
 
-Solution:
-```bash
-# Install Python 3.9 or later
-brew install python@3.11  # macOS
-# or
-apt install python3.11    # Linux
-# or
-choco install python      # Windows
-
-# Update your PATH or use explicit version
-python3.11 setup/install.py
-```
-
-### I edited settings.json and Claude Code still says no key
-
-Symptom: I added `GEMINI_API_KEY` to `~/.claude/settings.json`, but Claude Code still reports `[ERROR] No GEMINI_API_KEY found`.
-
-Solution: **Fully restart VSCode** (⌘Q on macOS, not "Reload Window"). Claude Code injects env vars at session launch, not at Reload Window.
+Claude Code reads the `env` block only at IDE launch. Fully quit and reopen the
+editor after editing `~/.claude/settings.json`.
 
 ### `Unknown skill: gemini` after install
 
-Symptom: `setup/install.py` finished successfully, `~/.claude/skills/gemini/SKILL.md` exists on disk, but typing `/gemini` in Claude Code still returns `Unknown skill: gemini`.
+Check these, in order:
 
-Causes, in order of likelihood:
+1. Fully restart Claude Code / VS Code.
+2. Verify `~/.claude/skills/gemini/SKILL.md` exists.
+3. Open the `Claude Code` output pane and look for skill-loader errors.
+4. Re-run the installer if the skill directory is incomplete.
 
-1. **Claude Code caches skill discovery at IDE launch.** Opening a new Claude Code session inside the same IDE process does **not** re-scan `~/.claude/skills/`. You need to fully quit VSCode (⌘Q on macOS) and relaunch it. "Reload Window" is not enough.
+### Skill venv setup failed
 
-2. **Invalid frontmatter fields in `SKILL.md`.** Claude Code skills (`.claude/skills/<name>/SKILL.md`) and slash commands (`.claude/commands/*.md`) use **different** frontmatter fields. Mixing them causes the skill loader to silently reject the file:
-   - ✅ Valid skill fields: `name`, `description`, `disable-model-invocation`, `user-invocable`
-   - ❌ Slash-command-only fields that break a SKILL.md: `allowed-tools`, `argument-hint`, `model`
+If venv creation or SDK import verification fails, the install still completes
+and the raw HTTP backend remains available. To retry the SDK install later,
+re-run the installer:
 
-   The minimal recommended `SKILL.md` frontmatter for this skill is:
-   ```yaml
-   ---
-   name: gemini
-   description: Gemini API — ...
-   disable-model-invocation: true
-   ---
-   ```
-
-   `user-invocable` defaults to `true`, so leave it unset unless you specifically want to hide the skill from the `/` menu. `disable-model-invocation: true` is set intentionally so Claude doesn't auto-invoke the billable Gemini API on its own — the user must explicitly type `/gemini`.
-
-3. **`SKILL.md` is missing from the install directory.** Verify:
-   ```bash
-   ls ~/.claude/skills/gemini/SKILL.md
-   head -10 ~/.claude/skills/gemini/SKILL.md
-   ```
-   If missing, re-run `python3 setup/install.py`.
-
-4. **Skill loader errors in the extension output pane.** In VSCode, open `View → Output` and select `Claude Code` from the dropdown. Skill-discovery errors are logged there. Look for lines mentioning `gemini` or `SKILL.md`.
-
-### Venv creation failed
-
-Error during `setup/install.py`:
-```
-[ERROR] Failed to create skill venv: ...
-```
-
-Solution: The skill can run without the SDK (raw HTTP backend only) by setting:
-```json
-{
-  "env": {
-    "GEMINI_IS_SDK_PRIORITY": "false",
-    "GEMINI_IS_RAWHTTP_PRIORITY": "true"
-  }
-}
-```
-Then restart VSCode. The raw HTTP backend uses only the standard library and requires no venv.
-
-To try venv creation again later:
 ```bash
-python3 setup/update.py
+python3 setup/install.py
+```
+
+or:
+
+```bash
+uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
 ```
 
 ### SDK version drift
 
-Error:
-```
-[WARNING] google-genai version mismatch: expected 1.33.0, found 1.32.0
-```
+If `health_check.py` reports that the installed SDK version differs from the
+pinned version, re-run the installer to restore the pin.
 
-Solution:
+### Model not found in registry
+
+Model registry changes ship with a new gemini-skill release. Install the latest
+release, then verify the available models with:
+
 ```bash
-python3 setup/update.py
-```
-
-This re-creates the venv and installs the pinned version.
-
-### Legacy `~/.claude/skills/gemini/.env` detected
-
-If you have an old `.env` file in the skill directory from a previous install, the Phase 5 installer automatically migrates it into `~/.claude/settings.json` on the next run. You can manually remove it after install:
-```bash
-rm ~/.claude/skills/gemini/.env
+/gemini models
 ```
 
 ### Permission denied
 
-Error:
-```
-Permission denied: ~/.claude/skills/gemini/scripts/gemini_run.py
-```
+If the installed scripts are not executable:
 
-Solution:
 ```bash
 chmod +x ~/.claude/skills/gemini/scripts/gemini_run.py
-chmod +x ~/.claude/skills/gemini/setup/install.py
+chmod +x ~/.claude/skills/gemini/scripts/health_check.py
 ```
 
 ### Network timeout
 
-Error:
-```
-[ERROR] Timeout after 30 seconds
-```
-
 Possible causes:
-- Gemini API is temporarily down (check [status.ai.google.dev](https://status.ai.google.dev))
+
+- Gemini API is temporarily down ([status.ai.google.dev](https://status.ai.google.dev))
 - Your internet connection is slow
-- Firewall is blocking requests to generativelanguage.googleapis.com
+- Firewall is blocking requests to `generativelanguage.googleapis.com`
 
-Solutions:
-- Wait a few seconds and retry
-- Check your internet connection
-- Check your firewall settings
+## What Gets Installed
 
-### Model not available
+The installer copies only the runtime payload:
 
-Error:
-```
-[ERROR] Model not found in registry: gemini-3.5-pro
-```
-
-Solution:
-1. Update the model registry:
-   ```bash
-   python3 setup/update.py
-   ```
-
-2. Check available models:
-   ```bash
-   /gemini models
-   ```
-
-## Installation locations
-
-The skill can be installed in two places:
-
-### Personal installation
-
-```
+```text
 ~/.claude/skills/gemini/
-```
-
-Available to all Claude Code sessions on your machine. This is the default install location.
-
-### Project-specific installation
-
-```
-./.claude/skills/gemini/
-```
-
-In your project root. Available only to Claude Code sessions in that project. Useful for sharing a preconfigured skill with your team.
-
-## What gets installed
-
-The install script copies only operational files (no tests, no docs, no `.git`):
-
-```
-~/.claude/skills/gemini/
-├── SKILL.md                  # Skill definition
-├── .venv/                    # Skill-local venv (created by Phase 5)
-│   └── lib/python3.x/site-packages/google/genai/  # google-genai SDK
+├── SKILL.md
+├── VERSION
+├── .checksums.json
+├── .venv/
 ├── scripts/
-│   ├── gemini_run.py         # CLI entry point
-│   └── health_check.py       # Health check utility
-├── core/                     # Runtime modules (transport, auth, config, etc.)
-├── adapters/                 # Command implementations (21 adapters)
-├── registry/                 # Model and capability data
-├── setup/
-│   ├── requirements.txt      # Pinned google-genai==1.33.0
-│   └── update.py             # Update handler
-└── .checksums.json           # Install integrity (SHA-256 hashes)
+├── core/
+├── adapters/
+├── reference/
+├── registry/
+└── setup/
+    ├── requirements.txt
+    └── update.py
 ```
 
-Test files, doc files, and git history are excluded to minimize storage. The `.venv` is created by `setup/install.py` and should NOT be committed; it's reinstalled on each `setup/update.py` run.
+Not installed:
 
-## Next steps
-
-1. **Set your API key** (environment variable or `.env`)
-2. **Verify installation:** `/gemini help`
-3. **Try a command:** `/gemini text "hello"`
-4. **Read the docs:**
-   - Quick start: `README.md`
-   - All commands: `reference/index.md`
-   - Capabilities: `docs/capabilities.md`
-   - Usage guide: `docs/usage.md`
+- `docs/`
+- `tests/`
+- `.git/`
+- `.github/`
+- `README.md`
+- `setup/install.py`
 
 ## Uninstall
 
-To remove the skill:
+To remove the installed skill:
 
 ```bash
-rm -rf ~/.claude/skills/gemini/
-# Or for project-specific:
-rm -rf ./.claude/skills/gemini/
+rm -rf ~/.claude/skills/gemini
 ```
 
-This does not affect your API key or any created resources (files, caches, sessions remain in your Gemini account).
+That does not remove your user-global `~/.claude/settings.json`.

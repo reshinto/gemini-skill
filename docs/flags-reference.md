@@ -304,39 +304,12 @@ This catalog lists every CLI flag the skill accepts, grouped by category. For ea
 
 **Default:** Not set (interactive mode)
 
-**Applies to:** install (setup/install.py)
+**Applies to:** `gemini-skill-install`, `setup/install.py`
 
-**Rationale:** Run the installer non-interactively. Automatically answers "yes" to all prompts (venv creation, SDK installation, settings merge, API key setup). Useful for automation and CI/CD.
-
----
-
-### --no-sdk
-
-**Default:** Not set (SDK is installed)
-
-**Applies to:** install (setup/install.py)
-
-**Rationale:** Skip the google-genai SDK installation. The skill will work in raw HTTP mode only. Use if you have a conflicting version of the SDK or want to minimize dependencies.
-
----
-
-### --reinstall
-
-**Default:** Not set
-
-**Applies to:** install (setup/install.py)
-
-**Rationale:** Force a fresh venv creation and reinstall, even if the skill is already installed. Useful for fixing a broken installation or upgrading to a new SDK version.
-
----
-
-### --health-check
-
-**Default:** Not set
-
-**Applies to:** All commands; often run standalone
-
-**Rationale:** Run diagnostic checks: verify the venv is active, SDK is importable, settings.json exists and is readable, API key is set, and the API is reachable with a small test request. Print a summary and exit. Useful for troubleshooting installation issues.
+**Rationale:** Run the installer in non-interactive mode for settings merge and
+legacy migration prompts. This is useful in CI or scripted installs. It does
+not force overwrite of an existing install directory; overwrite vs skip remains
+an explicit choice.
 
 ---
 

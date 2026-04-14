@@ -60,6 +60,12 @@ jobs:
           cd ..
           sha256sum dist/* >> release/checksums.txt
 
+      - name: Store bootstrap installer distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -69,3 +75,27 @@ jobs:
             dist/*
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+  publish-pypi:
+    name: Publish bootstrap installer to PyPI
+    needs: release
+    runs-on: ubuntu-latest
+    environment:
+      # One-time setup required outside this repo:
+      # 1. Create a GitHub environment named "pypi".
+      # 2. Register .github/workflows/release.yml as a Trusted Publisher
+      #    for the PyPI project "gemini-skill-install".
+      name: pypi
+      url: https://pypi.org/project/gemini-skill-install/
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download bootstrap installer distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish bootstrap installer to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

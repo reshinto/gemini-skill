@@ -202,10 +202,18 @@ Example registry entry:
 When Gemini releases new models or deprecates old ones:
 
 ```bash
-python3 setup/update.py
+uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
 ```
 
-This fetches the latest model list from the Gemini API and updates `registry/models.json`.
+Or, from a clone or release tarball:
+
+```bash
+python3 setup/install.py
+```
+
+Model registry changes ship as part of a new gemini-skill release. The current
+`setup/update.py` command only checks whether a newer GitHub release exists; it
+does not fetch and rewrite `registry/models.json` in place.
 
 ## Fallback
 

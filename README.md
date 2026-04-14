@@ -4,7 +4,7 @@ A Claude Code skill for broad Gemini REST API access — text generation, multim
 
 ## Quick Start
 
-1. **Install the bootstrap installer**
+1. **Install without cloning**
    ```bash
    uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
    ```
@@ -12,24 +12,27 @@ A Claude Code skill for broad Gemini REST API access — text generation, multim
    ```bash
    pipx run --spec git+https://github.com/reshinto/gemini-skill.git gemini-skill-install
    ```
-   Once the package is published to PyPI, these simplify to:
+   Tagged releases build and publish the same bootstrap installer to PyPI. After the
+   first PyPI release, these simplify to:
    ```bash
    uvx gemini-skill-install
    pipx install gemini-skill-install
    ```
 
-2. **Fallback: install from a clone**
+2. **Fallback: install from a clone or release tarball**
    ```bash
    git clone https://github.com/reshinto/gemini-skill.git
    cd gemini-skill
    python3 setup/install.py
    ```
-   Both install paths:
-   - Copies operational files to `~/.claude/skills/gemini/`
+   Both installer entry points call the same core installer. They:
+   - Copy operational files to `~/.claude/skills/gemini/`
+   - Includes the runtime payload: `SKILL.md`, `VERSION`, `core`, `adapters`, `reference`, `registry`, `scripts`, and `setup/{update.py,requirements.txt}`
    - Creates `~/.claude/skills/gemini/.venv` with pinned `google-genai`
    - Verifies install integrity via SHA-256 checksums
    - Prompts for Gemini API key (hidden input)
    - Merges env block into `~/.claude/settings.json` (with conflict resolution)
+   - Reuses an existing skill-local `.venv` on overwrite installs
 
 3. **Set your Gemini API key** (get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey))
 
@@ -77,7 +80,7 @@ A Claude Code skill for broad Gemini REST API access — text generation, multim
 
 - Python 3.9+
 - A Gemini API key
-- `google-genai==1.33.0` (installed automatically by `setup/install.py` into `~/.claude/skills/gemini/.venv`)
+- `google-genai==1.33.0` (installed automatically by the installer into `~/.claude/skills/gemini/.venv`)
 
 ## Documentation
 
@@ -107,7 +110,7 @@ A Claude Code skill for broad Gemini REST API access — text generation, multim
 
 - [Installation](docs/install.md) — Setup, troubleshooting, API key configuration.
 - [Usage](docs/usage.md) — Getting started and common workflows.
-- [Update & Sync](docs/update-sync.md) — Install mechanism, rollback, registry updates.
+- [Update & Sync](docs/update-sync.md) — Install mechanism, release checking, rollback, and release publishing.
 
 ### Contributors
 
@@ -130,6 +133,21 @@ All diagrams are committed as both Mermaid source (`.mmd`) and rendered SVG with
 - `token-optimization-flow.svg` — why SKILL.md stays small
 
 Regenerate any diagram with `bash scripts/render_diagrams.sh [name]`.
+
+## Releases
+
+Tagged releases (`v*`) run [.github/workflows/release.yml](.github/workflows/release.yml). The
+workflow verifies `VERSION`, builds the GitHub release tarball plus Python
+wheel/sdist artifacts, writes `checksums.txt`, creates the GitHub Release, and
+publishes `gemini-skill-install` to PyPI via Trusted Publishing.
+
+Maintainers can cut a release tag from the current [VERSION](VERSION) with:
+
+```bash
+bash scripts/tag_release.sh
+```
+
+See [docs/update-sync.md](docs/update-sync.md) for the full release flow.
 
 ## Backends
 

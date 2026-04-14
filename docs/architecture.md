@@ -8,7 +8,16 @@
 
 ## System Overview
 
-The gemini-skill is a Claude Code skill providing REST API access to Google Gemini. It uses a dual-backend transport layer (SDK primary, raw HTTP fallback) with modular adapters and policy enforcement.
+The gemini-skill is a Claude Code skill providing REST API access to Google
+Gemini. It uses a dual-backend transport layer (SDK primary, raw HTTP fallback)
+with modular adapters and policy enforcement.
+
+There are now two supported install entry points:
+
+- `setup/install.py` for source checkouts and release tarballs
+- `gemini-skill-install` for `uvx` / `pipx` bootstrap installs
+
+Both delegate to the same install core and shared payload manifest.
 
 ## Why SKILL.md Is Terse
 
@@ -86,9 +95,15 @@ Gemini API (v1 / v1beta endpoints)
 │   ├── gemini_run.py         # Entry point (version check, venv re-exec, dispatch)
 │   └── health_check.py       # Health check utility
 ├── setup/
-│   ├── install.py            # Install to ~/.claude/skills/gemini/ + venv + settings merge
-│   ├── update.py             # Sync operational files, refresh venv
+│   ├── install.py            # Source-checkout launcher, stable-Python guard + install delegation
+│   ├── update.py             # Release checker (latest GitHub tag vs installed VERSION)
 │   └── requirements.txt      # Pinned google-genai==1.33.0
+├── gemini_skill_install/
+│   ├── __main__.py           # Packaged bootstrap entry point
+│   └── cli.py                # Materialize packaged payload then delegate to install_main
+├── pyproject.toml            # PEP 517 build-system metadata
+├── setup.py                  # Package metadata + payload bundling for wheel/sdist
+├── MANIFEST.in               # Source distribution file manifest
 ├── core/
 │   ├── cli/
 │   │   ├── dispatch.py       # Subcommand whitelist, IS_ASYNC detection, policy enforcement
@@ -373,24 +388,26 @@ All errors are printed to stderr via `safe_print()` (no ANSI injection).
 
 **Runtime:**
 - Python 3.9+ standard library
-- `google-genai==1.33.0` (installed into skill venv at `~/.claude/skills/gemini/.venv` by `setup/install.py`)
+- `google-genai==1.33.0` (installed into the skill venv at `~/.claude/skills/gemini/.venv` by the installer)
 - Raw HTTP backend works without google-genai (fallback always available)
 
 **Build/Development:**
 - pytest, coverage (for testing)
+- build / setuptools / wheel (for `gemini-skill-install` distributions)
 - ruff (linting)
 - jsdoc2md, madge (optional: docs generation)
 
 **Deployment:**
-- Install script (`setup/install.py`) copies operational files, creates venv, installs pinned SDK, verifies checksums
-- Install destination: `~/.claude/skills/gemini/` (personal) or `.claude/skills/gemini/` (project)
-- No test files, docs, or git history shipped
+- `setup/install.py` and `gemini-skill-install` copy the same runtime payload, create or reuse the skill-local venv, install the pinned SDK, and write the install manifest
+- Release workflow builds a GitHub release tarball plus Python wheel/sdist artifacts for the bootstrap installer
+- Install destination is the user-global skill directory at `~/.claude/skills/gemini/`
+- No test files, full docs tree, or git history are shipped in the installed runtime payload
 
 ## Install-Time Integrity
 
 Phase 4 adds SHA-256 checksums (`core/infra/checksums.py`):
-- **Generation**: Released build writes `.checksums.json` with hashes of all operational files
-- **Verification**: `setup/install.py` and `health_check.py` verify hashes at install/update/health
+- **Generation**: the installer writes `.checksums.json` with hashes of all installed runtime files
+- **Verification**: `health_check.py` verifies hashes after install and on later health checks
 - **Refusal**: If user modified files post-install, health check reports drift and refuses silent update
 
 ## File Locking and Atomic Writes
