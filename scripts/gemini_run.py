@@ -39,6 +39,19 @@ def _check_python_version() -> None:
         )
 
 
+def _repo_root() -> str:
+    """Return the absolute repository root containing ``core/``."""
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _ensure_repo_root_on_syspath() -> str:
+    """Prepend the repository root to ``sys.path`` exactly once."""
+    repo_root_path: str = _repo_root()
+    if repo_root_path not in sys.path:
+        sys.path.insert(0, repo_root_path)
+    return repo_root_path
+
+
 def _skill_venv_python() -> Path:
     """Return the expected path to the installed-skill venv python.
 
@@ -89,15 +102,27 @@ def _maybe_reexec_under_venv() -> None:
     os.execv(str(venv_python), [str(venv_python)] + sys.argv)
 
 
+def _bootstrap_runtime_environment() -> None:
+    """Normalize canonical env keys into ``os.environ`` before dispatch."""
+    _ensure_repo_root_on_syspath()
+
+    from core.infra.errors import EnvironmentResolutionError
+    from core.infra.runtime_env import bootstrap_runtime_env
+
+    try:
+        bootstrap_runtime_env()
+    except EnvironmentResolutionError as environment_error:
+        sys.exit(str(environment_error))
+
+
 def main(argv: Sequence[str]) -> None:
     """End-to-end launcher entry point — dispatch to core.cli.dispatch."""
     _check_python_version()
+    _bootstrap_runtime_environment()
     _maybe_reexec_under_venv()
 
-    # Add repo root to path so we can import core.* — this only runs
-    # when we did NOT re-exec (otherwise the new process re-imports
-    # this file and re-runs main from scratch).
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    # Ensure the repo root is importable after the no-reexec path.
+    _ensure_repo_root_on_syspath()
 
     from core.cli.dispatch import main as dispatch_main  # noqa: E402
 

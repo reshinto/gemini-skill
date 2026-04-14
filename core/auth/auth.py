@@ -1,26 +1,16 @@
-"""API key resolution and .env file parsing.
+"""API key resolution.
 
-Resolves the Gemini API key from environment variables and an optional
-.env file in the local-development repo root. Precedence order:
-    1. GEMINI_API_KEY (shell env, set by Claude Code from
-       ~/.claude/settings.json or by the contributor's shell)
-    2. Values loaded from .env file at the repo root (local-dev only;
-       shell env always wins)
+Runtime launcher bootstrap is responsible for loading the current working
+directory's ``.env`` / ``.claude/settings*.json`` sources into the process
+environment before dispatch. This module then resolves ``GEMINI_API_KEY``
+from ``os.environ``.
 
-The skill deliberately does NOT honor GOOGLE_API_KEY. GEMINI_API_KEY is
-the one canonical name to avoid confusion about which key is in use.
-End users set GEMINI_API_KEY in ~/.claude/settings.json under the env
-block; contributors running tests from a repo clone set it in a
-gitignored .env file at the repo root.
+The optional ``env_dir`` parameter remains as a narrow test/local-dev helper:
+when provided, it loads ``<env_dir>/.env`` without overriding already-set
+process env values.
 
-The .env parser follows deliberately simple rules:
-    - Split on first '=' only (values may contain '=')
-    - Trim whitespace from key and value
-    - Strip matching outer quotes (" or ') from value
-    - Skip blank lines and lines starting with '#'
-    - No inline comment support (# in value is literal)
-
-Dependencies: core/infra/errors.py (AuthError), core/infra/sanitize.py
+The skill deliberately does NOT honor ``GOOGLE_API_KEY``. ``GEMINI_API_KEY``
+is the only canonical name.
 """
 
 from __future__ import annotations
@@ -33,42 +23,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from core.infra.errors import AuthError
+from core.infra.runtime_env import parse_env_content
 from core.infra.sanitize import sanitize
-
-
-def parse_env_content(content: str) -> dict[str, str]:
-    """Parse .env file content into a key-value dictionary.
-
-    Args:
-        content: Raw text content of a .env file.
-
-    Returns:
-        Dictionary mapping environment variable names to their values.
-    """
-    result: dict[str, str] = {}
-
-    for line in content.splitlines():
-        line = line.strip()
-
-        # Skip blank lines and comments
-        if not line or line.startswith("#"):
-            continue
-
-        # Must contain '=' to be a valid entry
-        if "=" not in line:
-            continue
-
-        key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.strip()
-
-        # Strip matching outer quotes
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
-            value = value[1:-1]
-
-        result[key] = value
-
-    return result
 
 
 def _load_env_file(env_dir: Path) -> None:
@@ -91,18 +47,16 @@ def _load_env_file(env_dir: Path) -> None:
 
 
 def resolve_key(env_dir: str | Path | None = None) -> str:
-    """Resolve the Gemini API key from environment and optional .env file.
+    """Resolve the Gemini API key from environment and optional ``env_dir``.
 
-    Precedence: GEMINI_API_KEY (process env) > GEMINI_API_KEY (in <env_dir>/.env).
-    Shell environment variables always override .env file values. The skill
-    does NOT honor GOOGLE_API_KEY.
+    Primary runtime precedence is established by launcher bootstrap before
+    dispatch. When ``env_dir`` is passed, ``<env_dir>/.env`` is loaded as a
+    backward-compatible helper without overriding already-set process env
+    values.
 
     Args:
         env_dir: Optional directory containing a .env file to load. The
-            installed skill does NOT pass this argument — it relies on
-            Claude Code injecting GEMINI_API_KEY from ~/.claude/settings.json
-            into the process env. Local-dev mode (running from a repo clone)
-            passes the repo root so the gitignored .env file is read.
+            launcher-driven runtime does not pass this argument.
 
     Returns:
         The resolved API key string.
@@ -119,10 +73,9 @@ def resolve_key(env_dir: str | Path | None = None) -> str:
     if not key:
         raise AuthError(
             "No GEMINI_API_KEY found.\n"
-            "Installed skill: edit ~/.claude/settings.json and add "
-            "GEMINI_API_KEY to the env block.\n"
-            "Local dev: copy .env.example to .env at the repo root and fill "
-            "in GEMINI_API_KEY."
+            "Create .env in the current working directory, add GEMINI_API_KEY to "
+            "./.claude/settings.local.json or ./.claude/settings.json, or set it "
+            "in ~/.claude/settings.json."
         )
 
     return key
