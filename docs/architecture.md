@@ -25,7 +25,7 @@ The `SKILL.md` file (gemini-skill's manifest in Claude Code) is intentionally mi
 
 **The Token Economics:**
 
-When a user starts a VSCode session, Claude Code auto-loads SKILL.md into context. That file is read *once* and stays in context for the entire session. Here's the cost:
+When a user starts a VSCode session, Claude Code auto-loads SKILL.md into context. That file is read _once_ and stays in context for the entire session. Here's the cost:
 
 - A typical SKILL.md today: ~1 KB = ~300 tokens
 - A verbose SKILL.md with full command catalog: ~10 KB = ~3,000 tokens
@@ -39,7 +39,7 @@ SKILL.md is read at session start. The model doesn't know yet whether it will in
 
 Instead, SKILL.md says: "The gemini skill does X, Y, Z. For the full command reference, see `reference/index.md` (or specific commands like `reference/text.md`)."
 
-If the model decides to invoke the skill, it reads the specific `reference/<command>.md` file *on demand*. That file (~2–3 KB per command) is loaded only when needed, and only the one command the model is about to invoke.
+If the model decides to invoke the skill, it reads the specific `reference/<command>.md` file _on demand_. That file (~2–3 KB per command) is loaded only when needed, and only the one command the model is about to invoke.
 
 **How This Actually Works:**
 
@@ -48,42 +48,24 @@ If the model decides to invoke the skill, it reads the specific `reference/<comm
 3. **Model invokes skill:** Executes the command with flags it just read.
 
 **Result:** A user who runs a gemini skill command in a session loads:
+
 - SKILL.md: ~300 tokens (once at session start)
 - Relevant `reference/*.md` file(s): ~600 tokens (loaded only if invoked)
 - Total: ~900 tokens
 
-A verbose, all-in-one SKILL.md would cost ~3,000 tokens *just at session start*, before the user even invokes the skill.
+A verbose, all-in-one SKILL.md would cost ~3,000 tokens _just at session start_, before the user even invokes the skill.
 
 **Cross-Reference:** This design mirrors the `Facade Pattern` (see [Design Patterns — Facade Pattern](design-patterns.md#facade-pattern)). Just as the skill's facade hides coordinator complexity behind three simple functions, SKILL.md hides reference complexity behind a terse launcher. Both examples of "minimal surface area at the boundary."
 
-For more details on how token optimization influences architecture, see the `docs/diagrams/token-optimization-flow.mmd` diagram.
+For more details on how token optimization influences architecture
+![Token optimization flow](diagrams/token-optimization-flow.svg)
+<sub>Source: [`docs/diagrams/token-optimization-flow.mmd`](diagrams/token-optimization-flow.mmd) — regenerate with `bash scripts/render_diagrams.sh`</sub>
 
 ![Dual-backend transport architecture](diagrams/architecture-dual-backend.svg)
 <sub>Source: [`docs/diagrams/architecture-dual-backend.mmd`](diagrams/architecture-dual-backend.mmd) — regenerate with `bash scripts/render_diagrams.sh`</sub>
 
-```
-SKILL.md (Claude Code launcher)
-    ↓
-scripts/gemini_run.py (re-execs under ~/.claude/skills/gemini/.venv/bin/python)
-    ↓
-core/cli/dispatch.py (policy: whitelist, IS_ASYNC detection, routing)
-    ↓
-adapters/ (21 adapters: generation, data, tools, media, experimental)
-    ↓
-core/transport (facade: api_call / stream_generate_content / upload_file)
-    ↓
-core/transport/coordinator.py (TransportCoordinator: primary/fallback dispatch)
-    ↓
-┌─ SdkTransport (google-genai SDK)          ─ primary by default
-│  └─ core/transport/sdk/{client_factory, transport, async_transport}
-│
-└─ RawHttpTransport (urllib)                ─ fallback / always available
-   └─ core/transport/raw_http/{client, transport}
-    ↓
-core/transport/normalize.py (unified GeminiResponse envelope)
-    ↓
-Gemini API (v1 / v1beta endpoints)
-```
+![Command dispatch flow](diagrams/command-dispatch-flow.svg)
+<sub>Source: [`docs/diagrams/command-dispatch-flow.mmd`](diagrams/command-dispatch-flow.mmd) — regenerate with `bash scripts/render_diagrams.sh`</sub>
 
 ## Directory Layout
 
@@ -214,6 +196,7 @@ The `dispatch.py` module implements a **policy-enforcing dispatcher** that pre-a
    - Input sanitization
 
 The dispatcher is intentionally **lean** — it doesn't implement business logic. Instead:
+
 - Adapters are **single-responsibility:** one adapter per command.
 - Each adapter has a `get_parser()` and `run(**kwargs)` function.
 - Adapters are imported dynamically via `importlib.import_module()`.
@@ -224,6 +207,7 @@ This design makes it easy to add new commands: implement a new adapter, add an e
 ## Adapter Lifecycle
 
 1. **Dispatcher invokes adapter:**
+
    ```python
    adapter_module = importlib.import_module(ALLOWED_COMMANDS[command])
    parser = adapter_module.get_parser()
@@ -304,10 +288,12 @@ The **backend priority matrix** shows how the two env flags resolve into primary
 ### Configuration
 
 Two environment variables control backend selection:
+
 - `GEMINI_IS_SDK_PRIORITY` (default `true`) — SDK is primary
 - `GEMINI_IS_RAWHTTP_PRIORITY` (default `false`) — raw HTTP is fallback
 
 Resolution rules:
+
 - Both true → SDK wins (SDK primary, raw HTTP fallback)
 - Both false → `ConfigError` (must enable at least one)
 - One true → that backend is exclusive, no fallback
@@ -319,6 +305,7 @@ Resolution rules:
 ### Fallback Policy
 
 When primary backend raises an exception, the coordinator consults `policy.is_fallback_eligible(exc)`:
+
 - **Eligible for fallback**: `BackendUnavailableError`, transport/network errors, 429 (rate limit), 5xx, `ImportError`
 - **NOT eligible** (re-raise immediately): `AuthError`, 4xx (except 429), `ValueError`/`TypeError`/`AssertionError`, `CostLimitError`
 
@@ -387,17 +374,20 @@ All errors are printed to stderr via `safe_print()` (no ANSI injection).
 ## Dependencies
 
 **Runtime:**
+
 - Python 3.9+ standard library
 - `google-genai==1.33.0` (installed into the skill venv at `~/.claude/skills/gemini/.venv` by the installer)
 - Raw HTTP backend works without google-genai (fallback always available)
 
 **Build/Development:**
+
 - pytest, coverage (for testing)
 - build / setuptools / wheel (for `gemini-skill-install` distributions)
 - ruff (linting)
 - jsdoc2md, madge (optional: docs generation)
 
 **Deployment:**
+
 - `setup/install.py` and `gemini-skill-install` copy the same runtime payload, create or reuse the skill-local venv, install the pinned SDK, and write the install manifest
 - Release workflow builds a GitHub release tarball plus Python wheel/sdist artifacts for the bootstrap installer
 - Install destination is the user-global skill directory at `~/.claude/skills/gemini/`
@@ -406,6 +396,7 @@ All errors are printed to stderr via `safe_print()` (no ANSI injection).
 ## Install-Time Integrity
 
 Phase 4 adds SHA-256 checksums (`core/infra/checksums.py`):
+
 - **Generation**: the installer writes `.checksums.json` with hashes of all installed runtime files
 - **Verification**: `health_check.py` verifies hashes after install and on later health checks
 - **Refusal**: If user modified files post-install, health check reports drift and refuses silent update

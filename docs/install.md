@@ -2,6 +2,9 @@
 
 [← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
 
+![Install flow](diagrams/install-flow.svg)
+<sub>Source: [`docs/diagrams/install-flow.mmd`](diagrams/install-flow.mmd)</sub>
+
 ## Install Paths
 
 ### Recommended: bootstrap installer
