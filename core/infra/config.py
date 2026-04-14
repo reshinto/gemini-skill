@@ -120,47 +120,39 @@ class Config:
     def __post_init__(self) -> None:
         """Validate cross-field invariants after dataclass construction.
 
-        Raises:
-            ConfigError: If both backend priority flags are False — at least
-                one backend must be enabled for the skill to do any work.
+        The transport layer always has two available backends conceptually:
+        SDK and raw HTTP. The priority flags control ordering preference, not
+        enable/disable semantics. Therefore no boolean combination is invalid.
         """
-        if not self.is_sdk_priority and not self.is_rawhttp_priority:
-            raise ConfigError(
-                "Both GEMINI_IS_SDK_PRIORITY and GEMINI_IS_RAWHTTP_PRIORITY are false. "
-                "At least one must be true. Edit ~/.claude/settings.json env block."
-            )
+        return
 
     @property
     def primary_backend(self) -> Literal["sdk", "raw_http"]:
         """Name of the backend the coordinator must try first.
 
-        Resolution rule (per the dual-backend refactor plan): SDK always wins
-        whenever it is enabled, even when both priority flags are true. The
-        only way to make raw HTTP the primary is to disable the SDK flag.
-
-        Returns:
-            ``"sdk"`` if SDK is enabled, otherwise ``"raw_http"``.
+        Ordering rules:
+        - sdk=true,  raw=false -> sdk
+        - sdk=true,  raw=true  -> sdk
+        - sdk=false, raw=true  -> raw_http
+        - sdk=false, raw=false -> sdk
         """
-        return "sdk" if self.is_sdk_priority else "raw_http"
+        if self.is_sdk_priority:
+            return "sdk"
+        if self.is_rawhttp_priority:
+            return "raw_http"
+        return "sdk"
 
     @property
     def fallback_backend(self) -> Literal["raw_http"] | None:
-        """Name of the backend used when the primary fails (or None).
+        """Name of the backend used when the primary fails.
 
-        A fallback exists only when *both* backends are enabled. Because SDK
-        always wins as the primary when both flags are true, the fallback can
-        only ever be ``"raw_http"`` — the type signature reflects that, so
-        the coordinator's match arms in later phases are not asked to
-        consider an unreachable ``"sdk"`` case. There is intentionally no
-        "raw HTTP primary with SDK fallback" configuration.
-
-        Returns:
-            ``"raw_http"`` when SDK is primary AND raw HTTP is also enabled;
-            otherwise None (single-backend mode — no fallback target).
+        Ordering rules:
+        - sdk=true,  raw=false -> raw_http
+        - sdk=true,  raw=true  -> raw_http
+        - sdk=false, raw=true  -> sdk
+        - sdk=false, raw=false -> raw_http
         """
-        if self.is_sdk_priority and self.is_rawhttp_priority:
-            return "raw_http"
-        return None
+        return "raw_http" if self.primary_backend == "sdk" else "sdk"
 
 
 def load_config(config_dir: Path | None = None) -> Config:
@@ -208,7 +200,9 @@ def load_config(config_dir: Path | None = None) -> Config:
                 # Only the JSON-backed fields are loaded from disk. Backend
                 # priority is env-only so we never let stale config.json
                 # contradict the user's settings.json env block.
-                json_backed_fields = {field.name for field in dataclasses.fields(cfg)} - {
+                json_backed_fields = {
+                    field.name for field in dataclasses.fields(cfg)
+                } - {
                     "is_sdk_priority",
                     "is_rawhttp_priority",
                 }

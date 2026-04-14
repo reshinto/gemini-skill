@@ -144,7 +144,9 @@ class TestConfigSaving:
         assert "is_sdk_priority" not in on_disk
         assert "is_rawhttp_priority" not in on_disk
 
-    @pytest.mark.skipif(os.name == "nt", reason="POSIX permissions not available on Windows")
+    @pytest.mark.skipif(
+        os.name == "nt", reason="POSIX permissions not available on Windows"
+    )
     def test_save_sets_secure_permissions(self, tmp_path):
         from core.infra.config import load_config, save_config
 
@@ -333,7 +335,9 @@ class TestParseBoolEnv:
             assert _parse_bool_env("ANY_FLAG", default=True) is True
             assert _parse_bool_env("ANY_FLAG", default=False) is False
 
-    @pytest.mark.parametrize("raw", ["true", "True", "TRUE", "1", "yes", "Yes", " true "])
+    @pytest.mark.parametrize(
+        "raw", ["true", "True", "TRUE", "1", "yes", "Yes", " true "]
+    )
     def test_truthy_values(self, raw):
         from core.infra.config import _parse_bool_env
 
@@ -397,23 +401,26 @@ class TestBackendPriorityFlags:
             assert cfg.is_sdk_priority is True
             assert cfg.is_rawhttp_priority is True
 
-    def test_both_flags_false_raises_config_error(self, tmp_path):
-        """At least one backend must be enabled — both-false is the only invalid combo."""
-        from core.infra.config import load_config, ConfigError
+    def test_both_flags_false_defaults_to_sdk_with_rawhttp_fallback(self, tmp_path):
+        """Both-false now means default ordering: sdk primary, raw_http fallback."""
+        from core.infra.config import load_config
 
         with patch.dict(
             os.environ,
             {"GEMINI_IS_SDK_PRIORITY": "false", "GEMINI_IS_RAWHTTP_PRIORITY": "false"},
             clear=True,
         ):
-            with pytest.raises(ConfigError, match="GEMINI_IS_SDK_PRIORITY"):
-                load_config(config_dir=tmp_path)
+            cfg = load_config(config_dir=tmp_path)
+            assert cfg.is_sdk_priority is False
+            assert cfg.is_rawhttp_priority is False
+            assert cfg.primary_backend == "sdk"
+            assert cfg.fallback_backend == "raw_http"
 
 
 class TestPrimaryFallbackProperties:
     """Config exposes computed primary/fallback backend names for the coordinator."""
 
-    def test_sdk_only_has_no_fallback(self, tmp_path):
+    def test_sdk_only_has_rawhttp_fallback(self, tmp_path):
         from core.infra.config import load_config
 
         with patch.dict(
@@ -423,9 +430,9 @@ class TestPrimaryFallbackProperties:
         ):
             cfg = load_config(config_dir=tmp_path)
             assert cfg.primary_backend == "sdk"
-            assert cfg.fallback_backend is None
+            assert cfg.fallback_backend == "raw_http"
 
-    def test_rawhttp_only_has_no_fallback(self, tmp_path):
+    def test_rawhttp_only_has_sdk_fallback(self, tmp_path):
         from core.infra.config import load_config
 
         with patch.dict(
@@ -435,7 +442,7 @@ class TestPrimaryFallbackProperties:
         ):
             cfg = load_config(config_dir=tmp_path)
             assert cfg.primary_backend == "raw_http"
-            assert cfg.fallback_backend is None
+            assert cfg.fallback_backend == "sdk"
 
     def test_both_enabled_sdk_wins_with_rawhttp_fallback(self, tmp_path):
         from core.infra.config import load_config
