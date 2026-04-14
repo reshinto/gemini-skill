@@ -792,9 +792,7 @@ class TestSdkTransportValueErrorTranslation:
 class TestInstallChecksumWiring:
     """Coverage for the Phase 11.6 checksum manifest wiring in install_main."""
 
-    def test_iter_manifest_files_excludes_venv_and_pycache(
-        self, tmp_path: Path
-    ) -> None:
+    def test_iter_manifest_files_excludes_venv_and_pycache(self, tmp_path: Path) -> None:
         """``.venv`` and ``__pycache__`` directories are excluded; the
         manifest file itself is excluded; other files are included."""
         from core.cli import install_main
@@ -884,9 +882,7 @@ class TestInstallChecksumWiring:
         # Install still completed
         assert "Installed to" in captured
 
-    def test_verify_install_integrity_returns_empty_when_no_manifest(
-        self, tmp_path: Path
-    ) -> None:
+    def test_verify_install_integrity_returns_empty_when_no_manifest(self, tmp_path: Path) -> None:
         """Installs predating Phase 11.6 (no manifest file) yield an
         empty mismatch list — drift detection is opt-in by manifest
         existence."""
@@ -908,9 +904,7 @@ class TestInstallChecksumWiring:
         mismatches = install_main.verify_install_integrity(tmp_path)
         assert "SKILL.md" in mismatches
 
-    def test_verify_install_integrity_returns_empty_for_clean_install(
-        self, tmp_path: Path
-    ) -> None:
+    def test_verify_install_integrity_returns_empty_for_clean_install(self, tmp_path: Path) -> None:
         """An untouched install verifies cleanly."""
         from core.cli import install_main
 
