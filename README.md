@@ -71,22 +71,55 @@ A Claude Code skill for broad Gemini REST API access — text generation, multim
 
 ## Documentation
 
-See [docs/](docs/) for full documentation including:
-- [Architecture](docs/architecture.md) — System design and module layout
-- [How It Works](docs/how-it-works.md) — End-to-end execution trace
-- [Installation](docs/install.md) — Setup, troubleshooting, API key configuration
-- [Commands](docs/commands.md) — Command index by capability family
-- [Capabilities](docs/capabilities.md) — Feature overview with status and limitations
-- [Model Routing](docs/model-routing.md) — Router decision tree and model selection
-- [Security](docs/security.md) — Threat model, auth, data protection
-- [Usage](docs/usage.md) — Getting started and common workflows
-- [Testing](docs/testing.md) — Running tests, writing tests, coverage, live API smoke tests
-- [Python Design](docs/python-guide.md) — Stdlib-only architecture, Python 3.9+ floor
-- [Contributing](docs/contributing.md) — Adding adapters, code style, PRs
-- [Update & Sync](docs/update-sync.md) — Install mechanism, rollback, registry updates
+**Start here:** [docs/README.md](docs/README.md) — the single index hub for every doc and reference page.
 
-See also:
-- [Per-command reference](reference/index.md) — Detailed docs for all 21 commands
+### Most-read pages
+
+- **[Design patterns](docs/design-patterns.md)** — what / where / why / how for every architectural decision in the codebase (Adapter, Facade, Capability registry, Coordinator, Anti-corruption layer, Atomic write, SHA-256 integrity, etc.). Read this first if you're touching the code.
+- **[Security & secrets storage](docs/security.md)** — full threat model + the "How the skill stores secrets and why it's safe" section explaining where `GEMINI_API_KEY` lives, why the chosen storage location is safe, alternatives rejected, and rotation procedure.
+- **[Usage tour](docs/usage-tour.md)** — 16 end-to-end examples (text, multimodal, streaming, function calling, search grounding, image gen, batch, caching, sessions, dry-run vs `--execute`, error recovery).
+- **[Per-command reference](reference/index.md)** — detailed docs for all 22 commands. Every page covers what / which model(s) / why (vs alternatives) / how (concrete usage).
+
+### Reference catalogs (single-page lookups)
+
+- **[Flags reference](docs/flags-reference.md)** — every CLI flag the skill accepts, grouped by category (privacy, cost, execution, I/O), with rationale.
+- **[Models reference](docs/models-reference.md)** — every model in the registry with cost tier, capabilities, and "when to pick this over siblings".
+
+### Architecture & internals
+
+- [Architecture](docs/architecture.md) — System design, module layout, dual-backend transport diagram, "Why SKILL.md is terse" (token optimization rationale).
+- [How It Works](docs/how-it-works.md) — End-to-end execution trace.
+- [Model Routing](docs/model-routing.md) — Router decision tree.
+- [Capabilities](docs/capabilities.md) — Feature matrix with status and limitations.
+- [Commands](docs/commands.md) — Command index by capability family.
+
+### Operating the skill
+
+- [Installation](docs/install.md) — Setup, troubleshooting, API key configuration.
+- [Usage](docs/usage.md) — Getting started and common workflows.
+- [Update & Sync](docs/update-sync.md) — Install mechanism, rollback, registry updates.
+
+### Contributors
+
+- [Contributing](docs/contributing.md) — Adding adapters, code style, PRs, strict typing rule.
+- [Testing](docs/testing.md) — Running tests, writing tests, coverage, live API smoke tests.
+- [Python Design](docs/python-guide.md) — Python 3.9+ floor, no `typing.Any`, idiomatic patterns.
+
+### Diagrams
+
+All diagrams are committed as both Mermaid source (`.mmd`) and rendered SVG with white background under [docs/diagrams/](docs/diagrams/):
+
+- `architecture-dual-backend.svg` — high-level dual-backend transport
+- `coordinator-decision-flow.svg` — fallback eligibility + capability gate
+- `backend-priority-matrix.svg` — env flag truth table
+- `auth-resolution.svg` — `GEMINI_API_KEY` precedence
+- `install-flow.svg` — installer pipeline
+- `secrets-flow.svg` — secret storage data flow + threat boundaries
+- `design-patterns-overview.svg` — class-diagram-style pattern map
+- `command-dispatch-flow.svg` — request lifecycle from `/gemini` to stdout
+- `token-optimization-flow.svg` — why SKILL.md stays small
+
+Regenerate any diagram with `bash scripts/render_diagrams.sh [name]`.
 
 ## Backends
 
