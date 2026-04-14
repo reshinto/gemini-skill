@@ -119,10 +119,7 @@ class RawHttpTransport:
         # the precise GeminiResponse TypedDict at the Protocol boundary.
         return _client_api_call(  # type: ignore[return-value]
             endpoint=endpoint,
-            # arg-type: client.py declares ``body: JSONObject | None``
-            # so passing a ``Mapping[str, object]`` triggers an arg-type
-            # error. Legacy signature debt — left until a later cleanup.
-            body=body,  # type: ignore[arg-type]
+            body=body,
             method=method,
             api_version=api_version,
             timeout=timeout,
@@ -153,10 +150,7 @@ class RawHttpTransport:
         # which mypy cannot prove satisfies ``Iterator[StreamChunk]``.
         yield from _client_stream_generate_content(  # type: ignore[misc]
             model=model,
-            # body: client.py declares ``JSONObject`` so passing a
-            # ``Mapping[str, object]`` triggers an arg-type error until the
-            # legacy signature is tightened in a later cleanup pass.
-            body=body,  # type: ignore[arg-type]
+            body=body,
             api_version=api_version,
             timeout=timeout,
         )

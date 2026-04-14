@@ -95,7 +95,7 @@ class Registry:
             raise ModelNotFoundError(
                 f"Model {model_id} has no pricing data in the registry"
             )
-        return cast(ModelPricing, model["pricing"])
+        return model["pricing"]
 
     def models_for_capability(self, capability: str) -> list[str]:
         """Return model IDs that support a given capability."""
