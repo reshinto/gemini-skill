@@ -187,9 +187,7 @@ class TestDeepResearchRun:
             run(prompt="research", execute=True)
         assert "55d paid" in capsys.readouterr().out
 
-    def test_missing_interaction_id_early_exit(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_missing_interaction_id_early_exit(self, capsys: pytest.CaptureFixture[str]) -> None:
         """When the Interactions API returns no id, run() prints an error and returns."""
         from adapters.experimental.deep_research import run
 
@@ -200,15 +198,11 @@ class TestDeepResearchRun:
             ),
             patch("adapters.experimental.deep_research.load_config") as mock_cfg,
         ):
-            mock_cfg.return_value = MagicMock(
-                deep_research_timeout_seconds=3600, output_dir=None
-            )
+            mock_cfg.return_value = MagicMock(deep_research_timeout_seconds=3600, output_dir=None)
             run(prompt="research", execute=True)
         assert "did not return an interaction id" in capsys.readouterr().out
 
-    def test_interaction_id_non_string_early_exit(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_interaction_id_non_string_early_exit(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Non-string interaction id (e.g. integer) is also rejected."""
         from adapters.experimental.deep_research import run
 
@@ -219,15 +213,11 @@ class TestDeepResearchRun:
             ),
             patch("adapters.experimental.deep_research.load_config") as mock_cfg,
         ):
-            mock_cfg.return_value = MagicMock(
-                deep_research_timeout_seconds=3600, output_dir=None
-            )
+            mock_cfg.return_value = MagicMock(deep_research_timeout_seconds=3600, output_dir=None)
             run(prompt="research", execute=True)
         assert "did not return an interaction id" in capsys.readouterr().out
 
-    def test_polling_surfaces_failed_status(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_polling_surfaces_failed_status(self, capsys: pytest.CaptureFixture[str]) -> None:
         """A ``failed`` poll status prints the failure reason and returns."""
         from adapters.experimental.deep_research import run
 
@@ -243,17 +233,13 @@ class TestDeepResearchRun:
             patch("adapters.experimental.deep_research.time.sleep"),
             patch("adapters.experimental.deep_research.time.time", side_effect=[0, 0, 0]),
         ):
-            mock_cfg.return_value = MagicMock(
-                deep_research_timeout_seconds=3600, output_dir=None
-            )
+            mock_cfg.return_value = MagicMock(deep_research_timeout_seconds=3600, output_dir=None)
             run(prompt="research", execute=True)
         captured = capsys.readouterr().out
         assert "FAILED" in captured
         assert "rate-limited" in captured
 
-    def test_polling_surfaces_cancelled_status(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_polling_surfaces_cancelled_status(self, capsys: pytest.CaptureFixture[str]) -> None:
         """A ``cancelled`` poll status prints the cancellation and returns."""
         from adapters.experimental.deep_research import run
 
@@ -269,9 +255,7 @@ class TestDeepResearchRun:
             patch("adapters.experimental.deep_research.time.sleep"),
             patch("adapters.experimental.deep_research.time.time", side_effect=[0, 0, 0]),
         ):
-            mock_cfg.return_value = MagicMock(
-                deep_research_timeout_seconds=3600, output_dir=None
-            )
+            mock_cfg.return_value = MagicMock(deep_research_timeout_seconds=3600, output_dir=None)
             run(prompt="research", execute=True)
         assert "CANCELLED" in capsys.readouterr().out
 
@@ -297,9 +281,7 @@ class TestDeepResearchRun:
                 side_effect=[0, 0, 0],
             ),
         ):
-            mock_cfg.return_value = MagicMock(
-                deep_research_timeout_seconds=3600, output_dir=None
-            )
+            mock_cfg.return_value = MagicMock(deep_research_timeout_seconds=3600, output_dir=None)
             run(prompt="research", execute=True)
         assert "No text output" in capsys.readouterr().out
 
@@ -325,9 +307,7 @@ class TestDeepResearchRun:
                 side_effect=[0, 0, 0],
             ),
         ):
-            mock_cfg.return_value = MagicMock(
-                deep_research_timeout_seconds=3600, output_dir=None
-            )
+            mock_cfg.return_value = MagicMock(deep_research_timeout_seconds=3600, output_dir=None)
             run(prompt="research", execute=True)
         assert "No text output" in capsys.readouterr().out
 
@@ -357,8 +337,6 @@ class TestDeepResearchRun:
                 side_effect=[0, 0, 0, 0],
             ),
         ):
-            mock_cfg.return_value = MagicMock(
-                deep_research_timeout_seconds=3600, output_dir=None
-            )
+            mock_cfg.return_value = MagicMock(deep_research_timeout_seconds=3600, output_dir=None)
             run(prompt="research", execute=True)
         assert "Research started" in capsys.readouterr().out

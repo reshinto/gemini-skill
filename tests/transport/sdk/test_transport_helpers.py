@@ -42,9 +42,7 @@ class TestBuildGenerateContentKwargs:
 
     def test_contents_only_returns_none_config(self) -> None:
         """When only ``contents`` is present, no config object is built."""
-        body: dict[str, object] = {
-            "contents": [{"role": "user", "parts": [{"text": "hi"}]}]
-        }
+        body: dict[str, object] = {"contents": [{"role": "user", "parts": [{"text": "hi"}]}]}
         contents, config = _build_generate_content_kwargs(body)
         assert contents == body["contents"]
         assert config is None

@@ -41,13 +41,9 @@ class TestImageGenNoTextFallthrough:
         from adapters.media.image_gen import run
 
         # No inlineData parts, no text parts
-        empty_response = {
-            "candidates": [{"content": {"parts": [{"unknownField": "value"}]}}]
-        }
+        empty_response = {"candidates": [{"content": {"parts": [{"unknownField": "value"}]}}]}
         with (
-            patch(
-                "adapters.media.image_gen.api_call", return_value=empty_response
-            ),
+            patch("adapters.media.image_gen.api_call", return_value=empty_response),
             patch("core.routing.router.Router") as mock_router_cls,
             patch("adapters.media.image_gen.load_config") as mock_cfg,
         ):
@@ -60,20 +56,14 @@ class TestImageGenNoTextFallthrough:
 class TestMusicGenNoTextFallthrough:
     """Coverage: music_gen falls through when response has no audio and no text."""
 
-    def test_response_without_audio_or_text_exits_cleanly(
-        self, tmp_path: Path
-    ) -> None:
+    def test_response_without_audio_or_text_exits_cleanly(self, tmp_path: Path) -> None:
         """A response with no inlineData and no text parts exits cleanly —
         branch 103→exit."""
         from adapters.media.music_gen import run
 
-        empty_response = {
-            "candidates": [{"content": {"parts": [{"unknownField": "value"}]}}]
-        }
+        empty_response = {"candidates": [{"content": {"parts": [{"unknownField": "value"}]}}]}
         with (
-            patch(
-                "adapters.media.music_gen.api_call", return_value=empty_response
-            ),
+            patch("adapters.media.music_gen.api_call", return_value=empty_response),
             patch("core.routing.router.Router") as mock_router_cls,
             patch("adapters.media.music_gen.load_config") as mock_cfg,
         ):
@@ -115,9 +105,7 @@ class TestSearchWithoutGrounding:
         branch 81→90."""
         from adapters.tools.search import run
 
-        response = {
-            "candidates": [{"content": {"parts": [{"text": "plain"}]}}]
-        }
+        response = {"candidates": [{"content": {"parts": [{"text": "plain"}]}}]}
         with (
             patch("adapters.tools.search.api_call", return_value=response),
             patch("core.routing.router.Router") as mock_router_cls,
@@ -200,8 +188,9 @@ class TestComputerUseUnknownPart:
 # ----------------------------------------------------------------------
 
 
-def _build_live_session_context(stream_factory: object, has_aclose: bool = True,
-                                 aclose_return: object = None) -> object:
+def _build_live_session_context(
+    stream_factory: object, has_aclose: bool = True, aclose_return: object = None
+) -> object:
     """Build a fake live-session context manager for the live adapter.
 
     Returns an async context manager that yields a session object whose
@@ -223,11 +212,13 @@ def _build_live_session_context(stream_factory: object, has_aclose: bool = True,
     stream_instance = _FakeStream()
     if has_aclose:
         if aclose_return is None:
+
             async def _aclose() -> None:
                 return None
 
             stream_instance.aclose = _aclose  # type: ignore[attr-defined]
         else:
+
             def _aclose_sync() -> object:
                 return aclose_return
 
@@ -269,9 +260,7 @@ class TestLiveAdapterBranches:
             patch("core.routing.router.Router") as mock_router_cls,
             patch("adapters.generation.live.load_config") as mock_cfg,
         ):
-            mock_router_cls.return_value.select_model.return_value = (
-                "gemini-live-2.5-flash-preview"
-            )
+            mock_router_cls.return_value.select_model.return_value = "gemini-live-2.5-flash-preview"
             mock_cfg.return_value = MagicMock(output_dir=None)
             await live_module.run_async(prompt="hello")
 
@@ -291,9 +280,7 @@ class TestLiveAdapterBranches:
 
         fake_client = MagicMock()
         fake_client.aio.live.connect = MagicMock(
-            return_value=_build_live_session_context(
-                stream_with_complete, has_aclose=False
-            )
+            return_value=_build_live_session_context(stream_with_complete, has_aclose=False)
         )
 
         with (
@@ -301,9 +288,7 @@ class TestLiveAdapterBranches:
             patch("core.routing.router.Router") as mock_router_cls,
             patch("adapters.generation.live.load_config") as mock_cfg,
         ):
-            mock_router_cls.return_value.select_model.return_value = (
-                "gemini-live-2.5-flash-preview"
-            )
+            mock_router_cls.return_value.select_model.return_value = "gemini-live-2.5-flash-preview"
             mock_cfg.return_value = MagicMock(output_dir=None)
             await live_module.run_async(prompt="hello")
 
@@ -334,9 +319,7 @@ class TestLiveAdapterBranches:
             patch("core.routing.router.Router") as mock_router_cls,
             patch("adapters.generation.live.load_config") as mock_cfg,
         ):
-            mock_router_cls.return_value.select_model.return_value = (
-                "gemini-live-2.5-flash-preview"
-            )
+            mock_router_cls.return_value.select_model.return_value = "gemini-live-2.5-flash-preview"
             mock_cfg.return_value = MagicMock(output_dir=None)
             await live_module.run_async(prompt="hello")
 
@@ -421,9 +404,7 @@ class TestSearchAdapterBranches:
         """Response without grounding metadata skips the sources footer (branch 81→90)."""
         from adapters.tools.search import run
 
-        response = {
-            "candidates": [{"content": {"parts": [{"text": "plain answer"}]}}]
-        }
+        response = {"candidates": [{"content": {"parts": [{"text": "plain answer"}]}}]}
         with (
             patch("adapters.tools.search.api_call", return_value=response),
             patch("core.routing.router.Router") as mock_router_cls,
@@ -811,9 +792,7 @@ class TestSdkTransportValueErrorTranslation:
 class TestInstallMainCleanInstallMissingFile:
     """Coverage: _clean_install skips operational files that don't exist (branch 309→307)."""
 
-    def test_clean_install_skips_missing_operational_file(
-        self, tmp_path: Path
-    ) -> None:
+    def test_clean_install_skips_missing_operational_file(self, tmp_path: Path) -> None:
         """When an _OPERATIONAL_FILES entry is missing from source_dir,
         the loop continues to the next file without raising."""
         from core.cli import install_main

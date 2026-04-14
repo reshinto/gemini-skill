@@ -436,9 +436,7 @@ class TestValidateAdapterProtocol:
         assert exit_info.value.code == 1
         assert "AdapterProtocol" in capsys.readouterr().out
 
-    def test_adapter_missing_get_parser_errors(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_adapter_missing_get_parser_errors(self, capsys: pytest.CaptureFixture[str]) -> None:
         """An adapter without get_parser exits with 1."""
         from types import SimpleNamespace
 

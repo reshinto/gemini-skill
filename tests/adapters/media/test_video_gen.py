@@ -206,9 +206,7 @@ class TestVideoGenRunErrorPaths:
             patch("adapters.media.video_gen.load_config") as mock_cfg,
         ):
             mock_router_cls.return_value.select_model.return_value = "veo-3"
-            mock_cfg.return_value = MagicMock(
-                prefer_preview_models=False, output_dir=None
-            )
+            mock_cfg.return_value = MagicMock(prefer_preview_models=False, output_dir=None)
             run(prompt="sunset", execute=True, output_dir=str(tmp_path))
 
         captured = capsys.readouterr().out
@@ -238,9 +236,7 @@ class TestVideoGenRunErrorPaths:
             patch("adapters.media.video_gen.time.sleep"),
         ):
             mock_router_cls.return_value.select_model.return_value = "veo-3"
-            mock_cfg.return_value = MagicMock(
-                prefer_preview_models=False, output_dir=None
-            )
+            mock_cfg.return_value = MagicMock(prefer_preview_models=False, output_dir=None)
             run(prompt="sunset", execute=True, output_dir=str(tmp_path))
 
         captured = capsys.readouterr().out

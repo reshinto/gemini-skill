@@ -20,9 +20,7 @@ _SCRIPT_PATH = Path(__file__).resolve().parents[2] / "setup" / "install.py"
 class TestInstallLauncher:
     """``setup/install.py`` delegates to core.cli.install_main."""
 
-    def test_main_branch_invokes_core_install_main(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_main_branch_invokes_core_install_main(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Running as __main__ calls core.cli.install_main.main with argv[1:]."""
         fake_main = MagicMock(return_value=None)
         fake_module = MagicMock()
@@ -47,9 +45,7 @@ class TestInstallLauncher:
 
         fake_main.assert_not_called()
 
-    def test_version_guard_rejects_old_python(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_version_guard_rejects_old_python(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The pre-import version check exits cleanly on Python < 3.9."""
         fake_version = (3, 8, 0, "final", 0)
         monkeypatch.setattr(sys, "version_info", fake_version)
@@ -57,9 +53,7 @@ class TestInstallLauncher:
             runpy.run_path(str(_SCRIPT_PATH), run_name="__main__")
         assert "3.9+" in str(exit_info.value)
 
-    def test_repo_root_added_to_syspath(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_repo_root_added_to_syspath(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The launcher prepends the repo root to ``sys.path``."""
         fake_main = MagicMock(return_value=None)
         fake_module = MagicMock()

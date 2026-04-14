@@ -925,9 +925,7 @@ class TestNonDictResponseHandling:
             result = api_call("models", method="GET")
         assert result == {}
 
-    def test_upload_file_returns_empty_dict_on_non_dict_payload(
-        self, tmp_path: Path
-    ) -> None:
+    def test_upload_file_returns_empty_dict_on_non_dict_payload(self, tmp_path: Path) -> None:
         """If the Files API returns non-dict JSON, ``upload_file`` returns {}."""
         from core.transport.raw_http.client import upload_file
 

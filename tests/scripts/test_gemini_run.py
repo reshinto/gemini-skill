@@ -157,21 +157,15 @@ class TestRunAsMain:
         import runpy
         from pathlib import Path
 
-        script_path = (
-            Path(__file__).resolve().parents[2] / "scripts" / "gemini_run.py"
-        )
+        script_path = Path(__file__).resolve().parents[2] / "scripts" / "gemini_run.py"
         fake_dispatch = mock.MagicMock(return_value=None)
         fake_dispatch_module = mock.MagicMock()
         fake_dispatch_module.main = fake_dispatch
         with (
-            mock.patch.dict(
-                sys.modules, {"core.cli.dispatch": fake_dispatch_module}
-            ),
+            mock.patch.dict(sys.modules, {"core.cli.dispatch": fake_dispatch_module}),
             mock.patch.object(sys, "argv", ["gemini_run.py", "text", "hi"]),
             # Skip the real venv re-exec check so we don't os.execv the test runner.
-            mock.patch(
-                "pathlib.Path.exists", return_value=False
-            ),
+            mock.patch("pathlib.Path.exists", return_value=False),
         ):
             runpy.run_path(str(script_path), run_name="__main__")
 
