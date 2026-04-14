@@ -113,19 +113,26 @@ def create_venv(target: Path) -> None:
         target: Absolute path where the venv should live, typically
             ``~/.claude/skills/gemini/.venv``.
     """
-    # Create the parent directory (the install dir) if it doesn't yet
-    # exist. ``mkdir(parents=True, exist_ok=True)`` is idempotent —
-    # safe to call when the directory already exists.
     target.parent.mkdir(parents=True, exist_ok=True)
 
-    # ``with_pip=True`` is the load-bearing kwarg here: without it,
-    # the venv ships with no pip and ``install_requirements`` would
-    # immediately fail. ``upgrade_deps=True`` is a follow-up
-    # consideration for ensuring pip itself is current; we leave the
-    # default for now to keep the venv build deterministic.
-    builder = venv.EnvBuilder(with_pip=True)
-    # ``EnvBuilder.create`` accepts a string, not a Path, so coerce.
-    builder.create(str(target))
+    try:
+        builder = venv.EnvBuilder(with_pip=True)
+        builder.create(str(target))
+    except subprocess.CalledProcessError as exc:
+        output = ""
+        if exc.output:
+            output = (
+                exc.output.decode()
+                if isinstance(exc.output, bytes)
+                else str(exc.output)
+            )
+        raise InstallError(
+            "virtualenv creation failed while bootstrapping pip via ensurepip"
+            f" (exit {exc.returncode})"
+            + (f":\n{output.strip()}" if output.strip() else "")
+        ) from exc
+    except Exception as exc:
+        raise InstallError(f"virtualenv creation failed: {exc}") from exc
 
 
 def install_requirements(venv_dir: Path, requirements_path: Path) -> None:
@@ -220,6 +227,7 @@ def verify_sdk_importable(venv_dir: Path) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise InstallError(
-            f"SDK not importable from venv (exit {result.returncode}):\n" f"{result.stderr.strip()}"
+            f"SDK not importable from venv (exit {result.returncode}):\n"
+            f"{result.stderr.strip()}"
         )
     return result.stdout.strip()
