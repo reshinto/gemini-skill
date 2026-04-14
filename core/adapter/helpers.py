@@ -12,6 +12,7 @@ overflow by saving large responses to a file and returning only the path.
 
 Dependencies: core/infra/sanitize.py (safe_print)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -113,9 +114,7 @@ def emit_output(
     directory = Path(output_dir) if output_dir else Path(tempfile.gettempdir())
     directory.mkdir(parents=True, exist_ok=True)
 
-    fd, path = tempfile.mkstemp(
-        prefix="gemini-skill-", suffix=".txt", dir=str(directory)
-    )
+    fd, path = tempfile.mkstemp(prefix="gemini-skill-", suffix=".txt", dir=str(directory))
     try:
         os.write(fd, text.encode("utf-8"))
     finally:
@@ -189,9 +188,7 @@ def extract_parts(response: GeminiResponse) -> list[Part]:
     if not candidates:
         feedback = response.get("promptFeedback", {})
         reason = feedback.get("blockReason", "unknown")
-        raise ValueError(
-            f"Gemini API returned no candidates (blockReason={reason})."
-        )
+        raise ValueError(f"Gemini API returned no candidates (blockReason={reason}).")
     return candidates[0].get("content", {}).get("parts", [])
 
 
@@ -210,9 +207,7 @@ def create_media_output_file(suffix: str, output_dir: str | None = None) -> str:
     """
     directory = Path(output_dir) if output_dir else Path(tempfile.gettempdir())
     directory.mkdir(parents=True, exist_ok=True)
-    fd, path = tempfile.mkstemp(
-        prefix="gemini-skill-", suffix=suffix, dir=str(directory)
-    )
+    fd, path = tempfile.mkstemp(prefix="gemini-skill-", suffix=suffix, dir=str(directory))
     os.close(fd)
     return str(Path(path).resolve())
 

@@ -6,6 +6,7 @@ until done, extracts download URI, saves video to file.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,15 +32,20 @@ def get_parser() -> argparse.ArgumentParser:
     add_execute_flag(parser)
     parser.add_argument("prompt", help="Video generation prompt.")
     parser.add_argument(
-        "--output-dir", default=None,
+        "--output-dir",
+        default=None,
         help="Directory for output files.",
     )
     parser.add_argument(
-        "--poll-interval", type=int, default=15,
+        "--poll-interval",
+        type=int,
+        default=15,
         help="Seconds between poll attempts (default: 15).",
     )
     parser.add_argument(
-        "--max-wait", type=int, default=1800,
+        "--max-wait",
+        type=int,
+        default=1800,
         help="Maximum seconds to wait for generation (default: 1800).",
     )
     return parser
@@ -59,6 +65,7 @@ def run(
         return
 
     from core.routing.router import Router
+
     config = load_config()
     router = Router(
         root_dir=Path(__file__).parent.parent.parent,
@@ -92,8 +99,7 @@ def run(
         time.sleep(poll_interval)
     else:
         safe_print(
-            f"[POLL TIMEOUT] Video not ready after {max_wait}s. "
-            f"Operation: {operation_name}"
+            f"[POLL TIMEOUT] Video not ready after {max_wait}s. " f"Operation: {operation_name}"
         )
         return
 
@@ -109,12 +115,14 @@ def run(
     output_path = create_media_output_file(".mp4", out_dir)
     Path(output_path).write_bytes(video_bytes)
 
-    emit_json({
-        "path": output_path,
-        "mime_type": "video/mp4",
-        "size_bytes": len(video_bytes),
-        "operation": operation_name,
-    })
+    emit_json(
+        {
+            "path": output_path,
+            "mime_type": "video/mp4",
+            "size_bytes": len(video_bytes),
+            "operation": operation_name,
+        }
+    )
 
 
 def _extract_video_uri(status: dict[str, object]) -> str | None:

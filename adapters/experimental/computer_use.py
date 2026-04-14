@@ -6,6 +6,7 @@ Preview with high churn risk.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -66,10 +67,12 @@ def run(
             actions.append(part["computerUseAction"])
 
     if actions:
-        emit_json({
-            "type": "computer_actions",
-            "actions": actions,
-            "text": "\n".join(text_parts) if text_parts else None,
-        })
+        emit_json(
+            {
+                "type": "computer_actions",
+                "actions": actions,
+                "text": "\n".join(text_parts) if text_parts else None,
+            }
+        )
     else:
         emit_output("\n".join(text_parts), output_dir=config.output_dir)

@@ -7,6 +7,7 @@ for conversation history management.
 Dependencies: core/infra/client.py, core/adapter/helpers.py,
     core/routing/router.py, core/state/session_state.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,15 +25,20 @@ def get_parser() -> argparse.ArgumentParser:
     parser = build_base_parser("Generate text using Gemini models")
     parser.add_argument("prompt", help="The text prompt to send.")
     parser.add_argument(
-        "--system", default=None,
+        "--system",
+        default=None,
         help="System instruction for the model.",
     )
     parser.add_argument(
-        "--max-tokens", type=int, default=8192,
+        "--max-tokens",
+        type=int,
+        default=8192,
         help="Maximum output tokens.",
     )
     parser.add_argument(
-        "--temperature", type=float, default=1.0,
+        "--temperature",
+        type=float,
+        default=1.0,
         help="Sampling temperature (0.0-2.0).",
     )
     return parser
@@ -68,6 +74,7 @@ def run(
 
     if session or continue_session:
         from core.state.session_state import SessionState
+
         config_dir = Path.home() / ".config" / "gemini-skill"
         sessions = SessionState(sessions_dir=config_dir / "sessions")
         session_id = session

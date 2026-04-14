@@ -83,9 +83,7 @@ class TestApiKeyBypass:
         fake_coord = mock.Mock()
         fake_coord.execute_api_call.return_value = {"candidates": [{"text": "via coord"}]}
         with mock.patch.object(facade, "_get_coordinator", return_value=fake_coord):
-            with mock.patch(
-                "core.transport.raw_http.client.api_call"
-            ) as direct:
+            with mock.patch("core.transport.raw_http.client.api_call") as direct:
                 result = shim.api_call(
                     endpoint="models/gemini:generateContent",
                     body={"contents": []},
@@ -99,9 +97,7 @@ class TestApiKeyBypass:
         """Verify every kwarg flows through to the raw HTTP client."""
         import core.infra.client as shim
 
-        with mock.patch(
-            "core.transport.raw_http.client.api_call", return_value={}
-        ) as direct:
+        with mock.patch("core.transport.raw_http.client.api_call", return_value={}) as direct:
             shim.api_call(
                 endpoint="models",
                 body={"foo": "bar"},
@@ -124,9 +120,7 @@ class TestApiKeyBypass:
         (not coerced to an empty dict by the dict() copy)."""
         import core.infra.client as shim
 
-        with mock.patch(
-            "core.transport.raw_http.client.api_call", return_value={}
-        ) as direct:
+        with mock.patch("core.transport.raw_http.client.api_call", return_value={}) as direct:
             shim.api_call(endpoint="models", method="GET", api_key="k")
 
         assert direct.call_args.kwargs["body"] is None

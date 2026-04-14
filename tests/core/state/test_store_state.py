@@ -3,6 +3,7 @@
 Verifies saving, loading, document tracking, and store management
 for persistent File Search stores (no expiry unlike Files API).
 """
+
 from __future__ import annotations
 
 import json
@@ -15,6 +16,7 @@ import pytest
 
 def _make_identity(sha="abc123"):
     from core.state.identity import DocumentIdentity
+
     return DocumentIdentity(sha, "application/pdf", f"/tmp/{sha}.pdf", None)
 
 
@@ -23,11 +25,13 @@ class TestStoreStateLoad:
 
     def test_load_empty_when_no_file(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         assert state.list_stores() == []
 
     def test_load_existing_state(self, tmp_path):
         from core.state.store_state import StoreState
+
         data = {
             "stores": {
                 "my-store": {
@@ -43,6 +47,7 @@ class TestStoreStateLoad:
 
     def test_load_invalid_json_returns_empty(self, tmp_path):
         from core.state.store_state import StoreState
+
         (tmp_path / "stores.json").write_text("bad json {")
         state = StoreState(state_dir=tmp_path)
         assert state.list_stores() == []
@@ -53,12 +58,14 @@ class TestStoreStateCreate:
 
     def test_create_store(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("my-store", "fileSearchStores/abc")
         assert "my-store" in state.list_stores()
 
     def test_create_store_persists(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("my-store", "fileSearchStores/abc")
 
@@ -67,6 +74,7 @@ class TestStoreStateCreate:
 
     def test_create_store_sets_id(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("my-store", "fileSearchStores/abc")
         info = state.get_store("my-store")
@@ -78,6 +86,7 @@ class TestStoreStateGetStore:
 
     def test_get_existing_store(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("s1", "fileSearchStores/s1")
         info = state.get_store("s1")
@@ -86,6 +95,7 @@ class TestStoreStateGetStore:
 
     def test_get_missing_store(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         assert state.get_store("nonexistent") is None
 
@@ -95,6 +105,7 @@ class TestStoreStateDocuments:
 
     def test_add_document(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("s1", "fileSearchStores/s1")
 
@@ -107,6 +118,7 @@ class TestStoreStateDocuments:
 
     def test_add_document_with_status(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("s1", "fileSearchStores/s1")
 
@@ -118,6 +130,7 @@ class TestStoreStateDocuments:
 
     def test_update_document_status(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("s1", "fileSearchStores/s1")
 
@@ -130,6 +143,7 @@ class TestStoreStateDocuments:
 
     def test_update_missing_document_no_error(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("s1", "fileSearchStores/s1")
         ident = _make_identity()
@@ -138,17 +152,20 @@ class TestStoreStateDocuments:
 
     def test_list_documents_empty_store(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("s1", "fileSearchStores/s1")
         assert state.list_documents("s1") == []
 
     def test_list_documents_missing_store(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         assert state.list_documents("nonexistent") == []
 
     def test_has_document_true(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("s1", "fileSearchStores/s1")
         ident = _make_identity()
@@ -157,6 +174,7 @@ class TestStoreStateDocuments:
 
     def test_has_document_false(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("s1", "fileSearchStores/s1")
         ident = _make_identity()
@@ -164,18 +182,21 @@ class TestStoreStateDocuments:
 
     def test_has_document_missing_store(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         ident = _make_identity()
         assert state.has_document("nonexistent", ident) is False
 
     def test_add_document_missing_store_no_error(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         ident = _make_identity()
         state.add_document("nonexistent", ident, operation_name="ops/1")
 
     def test_update_document_status_missing_store_no_error(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         ident = _make_identity()
         state.update_document_status("nonexistent", ident, status="done")
@@ -186,6 +207,7 @@ class TestStoreStateRemove:
 
     def test_remove_store(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.create_store("s1", "fileSearchStores/s1")
         state.remove_store("s1")
@@ -193,6 +215,7 @@ class TestStoreStateRemove:
 
     def test_remove_missing_store_no_error(self, tmp_path):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
         state.remove_store("nonexistent")  # Should not raise
 
@@ -202,22 +225,31 @@ class TestStoreStateSaveErrors:
 
     def test_save_cleans_up_on_replace_failure(self, tmp_path, monkeypatch):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
-        monkeypatch.setattr(os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed")))
+        monkeypatch.setattr(
+            os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed"))
+        )
         with pytest.raises(OSError, match="replace failed"):
             state.create_store("s1", "fileSearchStores/s1")
 
     def test_save_closes_fd_on_write_failure(self, tmp_path, monkeypatch):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
-        monkeypatch.setattr(os, "write", lambda fd, data: (_ for _ in ()).throw(OSError("write failed")))
+        monkeypatch.setattr(
+            os, "write", lambda fd, data: (_ for _ in ()).throw(OSError("write failed"))
+        )
         with pytest.raises(OSError, match="write failed"):
             state.create_store("s1", "fileSearchStores/s1")
 
     def test_save_handles_unlink_failure(self, tmp_path, monkeypatch):
         from core.state.store_state import StoreState
+
         state = StoreState(state_dir=tmp_path)
-        monkeypatch.setattr(os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed")))
+        monkeypatch.setattr(
+            os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed"))
+        )
         monkeypatch.setattr(os, "unlink", lambda p: (_ for _ in ()).throw(OSError("unlink failed")))
         with pytest.raises(OSError, match="replace failed"):
             state.create_store("s1", "fileSearchStores/s1")

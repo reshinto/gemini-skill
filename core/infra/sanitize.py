@@ -13,6 +13,7 @@ The exception hook is auto-installed on module import.
 
 Dependency: none (leaf module).
 """
+
 from __future__ import annotations
 
 import re
@@ -59,6 +60,7 @@ def install_exception_hook() -> None:
     traceback text sanitized before being printed to stderr. Chains
     to the original hook after sanitization so any prior hooks still fire.
     """
+
     def _safe_hook(
         exc_type: type[BaseException],
         exc_val: BaseException,

@@ -10,6 +10,7 @@ indefinitely (unlike Files API 48hr expiry).
 Dependencies: core/infra/client.py, core/adapter/helpers.py,
     core/state/store_state.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -131,6 +132,7 @@ def _query_store(
         return
 
     from core.routing.router import Router
+
     config = load_config()
     router = Router(
         root_dir=Path(__file__).parent.parent.parent,

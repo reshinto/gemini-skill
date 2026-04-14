@@ -3,6 +3,7 @@
 Verifies SHA-256 hashing, MIME detection, path resolution, URI handling,
 and equality/hashing of DocumentIdentity instances.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

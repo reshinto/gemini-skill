@@ -90,7 +90,11 @@ class TestDispatchPolicyEnforcement:
         [
             ("search", "adapters.tools.search.run", ["search", "weather today"]),
             ("maps", "adapters.tools.maps.run", ["maps", "coffee shops near me"]),
-            ("computer_use", "adapters.experimental.computer_use.run", ["computer_use", "describe screen"]),
+            (
+                "computer_use",
+                "adapters.experimental.computer_use.run",
+                ["computer_use", "describe screen"],
+            ),
         ],
     )
     def test_privacy_sensitive_main_auto_injects_opt_in(self, command, adapter_path, argv):
@@ -133,7 +137,10 @@ class TestDispatchPolicyEnforcement:
             (["files", "list"], "adapters.data.files.run"),
             (["cache", "list"], "adapters.data.cache.run"),
             (["batch", "list"], "adapters.data.batch.run"),
-            (["file_search", "query", "find doc", "--store", "stores/x"], "adapters.data.file_search.run"),
+            (
+                ["file_search", "query", "find doc", "--store", "stores/x"],
+                "adapters.data.file_search.run",
+            ),
             (["file_search", "list"], "adapters.data.file_search.run"),
         ],
     )

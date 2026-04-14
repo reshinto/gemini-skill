@@ -5,6 +5,7 @@ agentic flow). The smoke test verifies the DRY RUN path.
 
 Gate: requires GEMINI_LIVE_TESTS=1 and GEMINI_API_KEY.
 """
+
 from __future__ import annotations
 
 import os
@@ -32,9 +33,11 @@ pytestmark = [
 
 def test_deep_research_live() -> None:
     result = subprocess.run(
-        [sys.executable, str(_RUNNER), "deep_research",
-         "What is 2+2?"],
-        capture_output=True, text=True, timeout=30, cwd=str(_REPO_ROOT),
+        [sys.executable, str(_RUNNER), "deep_research", "What is 2+2?"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=str(_REPO_ROOT),
     )
     assert result.returncode == 0, f"stderr={result.stderr}"
     assert "[DRY RUN]" in result.stdout

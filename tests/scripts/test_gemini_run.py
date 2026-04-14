@@ -136,9 +136,11 @@ class TestMainEntryPoint:
         """Smoke test: main() calls _check_python_version, skips re-exec
         (venv missing in tmp), then forwards argv to dispatch.main."""
         runner = _import_runner()
-        with mock.patch.object(runner, "_check_python_version") as mock_check, \
-             mock.patch.object(runner, "_maybe_reexec_under_venv") as mock_reexec, \
-             mock.patch("core.cli.dispatch.main", return_value=0) as mock_dispatch:
+        with (
+            mock.patch.object(runner, "_check_python_version") as mock_check,
+            mock.patch.object(runner, "_maybe_reexec_under_venv") as mock_reexec,
+            mock.patch("core.cli.dispatch.main", return_value=0) as mock_dispatch,
+        ):
             runner.main(["text", "hello"])
 
         mock_check.assert_called_once()

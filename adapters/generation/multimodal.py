@@ -6,6 +6,7 @@ Handles file reading and MIME detection for local files.
 Dependencies: core/infra/client.py, core/adapter/helpers.py,
     core/infra/mime.py, core/state/identity.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -25,11 +26,14 @@ def get_parser() -> argparse.ArgumentParser:
     parser = build_base_parser("Send multimodal content to Gemini")
     parser.add_argument("prompt", help="Text prompt accompanying the media.")
     parser.add_argument(
-        "--file", action="append", default=[],
+        "--file",
+        action="append",
+        default=[],
         help="Path to a local file to include (can be repeated).",
     )
     parser.add_argument(
-        "--mime", default=None,
+        "--mime",
+        default=None,
         help="Override MIME type for the file.",
     )
     return parser
@@ -55,16 +59,18 @@ def run(
     parts: list[Part] = []
 
     # Add file parts
-    for file_path in (file or []):
+    for file_path in file or []:
         path = Path(file_path)
         mime_type = mime or guess_mime_for_path(path)
         data = base64.b64encode(path.read_bytes()).decode("utf-8")
-        parts.append({
-            "inlineData": {
-                "mimeType": mime_type,
-                "data": data,
+        parts.append(
+            {
+                "inlineData": {
+                    "mimeType": mime_type,
+                    "data": data,
+                }
             }
-        })
+        )
 
     # Add text prompt
     parts.append({"text": prompt})

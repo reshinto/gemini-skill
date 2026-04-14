@@ -12,6 +12,7 @@ Python constraints:
 
 Dependency: none (leaf module, stdlib only).
 """
+
 from __future__ import annotations
 
 import signal

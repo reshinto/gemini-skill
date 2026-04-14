@@ -1,4 +1,5 @@
 """Tests for adapters/media/music_gen.py — music generation adapter."""
+
 from __future__ import annotations
 
 import base64
@@ -11,26 +12,29 @@ import pytest
 def _mock_audio_response(data=b"audio-data", mime="audio/wav"):
     b64 = base64.b64encode(data).decode()
     return {
-        "candidates": [{
-            "content": {
-                "parts": [{"inlineData": {"mimeType": mime, "data": b64}}],
-                "role": "model",
+        "candidates": [
+            {
+                "content": {
+                    "parts": [{"inlineData": {"mimeType": mime, "data": b64}}],
+                    "role": "model",
+                }
             }
-        }],
+        ],
     }
 
 
 def _mock_text_only_response():
     return {
-        "candidates": [{
-            "content": {"parts": [{"text": "Cannot generate music."}], "role": "model"}
-        }],
+        "candidates": [
+            {"content": {"parts": [{"text": "Cannot generate music."}], "role": "model"}}
+        ],
     }
 
 
 class TestMusicGenGetParser:
     def test_has_prompt(self):
         from adapters.media.music_gen import get_parser
+
         args = get_parser().parse_args(["upbeat jazz"])
         assert args.prompt == "upbeat jazz"
 
@@ -38,13 +42,17 @@ class TestMusicGenGetParser:
 class TestMusicGenRun:
     def test_dry_run_skips(self, capsys):
         from adapters.media.music_gen import run
+
         run(prompt="jazz", execute=False)
         assert "[DRY RUN]" in capsys.readouterr().out
 
     def test_saves_audio_to_file(self, tmp_path, capsys):
         from adapters.media.music_gen import run
-        with patch("adapters.media.music_gen.api_call", return_value=_mock_audio_response()), \
-             patch("adapters.media.music_gen.load_config") as mock_cfg:
+
+        with (
+            patch("adapters.media.music_gen.api_call", return_value=_mock_audio_response()),
+            patch("adapters.media.music_gen.load_config") as mock_cfg,
+        ):
             mock_cfg.return_value = MagicMock(prefer_preview_models=False, output_dir=str(tmp_path))
             run(prompt="jazz", execute=True)
         data = json.loads(capsys.readouterr().out)
@@ -53,8 +61,11 @@ class TestMusicGenRun:
 
     def test_sets_audio_modality(self, capsys):
         from adapters.media.music_gen import run
-        with patch("adapters.media.music_gen.api_call", return_value=_mock_audio_response()) as mock, \
-             patch("adapters.media.music_gen.load_config") as mock_cfg:
+
+        with (
+            patch("adapters.media.music_gen.api_call", return_value=_mock_audio_response()) as mock,
+            patch("adapters.media.music_gen.load_config") as mock_cfg,
+        ):
             mock_cfg.return_value = MagicMock(prefer_preview_models=False, output_dir=None)
             run(prompt="jazz", execute=True)
         body = mock.call_args.kwargs["body"]
@@ -62,8 +73,11 @@ class TestMusicGenRun:
 
     def test_emits_text_when_no_audio(self, capsys):
         from adapters.media.music_gen import run
-        with patch("adapters.media.music_gen.api_call", return_value=_mock_text_only_response()), \
-             patch("adapters.media.music_gen.load_config") as mock_cfg:
+
+        with (
+            patch("adapters.media.music_gen.api_call", return_value=_mock_text_only_response()),
+            patch("adapters.media.music_gen.load_config") as mock_cfg,
+        ):
             mock_cfg.return_value = MagicMock(prefer_preview_models=False, output_dir=None)
             run(prompt="jazz", execute=True)
         assert "Cannot generate" in capsys.readouterr().out
@@ -73,10 +87,12 @@ class TestAudioMimeMap:
     def test_audio_mime_map_known(self):
         from adapters.media.music_gen import _AUDIO_MIME_MAP
         from core.adapter.helpers import mime_to_ext
+
         assert mime_to_ext("audio/wav", _AUDIO_MIME_MAP, ".wav") == ".wav"
         assert mime_to_ext("audio/mpeg", _AUDIO_MIME_MAP, ".wav") == ".mp3"
 
     def test_audio_mime_map_fallback(self):
         from adapters.media.music_gen import _AUDIO_MIME_MAP
         from core.adapter.helpers import mime_to_ext
+
         assert mime_to_ext("audio/unknown", _AUDIO_MIME_MAP, ".wav") == ".wav"

@@ -174,9 +174,7 @@ class TestGenerateContentParity:
         # REST-shaped (camelCase) response the real Gemini API sends back.
         from core.transport.raw_http.transport import RawHttpTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="models/gemini-2.5-flash:generateContent",
                 body={"contents": [{"role": "user", "parts": [{"text": "hi"}]}]},
@@ -200,9 +198,7 @@ class TestGenerateContentParity:
 
         _assert_parity(raw_result, sdk_result)
 
-    def test_multimodal_response_with_inline_data(
-        self, patched_sdk_client: mock.Mock
-    ) -> None:
+    def test_multimodal_response_with_inline_data(self, patched_sdk_client: mock.Mock) -> None:
         """Multimodal — parts carry inline_data with a mime_type."""
         snake = {
             "candidates": [
@@ -229,9 +225,7 @@ class TestGenerateContentParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="models/gemini-2.5-flash:generateContent",
                 body={"contents": []},
@@ -281,9 +275,7 @@ class TestGenerateContentParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="models/gemini-2.5-flash:generateContent",
                 body={"contents": []},
@@ -335,9 +327,7 @@ class TestGenerateContentParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="models/gemini-2.5-flash:generateContent",
                 body={"contents": []},
@@ -389,9 +379,7 @@ class TestGenerateContentParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="models/gemini-2.5-flash:generateContent",
                 body={"contents": []},
@@ -429,9 +417,7 @@ class TestGenerateContentParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="models/gemini-2.5-flash:generateContent",
                 body={"contents": []},
@@ -472,9 +458,7 @@ class TestCountTokensParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="models/gemini-2.5-flash:countTokens",
                 body={"contents": [{"role": "user", "parts": [{"text": "hi"}]}]},
@@ -504,9 +488,7 @@ class TestCountTokensParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="models/gemini-2.5-flash:countTokens",
                 body={"contents": [{"role": "user", "parts": [{"text": "hi"}]}]},
@@ -541,9 +523,7 @@ class TestPredictLongRunningParity:
         from core.transport.sdk.transport import SdkTransport
 
         body = {"instances": [{"prompt": "a cat playing piano"}]}
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="models/veo-2.0-generate-001:predictLongRunning",
                 body=body,
@@ -574,9 +554,7 @@ class TestEmbedContentParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="models/embedding-001:embedContent",
                 body={"content": {"parts": [{"text": "hi"}]}},
@@ -621,9 +599,7 @@ class TestFilesParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="files/abc123",
                 body=None,
@@ -669,9 +645,7 @@ class TestFilesParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="files",
                 body=None,
@@ -697,9 +671,7 @@ class TestFilesParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value={}
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value={}):
             raw_result = RawHttpTransport().api_call(
                 endpoint="files/abc123",
                 body=None,
@@ -742,9 +714,7 @@ class TestCachesParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="cachedContents",
                 body=body,
@@ -783,9 +753,7 @@ class TestCachesParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="cachedContents",
                 body=None,
@@ -794,9 +762,7 @@ class TestCachesParity:
                 timeout=30,
             )
 
-        patched_sdk_client.caches.list.return_value = [
-            _make_sdk_obj(i) for i in snake_items
-        ]
+        patched_sdk_client.caches.list.return_value = [_make_sdk_obj(i) for i in snake_items]
         sdk_result = SdkTransport().api_call(
             endpoint="cachedContents",
             body=None,
@@ -806,6 +772,7 @@ class TestCachesParity:
         )
 
         _assert_parity(raw_result, sdk_result)
+
     def test_caches_get_single(self, patched_sdk_client: mock.Mock) -> None:
         snake = {
             "name": "cachedContents/abc",
@@ -821,9 +788,7 @@ class TestCachesParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="cachedContents/abc",
                 body=None,
@@ -860,9 +825,7 @@ class TestBatchesParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="batchJobs",
                 body=body,
@@ -901,9 +864,7 @@ class TestBatchesParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="batchJobs",
                 body=None,
@@ -912,9 +873,7 @@ class TestBatchesParity:
                 timeout=30,
             )
 
-        patched_sdk_client.batches.list.return_value = [
-            _make_sdk_obj(i) for i in snake_items
-        ]
+        patched_sdk_client.batches.list.return_value = [_make_sdk_obj(i) for i in snake_items]
         sdk_result = SdkTransport().api_call(
             endpoint="batchJobs",
             body=None,
@@ -925,16 +884,12 @@ class TestBatchesParity:
 
         _assert_parity(raw_result, sdk_result)
 
-    def test_batches_cancel_empty_envelope(
-        self, patched_sdk_client: mock.Mock
-    ) -> None:
+    def test_batches_cancel_empty_envelope(self, patched_sdk_client: mock.Mock) -> None:
         """``batchJobs/{name}:cancel`` returns empty ``{}`` on both backends."""
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value={}
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value={}):
             raw_result = RawHttpTransport().api_call(
                 endpoint="batchJobs/xyz:cancel",
                 body=None,
@@ -968,9 +923,7 @@ class TestBatchesParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="batchJobs/xyz",
                 body=None,
@@ -1004,9 +957,7 @@ class TestOperationsParity:
         from core.transport.raw_http.transport import RawHttpTransport
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.raw_http.transport._client_api_call", return_value=camel
-        ):
+        with mock.patch("core.transport.raw_http.transport._client_api_call", return_value=camel):
             raw_result = RawHttpTransport().api_call(
                 endpoint="operations/abc",
                 body=None,
@@ -1109,9 +1060,7 @@ class TestStreamParity:
 
 
 class TestUploadFileParity:
-    def test_upload_file_metadata(
-        self, patched_sdk_client: mock.Mock, tmp_path: Path
-    ) -> None:
+    def test_upload_file_metadata(self, patched_sdk_client: mock.Mock, tmp_path: Path) -> None:
         """File upload metadata must match across backends.
 
         Both transports ultimately return a ``FileMetadata`` shape — raw HTTP

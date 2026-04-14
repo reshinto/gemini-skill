@@ -6,6 +6,7 @@ returns DRY RUN cleanly.
 
 Gate: requires GEMINI_LIVE_TESTS=1 and GEMINI_API_KEY.
 """
+
 from __future__ import annotations
 
 import os
@@ -34,7 +35,10 @@ pytestmark = [
 def test_files_live() -> None:
     result = subprocess.run(
         [sys.executable, str(_RUNNER), "files", "delete", "files/smoke"],
-        capture_output=True, text=True, timeout=30, cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=str(_REPO_ROOT),
     )
     assert result.returncode == 0, f"stderr={result.stderr}"
     assert "[DRY RUN]" in result.stdout

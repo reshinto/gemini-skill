@@ -83,8 +83,9 @@ class _ImagenResponseProtocol(Protocol):
 
 
 class _ImagenModelsProtocol(Protocol):
-    def generate_images(self, *, model: str, prompt: str, config: object) -> _ImagenResponseProtocol:
-        ...
+    def generate_images(
+        self, *, model: str, prompt: str, config: object
+    ) -> _ImagenResponseProtocol: ...
 
 
 class _ImagenClientProtocol(Protocol):

@@ -5,6 +5,7 @@ targets a mutating subcommand and verifies the DRY RUN path.
 
 Gate: requires GEMINI_LIVE_TESTS=1 and GEMINI_API_KEY.
 """
+
 from __future__ import annotations
 
 import os
@@ -33,7 +34,10 @@ pytestmark = [
 def test_batch_live() -> None:
     result = subprocess.run(
         [sys.executable, str(_RUNNER), "batch", "cancel", "batchJobs/smoke"],
-        capture_output=True, text=True, timeout=30, cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=str(_REPO_ROOT),
     )
     assert result.returncode == 0, f"stderr={result.stderr}"
     assert "[DRY RUN]" in result.stdout

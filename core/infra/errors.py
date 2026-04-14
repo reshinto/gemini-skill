@@ -12,6 +12,7 @@ so any caller that builds an APIError with raw upstream content gets
 defense-in-depth redaction). sanitize is itself a leaf module with
 zero core/* imports, so no circular risk.
 """
+
 from __future__ import annotations
 
 from core.infra.sanitize import sanitize as _sanitize
@@ -106,9 +107,7 @@ class APIError(GeminiSkillError):
         # imported at module top — see the module docstring's note on
         # the lack of circular-import risk.
         self.primary_error = _sanitize(primary_error) if primary_error is not None else None
-        self.fallback_error = (
-            _sanitize(fallback_error) if fallback_error is not None else None
-        )
+        self.fallback_error = _sanitize(fallback_error) if fallback_error is not None else None
 
     def __str__(self) -> str:
         """Render a structured combined message when multi-backend context is set.

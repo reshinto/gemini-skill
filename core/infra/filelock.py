@@ -11,6 +11,7 @@ even if an exception occurs inside the with block.
 Dependency: core/infra/errors.py (for LockTimeout, though we define it here
 to keep the filelock self-contained).
 """
+
 from __future__ import annotations
 
 import os
@@ -78,9 +79,11 @@ class FileLock:
             raise RuntimeError("File descriptor not initialized before locking")
         if sys.platform == "win32":  # pragma: no cover
             import msvcrt
+
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
         else:
             import fcntl
+
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     def _release(self) -> None:
@@ -89,12 +92,14 @@ class FileLock:
             try:
                 if sys.platform == "win32":  # pragma: no cover
                     import msvcrt
+
                     try:
                         msvcrt.locking(self._fd, msvcrt.LK_UNLCK, 1)
                     except OSError:
                         pass
                 else:
                     import fcntl
+
                     fcntl.flock(self._fd, fcntl.LOCK_UN)
             finally:
                 os.close(self._fd)

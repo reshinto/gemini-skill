@@ -193,7 +193,9 @@ class TestApiCallGenerateContent:
     ) -> None:
         from core.transport.sdk.transport import SdkTransport
 
-        patched_get_client.models.generate_content.return_value = _make_sdk_response({"candidates": []})
+        patched_get_client.models.generate_content.return_value = _make_sdk_response(
+            {"candidates": []}
+        )
 
         body = {
             "contents": [{"role": "user", "parts": [{"text": "go"}]}],
@@ -206,9 +208,7 @@ class TestApiCallGenerateContent:
             },
             "systemInstruction": {"parts": [{"text": "be brief"}]},
             "tools": [{"functionDeclarations": [{"name": "lookup"}]}],
-            "safetySettings": [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}
-            ],
+            "safetySettings": [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}],
         }
         SdkTransport().api_call("models/gemini-2.5-pro:generateContent", body=body)
 
@@ -233,7 +233,9 @@ class TestApiCallGenerateContent:
     def test_no_config_passes_none(self, patched_get_client: mock.Mock) -> None:
         from core.transport.sdk.transport import SdkTransport
 
-        patched_get_client.models.generate_content.return_value = _make_sdk_response({"candidates": []})
+        patched_get_client.models.generate_content.return_value = _make_sdk_response(
+            {"candidates": []}
+        )
 
         body = {"contents": [{"role": "user", "parts": [{"text": "go"}]}]}
         SdkTransport().api_call("models/gemini:generateContent", body=body)
@@ -265,9 +267,7 @@ class TestApiCallCountTokens:
 
 
 class TestApiCallEmbedContent:
-    def test_embed_content_with_output_dimensionality(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_embed_content_with_output_dimensionality(self, patched_get_client: mock.Mock) -> None:
         from core.transport.sdk.transport import SdkTransport
 
         patched_get_client.models.embed_content.return_value = _make_sdk_response(
@@ -397,9 +397,7 @@ class TestApiCallBatches:
     def test_batches_get(self, patched_get_client: mock.Mock) -> None:
         from core.transport.sdk.transport import SdkTransport
 
-        patched_get_client.batches.get.return_value = _make_sdk_response(
-            {"name": "batchJobs/abc"}
-        )
+        patched_get_client.batches.get.return_value = _make_sdk_response({"name": "batchJobs/abc"})
         SdkTransport().api_call("batchJobs/abc", method="GET")
         patched_get_client.batches.get.assert_called_once_with(name="batchJobs/abc")
 
@@ -422,7 +420,10 @@ class TestApiCallOperations:
         result = cast(JSONObject, SdkTransport().api_call("operations/abc", method="GET"))
         # SDK uses operation= kwarg, not name=
         call = patched_get_client.operations.get.call_args
-        assert call.kwargs.get("operation") == "operations/abc" or call.kwargs.get("name") == "operations/abc"
+        assert (
+            call.kwargs.get("operation") == "operations/abc"
+            or call.kwargs.get("name") == "operations/abc"
+        )
         assert result["name"] == "operations/abc"
 
 
@@ -476,9 +477,7 @@ class TestApiCallUnsupportedEndpoint:
         with pytest.raises(BackendUnavailableError, match="unknown action endpoint"):
             SdkTransport().api_call("randomThing/abc:operate", body={})
 
-    def test_operations_unsupported_method_raises(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_operations_unsupported_method_raises(self, patched_get_client: mock.Mock) -> None:
         """``operations/{name}`` only supports GET; other methods fall through
         to the collection-level raise."""
         from core.transport.base import BackendUnavailableError
@@ -518,9 +517,7 @@ class TestUnsupportedEndpointMessageSanitized:
 
     _LEAKED_KEY = "AIzaSyTestKey12345678901234567890123456"
 
-    def test_unknown_action_endpoint_redacts_key(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_unknown_action_endpoint_redacts_key(self, patched_get_client: mock.Mock) -> None:
         from core.transport.base import BackendUnavailableError
         from core.transport.sdk.transport import SdkTransport
 
@@ -530,9 +527,7 @@ class TestUnsupportedEndpointMessageSanitized:
             SdkTransport().api_call(endpoint, body={})
         assert self._LEAKED_KEY not in str(exc_info.value)
 
-    def test_unknown_action_path_redacts_key(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_unknown_action_path_redacts_key(self, patched_get_client: mock.Mock) -> None:
         from core.transport.base import BackendUnavailableError
         from core.transport.sdk.transport import SdkTransport
 
@@ -541,9 +536,7 @@ class TestUnsupportedEndpointMessageSanitized:
             SdkTransport().api_call(endpoint, body={})
         assert self._LEAKED_KEY not in str(exc_info.value)
 
-    def test_unknown_collection_redacts_key(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_unknown_collection_redacts_key(self, patched_get_client: mock.Mock) -> None:
         from core.transport.base import BackendUnavailableError
         from core.transport.sdk.transport import SdkTransport
 
@@ -552,9 +545,7 @@ class TestUnsupportedEndpointMessageSanitized:
             SdkTransport().api_call(endpoint, method="GET")
         assert self._LEAKED_KEY not in str(exc_info.value)
 
-    def test_files_unsupported_method_redacts_key(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_files_unsupported_method_redacts_key(self, patched_get_client: mock.Mock) -> None:
         from core.transport.base import BackendUnavailableError
         from core.transport.sdk.transport import SdkTransport
 
@@ -563,9 +554,7 @@ class TestUnsupportedEndpointMessageSanitized:
             SdkTransport().api_call(endpoint, method="PUT")
         assert self._LEAKED_KEY not in str(exc_info.value)
 
-    def test_caches_unsupported_method_redacts_key(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_caches_unsupported_method_redacts_key(self, patched_get_client: mock.Mock) -> None:
         from core.transport.base import BackendUnavailableError
         from core.transport.sdk.transport import SdkTransport
 
@@ -574,9 +563,7 @@ class TestUnsupportedEndpointMessageSanitized:
             SdkTransport().api_call(endpoint, method="PUT")
         assert self._LEAKED_KEY not in str(exc_info.value)
 
-    def test_batches_unsupported_method_redacts_key(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_batches_unsupported_method_redacts_key(self, patched_get_client: mock.Mock) -> None:
         from core.transport.base import BackendUnavailableError
         from core.transport.sdk.transport import SdkTransport
 
@@ -585,9 +572,7 @@ class TestUnsupportedEndpointMessageSanitized:
             SdkTransport().api_call(endpoint, method="DELETE")
         assert self._LEAKED_KEY not in str(exc_info.value)
 
-    def test_operations_unsupported_method_redacts_key(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_operations_unsupported_method_redacts_key(self, patched_get_client: mock.Mock) -> None:
         from core.transport.base import BackendUnavailableError
         from core.transport.sdk.transport import SdkTransport
 
@@ -596,9 +581,7 @@ class TestUnsupportedEndpointMessageSanitized:
             SdkTransport().api_call(endpoint, method="DELETE")
         assert self._LEAKED_KEY not in str(exc_info.value)
 
-    def test_unknown_model_action_redacts_key(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_unknown_model_action_redacts_key(self, patched_get_client: mock.Mock) -> None:
         """The model-action raise interpolates both action and model."""
         from core.transport.base import BackendUnavailableError
         from core.transport.sdk.transport import SdkTransport
@@ -705,10 +688,7 @@ class TestVideoPromptExtraction:
         )
         body = {"instances": [{"prompt": 42}], "prompt": "fallback"}
         SdkTransport().api_call("models/veo:predictLongRunning", body=body)
-        assert (
-            patched_get_client.models.generate_videos.call_args.kwargs["prompt"]
-            == "fallback"
-        )
+        assert patched_get_client.models.generate_videos.call_args.kwargs["prompt"] == "fallback"
 
     def test_instances_with_non_dict_first_falls_through(
         self, patched_get_client: mock.Mock
@@ -720,10 +700,7 @@ class TestVideoPromptExtraction:
         )
         body = {"instances": ["not-a-dict"], "prompt": "fallback"}
         SdkTransport().api_call("models/veo:predictLongRunning", body=body)
-        assert (
-            patched_get_client.models.generate_videos.call_args.kwargs["prompt"]
-            == "fallback"
-        )
+        assert patched_get_client.models.generate_videos.call_args.kwargs["prompt"] == "fallback"
 
 
 class TestWrapCollection:
@@ -750,12 +727,8 @@ class TestStreamGenerateContent:
     def test_yields_normalized_chunks(self, patched_get_client: mock.Mock) -> None:
         from core.transport.sdk.transport import SdkTransport
 
-        chunk1 = _make_sdk_response(
-            {"candidates": [{"content": {"parts": [{"text": "Hello "}]}}]}
-        )
-        chunk2 = _make_sdk_response(
-            {"candidates": [{"content": {"parts": [{"text": "world"}]}}]}
-        )
+        chunk1 = _make_sdk_response({"candidates": [{"content": {"parts": [{"text": "Hello "}]}}]})
+        chunk2 = _make_sdk_response({"candidates": [{"content": {"parts": [{"text": "world"}]}}]})
         patched_get_client.models.generate_content_stream.return_value = iter([chunk1, chunk2])
 
         body = {"contents": [{"role": "user", "parts": [{"text": "say hi"}]}]}
@@ -910,9 +883,7 @@ class TestStreamCloseOnEarlyExit:
     iterator's close() is called even if the consumer breaks out early.
     Pins the resource-cleanup contract a hardening review asked for."""
 
-    def test_iterator_close_called_on_full_consumption(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_iterator_close_called_on_full_consumption(self, patched_get_client: mock.Mock) -> None:
         from core.transport.sdk.transport import SdkTransport
 
         chunk = _make_sdk_response({"candidates": []})
@@ -1026,9 +997,7 @@ class TestWrapSdkErrorsUnit:
 
         with pytest.raises(AuthError) as exc_info:
             with _wrap_sdk_errors():
-                raise _make_sdk_client_error(
-                    401, f"API key invalid: key={_LEAKED_KEY_SDK}"
-                )
+                raise _make_sdk_client_error(401, f"API key invalid: key={_LEAKED_KEY_SDK}")
         assert _LEAKED_KEY_SDK not in str(exc_info.value)
         assert "[REDACTED]" in str(exc_info.value)
 
@@ -1042,9 +1011,7 @@ class TestWrapSdkErrorsUnit:
         # regression where sanitize() stops being called.
         with pytest.raises(AuthError) as exc_info:
             with _wrap_sdk_errors():
-                raise _make_sdk_client_error(
-                    403, f"permission denied: key={_LEAKED_KEY_SDK}"
-                )
+                raise _make_sdk_client_error(403, f"permission denied: key={_LEAKED_KEY_SDK}")
         assert _LEAKED_KEY_SDK not in str(exc_info.value)
         assert "[REDACTED]" in str(exc_info.value)
 
@@ -1064,9 +1031,7 @@ class TestWrapSdkErrorsUnit:
 
         with pytest.raises(APIError) as exc_info:
             with _wrap_sdk_errors():
-                raise _make_sdk_client_error(
-                    400, f"bad request with key {_LEAKED_KEY_SDK}"
-                )
+                raise _make_sdk_client_error(400, f"bad request with key {_LEAKED_KEY_SDK}")
         assert exc_info.value.status_code == 400
         assert _LEAKED_KEY_SDK not in str(exc_info.value)
 
@@ -1085,9 +1050,7 @@ class TestWrapSdkErrorsUnit:
 
         with pytest.raises(APIError) as exc_info:
             with _wrap_sdk_errors():
-                raise _make_sdk_server_error(
-                    500, f"server error {_LEAKED_KEY_SDK}"
-                )
+                raise _make_sdk_server_error(500, f"server error {_LEAKED_KEY_SDK}")
         assert exc_info.value.status_code == 500
         assert _LEAKED_KEY_SDK not in str(exc_info.value)
 
@@ -1190,9 +1153,7 @@ class TestWrapSdkErrorsUnit:
 
         with pytest.raises(AuthError) as exc_info:
             with _wrap_sdk_errors():
-                raise _make_sdk_client_error(
-                    401, f"bad key {_LEAKED_KEY_SDK}"
-                )
+                raise _make_sdk_client_error(401, f"bad key {_LEAKED_KEY_SDK}")
         # __cause__ is None: the chain is suppressed at the boundary.
         assert exc_info.value.__cause__ is None
 
@@ -1217,29 +1178,21 @@ class TestWrapSdkErrorsIntegration:
     and raise an SDK error; the resulting skill-level exception proves
     the wrapper is threaded through the dispatch code path."""
 
-    def test_api_call_wraps_generate_content_error(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_api_call_wraps_generate_content_error(self, patched_get_client: mock.Mock) -> None:
         from core.infra.errors import APIError
         from core.transport.sdk.transport import SdkTransport
 
-        patched_get_client.models.generate_content.side_effect = _make_sdk_client_error(
-            429, "rate"
-        )
+        patched_get_client.models.generate_content.side_effect = _make_sdk_client_error(429, "rate")
         body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
         with pytest.raises(APIError) as exc_info:
             SdkTransport().api_call("models/gemini:generateContent", body=body)
         assert exc_info.value.status_code == 429
 
-    def test_api_call_wraps_files_list_error(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_api_call_wraps_files_list_error(self, patched_get_client: mock.Mock) -> None:
         from core.infra.errors import APIError
         from core.transport.sdk.transport import SdkTransport
 
-        patched_get_client.files.list.side_effect = _make_sdk_server_error(
-            500, "server"
-        )
+        patched_get_client.files.list.side_effect = _make_sdk_server_error(500, "server")
         with pytest.raises(APIError):
             SdkTransport().api_call("files", method="GET")
 
@@ -1247,29 +1200,23 @@ class TestWrapSdkErrorsIntegration:
         from core.infra.errors import AuthError
         from core.transport.sdk.transport import SdkTransport
 
-        patched_get_client.models.count_tokens.side_effect = _make_sdk_client_error(
-            401, "bad key"
-        )
+        patched_get_client.models.count_tokens.side_effect = _make_sdk_client_error(401, "bad key")
         body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
         with pytest.raises(AuthError):
             SdkTransport().api_call("models/gemini:countTokens", body=body)
 
-    def test_stream_wraps_initial_call_error(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_stream_wraps_initial_call_error(self, patched_get_client: mock.Mock) -> None:
         from core.infra.errors import APIError
         from core.transport.sdk.transport import SdkTransport
 
-        patched_get_client.models.generate_content_stream.side_effect = (
-            _make_sdk_server_error(500, "boom")
+        patched_get_client.models.generate_content_stream.side_effect = _make_sdk_server_error(
+            500, "boom"
         )
         body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
         with pytest.raises(APIError):
             list(SdkTransport().stream_generate_content("gemini", body=body))
 
-    def test_stream_wraps_mid_iteration_error(
-        self, patched_get_client: mock.Mock
-    ) -> None:
+    def test_stream_wraps_mid_iteration_error(self, patched_get_client: mock.Mock) -> None:
         """An SDK error raised during chunk iteration (not the initial call)
         must also be mapped through the wrapper."""
         from core.infra.errors import APIError
@@ -1281,25 +1228,19 @@ class TestWrapSdkErrorsIntegration:
             yield good_chunk
             raise _make_sdk_server_error(503, "stream dropped")
 
-        patched_get_client.models.generate_content_stream.return_value = (
-            raising_iterator()
-        )
+        patched_get_client.models.generate_content_stream.return_value = raising_iterator()
         body = {"contents": [{"role": "user", "parts": [{"text": "x"}]}]}
         with pytest.raises(APIError) as exc_info:
             list(SdkTransport().stream_generate_content("gemini", body=body))
         assert exc_info.value.status_code == 503
 
-    def test_upload_wraps_error(
-        self, patched_get_client: mock.Mock, tmp_path: Path
-    ) -> None:
+    def test_upload_wraps_error(self, patched_get_client: mock.Mock, tmp_path: Path) -> None:
         from core.infra.errors import APIError
         from core.transport.sdk.transport import SdkTransport
 
         path = tmp_path / "f.txt"
         path.write_text("x")
-        patched_get_client.files.upload.side_effect = _make_sdk_client_error(
-            413, "too large"
-        )
+        patched_get_client.files.upload.side_effect = _make_sdk_client_error(413, "too large")
         with pytest.raises(APIError) as exc_info:
             SdkTransport().upload_file(file_path=path, mime_type="text/plain")
         assert exc_info.value.status_code == 413

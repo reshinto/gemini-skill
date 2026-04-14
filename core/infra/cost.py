@@ -15,6 +15,7 @@ to prevent TOCTOU races.
 
 Dependencies: core/infra/filelock.py, core/infra/atomic_write.py
 """
+
 from __future__ import annotations
 
 import json
@@ -100,22 +101,26 @@ class CostTracker:
         with FileLock(self._lock_path):
             current = self._read_daily_unlocked()
             total = current + delta
-            data = json.dumps({
-                "date": self._today_key(),
-                "total": total,
-                "updated_at": time.time(),
-            })
+            data = json.dumps(
+                {
+                    "date": self._today_key(),
+                    "total": total,
+                    "updated_at": time.time(),
+                }
+            )
             atomic_write_json(self._cost_file, data)
 
     def _write_daily(self, total: float) -> None:
         """Write a specific daily total (used for testing/direct set)."""
         self._state_dir.mkdir(parents=True, exist_ok=True)
         with FileLock(self._lock_path):
-            data = json.dumps({
-                "date": self._today_key(),
-                "total": total,
-                "updated_at": time.time(),
-            })
+            data = json.dumps(
+                {
+                    "date": self._today_key(),
+                    "total": total,
+                    "updated_at": time.time(),
+                }
+            )
             atomic_write_json(self._cost_file, data)
 
     def get_daily_total(self) -> float:

@@ -10,6 +10,7 @@ to maintain state across multi-turn API calls.
 
 Dependency: none (leaf module).
 """
+
 from __future__ import annotations
 
 import copy
@@ -17,12 +18,14 @@ import copy
 from core.transport.base import Content, Part
 
 # Fields that indicate a part carries tool state
-_TOOL_STATE_KEYS = frozenset({
-    "functionCall",
-    "functionResponse",
-    "executableCode",
-    "codeExecutionResult",
-})
+_TOOL_STATE_KEYS = frozenset(
+    {
+        "functionCall",
+        "functionResponse",
+        "executableCode",
+        "codeExecutionResult",
+    }
+)
 
 
 def has_tool_state(part: Part) -> bool:

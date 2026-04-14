@@ -9,6 +9,7 @@ the live API at runtime. This module provides the static reference data.
 
 Dependencies: core/infra/errors.py (ModelNotFoundError, CapabilityUnavailableError)
 """
+
 from __future__ import annotations
 
 import copy
@@ -92,24 +93,18 @@ class Registry:
         """
         model = self.get_model(model_id)
         if "pricing" not in model:
-            raise ModelNotFoundError(
-                f"Model {model_id} has no pricing data in the registry"
-            )
+            raise ModelNotFoundError(f"Model {model_id} has no pricing data in the registry")
         return model["pricing"]
 
     def models_for_capability(self, capability: str) -> list[str]:
         """Return model IDs that support a given capability."""
         return [
-            mid for mid, info in self._models.items()
-            if capability in info.get("capabilities", [])
+            mid for mid, info in self._models.items() if capability in info.get("capabilities", [])
         ]
 
     def models_by_status(self, status: str) -> list[str]:
         """Return model IDs with a given status (stable, preview, etc.)."""
-        return [
-            mid for mid, info in self._models.items()
-            if info.get("status") == status
-        ]
+        return [mid for mid, info in self._models.items() if info.get("status") == status]
 
     # --- Capability operations ---
 
@@ -126,9 +121,7 @@ class Registry:
             CapabilityUnavailableError: If the capability is not registered.
         """
         if name not in self._capabilities:
-            raise CapabilityUnavailableError(
-                f"Capability not found in registry: {name}"
-            )
+            raise CapabilityUnavailableError(f"Capability not found in registry: {name}")
         return copy.deepcopy(self._capabilities[name])
 
 

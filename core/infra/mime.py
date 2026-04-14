@@ -9,6 +9,7 @@ Users can override MIME detection via the --mime CLI flag.
 
 Dependency: none (leaf module, stdlib only).
 """
+
 from __future__ import annotations
 
 import mimetypes

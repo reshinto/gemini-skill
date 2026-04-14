@@ -40,9 +40,7 @@ import re
 # characters, ``\r``, ``\n``, and ``\x00`` so a malicious adapter input
 # cannot inject a header line. ``fullmatch`` is required to reject any
 # leading/trailing junk.
-_SAFE_MIME_RE = re.compile(
-    r"^[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*/[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*$"
-)
+_SAFE_MIME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*/[a-zA-Z0-9][a-zA-Z0-9!#$&\-^_.+]*$")
 
 
 def validate_mime_type(mime_type: str) -> None:
@@ -95,6 +93,4 @@ def validate_no_crlf(value: str, *, field_name: str) -> None:
         ValueError: If ``value`` contains ``\\r`` or ``\\n``.
     """
     if "\r" in value or "\n" in value:
-        raise ValueError(
-            f"Unsafe {field_name}: must not contain CR or LF characters"
-        )
+        raise ValueError(f"Unsafe {field_name}: must not contain CR or LF characters")

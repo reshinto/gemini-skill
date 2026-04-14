@@ -1,4 +1,5 @@
 """Tests for core/cli/health_main.py."""
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -9,8 +10,11 @@ import pytest
 class TestHealthMain:
     def test_all_checks_pass(self, capsys):
         from core.cli.health_main import main
-        with patch("core.auth.auth.resolve_key", return_value="fake-key"), \
-             patch("core.infra.client.api_call", return_value={"models": [{"name": "m1"}]}):
+
+        with (
+            patch("core.auth.auth.resolve_key", return_value="fake-key"),
+            patch("core.infra.client.api_call", return_value={"models": [{"name": "m1"}]}),
+        ):
             main([])
         output = capsys.readouterr().out
         assert "[OK] API key resolved" in output
@@ -20,6 +24,7 @@ class TestHealthMain:
     def test_auth_failure(self, capsys):
         from core.cli.health_main import main
         from core.infra.errors import AuthError
+
         with patch("core.auth.auth.resolve_key", side_effect=AuthError("no key")):
             main([])
         output = capsys.readouterr().out
@@ -28,8 +33,11 @@ class TestHealthMain:
 
     def test_api_connectivity_failure(self, capsys):
         from core.cli.health_main import main
-        with patch("core.auth.auth.resolve_key", return_value="fake-key"), \
-             patch("core.infra.client.api_call", side_effect=Exception("network down")):
+
+        with (
+            patch("core.auth.auth.resolve_key", return_value="fake-key"),
+            patch("core.infra.client.api_call", side_effect=Exception("network down")),
+        ):
             main([])
         output = capsys.readouterr().out
         assert "[FAIL] API connectivity" in output
@@ -52,9 +60,11 @@ class TestBackendReporting:
     def test_reports_primary_and_fallback_backend(self, capsys, tmp_path):
         from core.cli.health_main import main
 
-        with patch("core.auth.auth.resolve_key", return_value="fake-key"), \
-             patch("core.infra.client.api_call", return_value={"models": []}), \
-             patch("core.cli.health_main._install_dir", return_value=tmp_path):
+        with (
+            patch("core.auth.auth.resolve_key", return_value="fake-key"),
+            patch("core.infra.client.api_call", return_value={"models": []}),
+            patch("core.cli.health_main._install_dir", return_value=tmp_path),
+        ):
             main([])
 
         output = capsys.readouterr().out
@@ -71,9 +81,11 @@ class TestBackendReporting:
         venv_dir = tmp_path / ".venv"
         venv_dir.mkdir()
 
-        with patch("core.auth.auth.resolve_key", return_value="fake-key"), \
-             patch("core.infra.client.api_call", return_value={"models": []}), \
-             patch("core.cli.health_main._install_dir", return_value=tmp_path):
+        with (
+            patch("core.auth.auth.resolve_key", return_value="fake-key"),
+            patch("core.infra.client.api_call", return_value={"models": []}),
+            patch("core.cli.health_main._install_dir", return_value=tmp_path),
+        ):
             main([])
 
         output = capsys.readouterr().out
@@ -84,9 +96,11 @@ class TestBackendReporting:
         from core.cli.health_main import main
 
         # No .venv directory under the install dir.
-        with patch("core.auth.auth.resolve_key", return_value="fake-key"), \
-             patch("core.infra.client.api_call", return_value={"models": []}), \
-             patch("core.cli.health_main._install_dir", return_value=tmp_path):
+        with (
+            patch("core.auth.auth.resolve_key", return_value="fake-key"),
+            patch("core.infra.client.api_call", return_value={"models": []}),
+            patch("core.cli.health_main._install_dir", return_value=tmp_path),
+        ):
             main([])
 
         output = capsys.readouterr().out
@@ -98,16 +112,15 @@ class TestBackendReporting:
 
         # Set up a fake install dir with setup/requirements.txt + .venv.
         (tmp_path / "setup").mkdir()
-        (tmp_path / "setup" / "requirements.txt").write_text(
-            "# pin\ngoogle-genai==1.33.0\n"
-        )
+        (tmp_path / "setup" / "requirements.txt").write_text("# pin\ngoogle-genai==1.33.0\n")
         (tmp_path / ".venv").mkdir()
 
-        with patch("core.auth.auth.resolve_key", return_value="fake-key"), \
-             patch("core.infra.client.api_call", return_value={"models": []}), \
-             patch("core.cli.health_main._install_dir", return_value=tmp_path), \
-             patch("core.cli.installer.venv.verify_sdk_importable",
-                   return_value="1.33.0"):
+        with (
+            patch("core.auth.auth.resolve_key", return_value="fake-key"),
+            patch("core.infra.client.api_call", return_value={"models": []}),
+            patch("core.cli.health_main._install_dir", return_value=tmp_path),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+        ):
             main([])
 
         output = capsys.readouterr().out
@@ -122,16 +135,15 @@ class TestBackendReporting:
         from core.cli.health_main import main
 
         (tmp_path / "setup").mkdir()
-        (tmp_path / "setup" / "requirements.txt").write_text(
-            "google-genai==1.33.0\n"
-        )
+        (tmp_path / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
         (tmp_path / ".venv").mkdir()
 
-        with patch("core.auth.auth.resolve_key", return_value="fake-key"), \
-             patch("core.infra.client.api_call", return_value={"models": []}), \
-             patch("core.cli.health_main._install_dir", return_value=tmp_path), \
-             patch("core.cli.installer.venv.verify_sdk_importable",
-                   return_value="1.34.0"):
+        with (
+            patch("core.auth.auth.resolve_key", return_value="fake-key"),
+            patch("core.infra.client.api_call", return_value={"models": []}),
+            patch("core.cli.health_main._install_dir", return_value=tmp_path),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.34.0"),
+        ):
             main([])
 
         output = capsys.readouterr().out
@@ -141,16 +153,15 @@ class TestBackendReporting:
         from core.cli.health_main import main
 
         (tmp_path / "setup").mkdir()
-        (tmp_path / "setup" / "requirements.txt").write_text(
-            "google-genai==1.33.0\n"
-        )
+        (tmp_path / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
         (tmp_path / ".venv").mkdir()
 
-        with patch("core.auth.auth.resolve_key", return_value="fake-key"), \
-             patch("core.infra.client.api_call", return_value={"models": []}), \
-             patch("core.cli.health_main._install_dir", return_value=tmp_path), \
-             patch("core.cli.installer.venv.verify_sdk_importable",
-                   return_value="1.33.0"):
+        with (
+            patch("core.auth.auth.resolve_key", return_value="fake-key"),
+            patch("core.infra.client.api_call", return_value={"models": []}),
+            patch("core.cli.health_main._install_dir", return_value=tmp_path),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
+        ):
             main([])
 
         output = capsys.readouterr().out
@@ -163,18 +174,18 @@ class TestBackendReporting:
         of crashing."""
         from core.cli.health_main import main
 
-        with patch("core.auth.auth.resolve_key", return_value="fake-key"), \
-             patch("core.infra.client.api_call", return_value={"models": []}), \
-             patch("core.cli.health_main._install_dir", return_value=tmp_path):
+        with (
+            patch("core.auth.auth.resolve_key", return_value="fake-key"),
+            patch("core.infra.client.api_call", return_value={"models": []}),
+            patch("core.cli.health_main._install_dir", return_value=tmp_path),
+        ):
             main([])
 
         output = capsys.readouterr().out
         # Should not crash; should report SOMETHING about the missing pin.
         assert "google-genai" in output
 
-    def test_handles_requirements_file_without_google_genai_pin(
-        self, capsys, tmp_path
-    ):
+    def test_handles_requirements_file_without_google_genai_pin(self, capsys, tmp_path):
         """A requirements.txt that exists but doesn't pin google-genai
         (e.g. a hand-edited file with the pin commented out) must
         report ``unknown`` instead of crashing on a None match.
@@ -186,9 +197,11 @@ class TestBackendReporting:
             "# google-genai==1.33.0  (commented out)\nrequests==2.31.0\n"
         )
 
-        with patch("core.auth.auth.resolve_key", return_value="fake-key"), \
-             patch("core.infra.client.api_call", return_value={"models": []}), \
-             patch("core.cli.health_main._install_dir", return_value=tmp_path):
+        with (
+            patch("core.auth.auth.resolve_key", return_value="fake-key"),
+            patch("core.infra.client.api_call", return_value={"models": []}),
+            patch("core.cli.health_main._install_dir", return_value=tmp_path),
+        ):
             main([])
 
         output = capsys.readouterr().out

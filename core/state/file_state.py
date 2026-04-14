@@ -10,6 +10,7 @@ to prevent TOCTOU races from concurrent processes.
 Dependencies: core/infra/filelock.py, core/infra/atomic_write.py,
     core/state/identity.py
 """
+
 from __future__ import annotations
 
 import json
@@ -123,10 +124,7 @@ class FileState:
         with FileLock(self._lock_path):
             data = self._load()
             now = time.time()
-            expired_keys = [
-                key for key, entry in data.items()
-                if now >= entry["expiry"]
-            ]
+            expired_keys = [key for key, entry in data.items() if now >= entry["expiry"]]
             for key in expired_keys:
                 del data[key]
             if expired_keys:

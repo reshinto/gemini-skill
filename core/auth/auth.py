@@ -22,6 +22,7 @@ The .env parser follows deliberately simple rules:
 
 Dependencies: core/infra/errors.py (AuthError), core/infra/sanitize.py
 """
+
 from __future__ import annotations
 
 import os
@@ -160,6 +161,4 @@ def validate_key(key: str) -> bool:
         # Narrow to realistic network failures. A bare ``Exception`` here
         # would swallow programmer bugs (AttributeError, TypeError) and
         # silently re-wrap them as AuthError, which makes debugging hard.
-        raise AuthError(
-            f"API key validation failed: {sanitize(str(e))}"
-        ) from e
+        raise AuthError(f"API key validation failed: {sanitize(str(e))}") from e

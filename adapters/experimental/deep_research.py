@@ -9,6 +9,7 @@ Preview with high churn risk.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,11 +27,14 @@ def get_parser() -> argparse.ArgumentParser:
     add_execute_flag(parser)
     parser.add_argument("prompt", help="Research query.")
     parser.add_argument(
-        "--resume", default=None,
+        "--resume",
+        default=None,
         help="Resume polling an existing interaction by ID.",
     )
     parser.add_argument(
-        "--max-wait", type=int, default=None,
+        "--max-wait",
+        type=int,
+        default=None,
         help="Override max polling time in seconds.",
     )
     return parser
@@ -96,7 +100,9 @@ def _poll_interaction(interaction_id: str, max_wait: int, config: Config) -> Non
             _emit_result(interaction, config)
             return
         if status in ("failed", "cancelled"):
-            safe_print(f"[{status.upper()}] Research {status}: {interaction.get('error', 'unknown')}")
+            safe_print(
+                f"[{status.upper()}] Research {status}: {interaction.get('error', 'unknown')}"
+            )
             return
 
         time.sleep(15)

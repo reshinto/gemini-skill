@@ -3,6 +3,7 @@
 Verifies that the AdapterProtocol defines the expected interface
 and that conforming/non-conforming classes are detected correctly.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -13,10 +14,12 @@ class TestAdapterProtocol:
 
     def test_protocol_has_get_parser(self) -> None:
         from core.adapter.contract import AdapterProtocol
+
         assert hasattr(AdapterProtocol, "get_parser")
 
     def test_protocol_has_run(self) -> None:
         from core.adapter.contract import AdapterProtocol
+
         assert hasattr(AdapterProtocol, "run")
 
     def test_conforming_class_is_accepted(self) -> None:
@@ -60,6 +63,7 @@ class TestAdapterProtocol:
         class PartialAdapter:
             def get_parser(self) -> argparse.ArgumentParser:
                 return argparse.ArgumentParser()
+
             # Missing run()
 
         assert not isinstance(PartialAdapter(), AdapterProtocol)

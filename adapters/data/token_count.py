@@ -5,6 +5,7 @@ the countTokens endpoint. Does not generate content.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -43,7 +44,9 @@ def run(
 
     response = api_call(f"models/{resolved_model}:countTokens", body=body)
 
-    emit_json({
-        "model": resolved_model,
-        "totalTokens": response.get("totalTokens", 0),
-    })
+    emit_json(
+        {
+            "model": resolved_model,
+            "totalTokens": response.get("totalTokens", 0),
+        }
+    )

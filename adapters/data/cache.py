@@ -5,6 +5,7 @@ latency on repeated requests. Mutating operations require --execute.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -75,6 +76,7 @@ def _create(
         return
 
     from core.routing.router import Router
+
     config = load_config()
     router = Router(
         root_dir=Path(__file__).parent.parent.parent,

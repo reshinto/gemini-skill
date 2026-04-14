@@ -10,6 +10,7 @@ to prevent TOCTOU races from concurrent processes.
 Dependencies: core/infra/filelock.py, core/infra/atomic_write.py,
     core/state/identity.py
 """
+
 from __future__ import annotations
 
 import json

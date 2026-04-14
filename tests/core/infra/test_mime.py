@@ -3,6 +3,7 @@
 Verifies version-gated MIME detection: guess_file_type() on 3.13+,
 guess_type() on 3.9-3.12. Neither inspects file contents.
 """
+
 from __future__ import annotations
 
 import sys
@@ -16,30 +17,35 @@ class TestGuessMimeForPath:
 
     def test_png_file(self, tmp_path):
         from core.infra.mime import guess_mime_for_path
+
         p = tmp_path / "image.png"
         p.touch()
         assert guess_mime_for_path(p) == "image/png"
 
     def test_pdf_file(self, tmp_path):
         from core.infra.mime import guess_mime_for_path
+
         p = tmp_path / "doc.pdf"
         p.touch()
         assert guess_mime_for_path(p) == "application/pdf"
 
     def test_mp4_file(self, tmp_path):
         from core.infra.mime import guess_mime_for_path
+
         p = tmp_path / "video.mp4"
         p.touch()
         assert guess_mime_for_path(p) == "video/mp4"
 
     def test_json_file(self, tmp_path):
         from core.infra.mime import guess_mime_for_path
+
         p = tmp_path / "data.json"
         p.touch()
         assert guess_mime_for_path(p) == "application/json"
 
     def test_unknown_extension_returns_fallback(self, tmp_path):
         from core.infra.mime import guess_mime_for_path
+
         p = tmp_path / "file.xyzabc"
         p.touch()
         result = guess_mime_for_path(p)
@@ -47,6 +53,7 @@ class TestGuessMimeForPath:
 
     def test_accepts_string_path(self, tmp_path):
         from core.infra.mime import guess_mime_for_path
+
         p = tmp_path / "test.txt"
         p.touch()
         result = guess_mime_for_path(str(p))
@@ -55,6 +62,7 @@ class TestGuessMimeForPath:
     def test_no_cgi_module_used(self):
         """Verify the mime module does not import cgi (removed in 3.13)."""
         import importlib
+
         mod = importlib.import_module("core.infra.mime")
         source = Path(mod.__file__).read_text()
         assert "import cgi" not in source
@@ -83,6 +91,7 @@ class TestMimeVersionBranching:
 
         # Re-import to pick up monkeypatch
         import importlib
+
         importlib.reload(mime_mod)
         result = mime_mod.guess_mime_for_path(p)
 
@@ -105,6 +114,7 @@ class TestMimeVersionBranching:
         p.touch()
 
         import importlib
+
         importlib.reload(mime_mod)
         result = mime_mod.guess_mime_for_path(p)
 

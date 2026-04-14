@@ -3,6 +3,7 @@
 Verifies saving, loading, expiry checking, cleanup, and file-locked
 atomic writes for the upload state store.
 """
+
 from __future__ import annotations
 
 import json
@@ -16,6 +17,7 @@ import pytest
 def _make_identity():
     """Helper to create a DocumentIdentity for testing."""
     from core.state.identity import DocumentIdentity
+
     return DocumentIdentity(
         content_sha256="abc123def456",
         mime_type="application/pdf",
@@ -99,8 +101,12 @@ class TestFileStateSave:
         identity = _make_identity()
         state = FileState(state_dir=tmp_path)
 
-        state.save(identity, gemini_uri="files/old", gemini_name="files/old", expiry=time.time() + 3600)
-        state.save(identity, gemini_uri="files/new", gemini_name="files/new", expiry=time.time() + 7200)
+        state.save(
+            identity, gemini_uri="files/old", gemini_name="files/old", expiry=time.time() + 3600
+        )
+        state.save(
+            identity, gemini_uri="files/new", gemini_name="files/new", expiry=time.time() + 7200
+        )
 
         entry = state.get(identity)
         assert entry["gemini_uri"] == "files/new"
@@ -121,7 +127,9 @@ class TestFileStateGet:
 
         identity = _make_identity()
         state = FileState(state_dir=tmp_path)
-        state.save(identity, gemini_uri="files/abc", gemini_name="files/abc", expiry=time.time() + 3600)
+        state.save(
+            identity, gemini_uri="files/abc", gemini_name="files/abc", expiry=time.time() + 3600
+        )
 
         entry = state.get(identity)
         assert entry is not None
@@ -244,7 +252,9 @@ class TestFileStateSaveErrors:
         identity = _make_identity()
         state = FileState(state_dir=tmp_path)
 
-        monkeypatch.setattr(os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed")))
+        monkeypatch.setattr(
+            os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed"))
+        )
         with pytest.raises(OSError, match="replace failed"):
             state.save(identity, "files/x", "files/x", expiry=time.time() + 3600)
 
@@ -254,7 +264,9 @@ class TestFileStateSaveErrors:
         identity = _make_identity()
         state = FileState(state_dir=tmp_path)
 
-        monkeypatch.setattr(os, "write", lambda fd, data: (_ for _ in ()).throw(OSError("write failed")))
+        monkeypatch.setattr(
+            os, "write", lambda fd, data: (_ for _ in ()).throw(OSError("write failed"))
+        )
         with pytest.raises(OSError, match="write failed"):
             state.save(identity, "files/x", "files/x", expiry=time.time() + 3600)
 
@@ -264,7 +276,9 @@ class TestFileStateSaveErrors:
         identity = _make_identity()
         state = FileState(state_dir=tmp_path)
 
-        monkeypatch.setattr(os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed")))
+        monkeypatch.setattr(
+            os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed"))
+        )
         monkeypatch.setattr(os, "unlink", lambda p: (_ for _ in ()).throw(OSError("unlink failed")))
         with pytest.raises(OSError, match="replace failed"):
             state.save(identity, "files/x", "files/x", expiry=time.time() + 3600)

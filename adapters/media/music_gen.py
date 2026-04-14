@@ -6,6 +6,7 @@ Mutating — requires --execute.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,7 +42,8 @@ def get_parser() -> argparse.ArgumentParser:
     add_execute_flag(parser)
     parser.add_argument("prompt", help="Music generation prompt.")
     parser.add_argument(
-        "--output-dir", default=None,
+        "--output-dir",
+        default=None,
         help="Directory for output files.",
     )
     return parser
@@ -59,6 +61,7 @@ def run(
         return
 
     from core.routing.router import Router
+
     config = load_config()
     router = Router(
         root_dir=Path(__file__).parent.parent.parent,
@@ -86,11 +89,13 @@ def run(
         output_path = create_media_output_file(ext, out_dir)
         Path(output_path).write_bytes(audio_bytes)
 
-        emit_json({
-            "path": output_path,
-            "mime_type": mime,
-            "size_bytes": len(audio_bytes),
-        })
+        emit_json(
+            {
+                "path": output_path,
+                "mime_type": mime,
+                "size_bytes": len(audio_bytes),
+            }
+        )
         return
 
     # No audio — emit text if available

@@ -10,6 +10,7 @@ Session IDs are validated to prevent path traversal.
 
 Dependencies: core/infra/filelock.py, core/infra/atomic_write.py
 """
+
 from __future__ import annotations
 
 import json
@@ -127,9 +128,7 @@ class SessionState:
 
     def list_sessions(self) -> list[str]:
         """Return IDs of all active sessions."""
-        return sorted(
-            p.stem for p in self._dir.glob("*.json")
-        )
+        return sorted(p.stem for p in self._dir.glob("*.json"))
 
     def most_recent(self) -> str | None:
         """Return the ID of the most recently modified session, or None."""

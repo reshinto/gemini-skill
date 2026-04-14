@@ -5,6 +5,7 @@ as they arrive. Text models only.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
 import argparse

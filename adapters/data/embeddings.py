@@ -5,6 +5,7 @@ embedding model. Returns the embedding values as JSON.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,7 +21,8 @@ def get_parser() -> argparse.ArgumentParser:
     parser = build_base_parser("Generate text embeddings")
     parser.add_argument("text", help="The text to embed.")
     parser.add_argument(
-        "--task-type", default=None,
+        "--task-type",
+        default=None,
         help="Embedding task type (e.g., RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY).",
     )
     return parser
@@ -57,8 +59,10 @@ def run(
         if isinstance(raw_values, list):
             values = raw_values
 
-    emit_json({
-        "model": resolved_model,
-        "values": values,
-        "dimensions": len(values),
-    })
+    emit_json(
+        {
+            "model": resolved_model,
+            "values": values,
+            "dimensions": len(values),
+        }
+    )

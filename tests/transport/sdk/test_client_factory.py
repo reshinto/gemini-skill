@@ -42,8 +42,12 @@ class TestGetClient:
         fake_genai = mock.Mock()
         fake_genai.Client.return_value = fake_client
 
-        with mock.patch.dict(sys.modules, {"google.genai": fake_genai, "google": mock.Mock(genai=fake_genai)}):
-            with mock.patch.object(client_factory, "resolve_key", return_value="test-sdk-key-001") as mock_resolve:
+        with mock.patch.dict(
+            sys.modules, {"google.genai": fake_genai, "google": mock.Mock(genai=fake_genai)}
+        ):
+            with mock.patch.object(
+                client_factory, "resolve_key", return_value="test-sdk-key-001"
+            ) as mock_resolve:
                 result = client_factory.get_client()
 
         assert result is fake_client
@@ -57,8 +61,12 @@ class TestGetClient:
         fake_genai = mock.Mock()
         fake_genai.Client.return_value = fake_client
 
-        with mock.patch.dict(sys.modules, {"google.genai": fake_genai, "google": mock.Mock(genai=fake_genai)}):
-            with mock.patch.object(client_factory, "resolve_key", return_value="test-sdk-key-cached"):
+        with mock.patch.dict(
+            sys.modules, {"google.genai": fake_genai, "google": mock.Mock(genai=fake_genai)}
+        ):
+            with mock.patch.object(
+                client_factory, "resolve_key", return_value="test-sdk-key-cached"
+            ):
                 first = client_factory.get_client()
                 second = client_factory.get_client()
 
@@ -100,7 +108,9 @@ class TestClientConstructionErrorSanitized:
         fake_genai = mock.Mock()
         fake_genai.Client.side_effect = ValueError(f"bad key {leaked_key} rejected")
 
-        with mock.patch.dict(sys.modules, {"google.genai": fake_genai, "google": mock.Mock(genai=fake_genai)}):
+        with mock.patch.dict(
+            sys.modules, {"google.genai": fake_genai, "google": mock.Mock(genai=fake_genai)}
+        ):
             with mock.patch.object(client_factory, "resolve_key", return_value=leaked_key):
                 with pytest.raises(BackendUnavailableError) as exc_info:
                     client_factory.get_client()
@@ -144,8 +154,12 @@ class TestGetAsyncClient:
         fake_genai = mock.Mock()
         fake_genai.Client.return_value = fake_client
 
-        with mock.patch.dict(sys.modules, {"google.genai": fake_genai, "google": mock.Mock(genai=fake_genai)}):
-            with mock.patch.object(client_factory, "resolve_key", return_value="test-sdk-key-async"):
+        with mock.patch.dict(
+            sys.modules, {"google.genai": fake_genai, "google": mock.Mock(genai=fake_genai)}
+        ):
+            with mock.patch.object(
+                client_factory, "resolve_key", return_value="test-sdk-key-async"
+            ):
                 result = client_factory.get_async_client()
 
         assert result is fake_aio

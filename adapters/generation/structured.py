@@ -5,6 +5,7 @@ matching the schema. Uses responseSchema in generationConfig.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -23,7 +24,8 @@ def get_parser() -> argparse.ArgumentParser:
     parser = build_base_parser("Generate structured JSON output")
     parser.add_argument("prompt", help="The text prompt.")
     parser.add_argument(
-        "--schema", required=True,
+        "--schema",
+        required=True,
         help="JSON schema string or path to schema file.",
     )
     return parser

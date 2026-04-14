@@ -7,6 +7,7 @@ loops with state preservation via core/routing/tool_state.py.
 Dependencies: core/infra/client.py, core/adapter/helpers.py,
     core/routing/tool_state.py
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,7 +27,8 @@ def get_parser() -> argparse.ArgumentParser:
     parser = build_base_parser("Execute function/tool calling")
     parser.add_argument("prompt", help="The text prompt.")
     parser.add_argument(
-        "--tools", required=True,
+        "--tools",
+        required=True,
         help="JSON string or file path containing tool declarations.",
     )
     return parser
@@ -68,10 +70,12 @@ def run(
     # Check for function calls
     tool_parts = extract_tool_state(parts)
     if tool_parts:
-        emit_json({
-            "type": "function_calls",
-            "calls": tool_parts,
-        })
+        emit_json(
+            {
+                "type": "function_calls",
+                "calls": tool_parts,
+            }
+        )
     else:
         # Model responded with text instead of function calls
         text_parts = [p["text"] for p in parts if "text" in p]

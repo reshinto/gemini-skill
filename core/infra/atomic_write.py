@@ -7,6 +7,7 @@ replacing the target.
 
 Dependency: none (leaf module, stdlib only).
 """
+
 from __future__ import annotations
 
 import os
@@ -41,9 +42,7 @@ def atomic_write_json(
     except OSError:
         pass
 
-    fd, tmp_path = tempfile.mkstemp(
-        dir=str(parent), prefix=".atomic-", suffix=".tmp"
-    )
+    fd, tmp_path = tempfile.mkstemp(dir=str(parent), prefix=".atomic-", suffix=".tmp")
     try:
         os.write(fd, data.encode("utf-8"))
         os.close(fd)

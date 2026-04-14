@@ -8,6 +8,7 @@ adapters at import time.
 
 Dependency: none (leaf module, stdlib only).
 """
+
 from __future__ import annotations
 
 import argparse

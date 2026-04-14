@@ -56,9 +56,7 @@ class TestUnsupportedCapabilityRoutesToRawHttp:
             # Patch the SDK client factory at its IMPORT site in the SDK
             # transport module. If the coordinator misroutes and accidentally
             # touches the SDK, this Mock will be called and fail the test.
-            with mock.patch(
-                "core.transport.sdk.transport.get_client"
-            ) as sdk_get_client:
+            with mock.patch("core.transport.sdk.transport.get_client") as sdk_get_client:
                 coord = TransportCoordinator(
                     primary=SdkTransport(),
                     fallback=RawHttpTransport(),
@@ -104,12 +102,8 @@ class TestSupportedCapabilityRoutesToSdk:
         fake_client.models = mock.Mock()
         fake_client.models.generate_content.return_value = fake_resp
 
-        with mock.patch(
-            "core.transport.sdk.transport.get_client", return_value=fake_client
-        ):
-            with mock.patch(
-                "core.transport.raw_http.transport._client_api_call"
-            ) as raw_mock:
+        with mock.patch("core.transport.sdk.transport.get_client", return_value=fake_client):
+            with mock.patch("core.transport.raw_http.transport._client_api_call") as raw_mock:
                 coord = TransportCoordinator(
                     primary=SdkTransport(),
                     fallback=RawHttpTransport(),
@@ -138,9 +132,7 @@ class TestUnsupportedCapabilityNoFallbackRaises:
         from core.transport.coordinator import TransportCoordinator
         from core.transport.sdk.transport import SdkTransport
 
-        with mock.patch(
-            "core.transport.sdk.transport.get_client"
-        ) as sdk_get_client:
+        with mock.patch("core.transport.sdk.transport.get_client") as sdk_get_client:
             coord = TransportCoordinator(primary=SdkTransport(), fallback=None)
             with pytest.raises(BackendUnavailableError, match="maps"):
                 coord.execute_api_call(

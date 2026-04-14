@@ -7,6 +7,7 @@ to prevent redundant uploads of identical content.
 
 Dependencies: core/infra/mime.py (guess_mime_for_path)
 """
+
 from __future__ import annotations
 
 import hashlib
