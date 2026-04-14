@@ -1,31 +1,22 @@
-%% End-to-end install pipeline run by setup/install.py.
-%% Covers: copy → checksums → venv → pip → SDK verify → API key prompt
-%% → settings.json merge → legacy .env migration.
+%% End-to-end install pipeline shared by gemini-skill-install and setup/install.py.
 flowchart TD
-    START([python3 setup/install.py])
-    COPY[Copy operational files to<br/>~/.claude/skills/gemini/]
-    CHK[Verify .checksums.json<br/>SHA-256 integrity]
-    VENV[Create ~/.claude/skills/gemini/.venv]
+    START{Install entry point}
+    BOOT["uvx / pipx<br/>gemini-skill-install"]
+    MAT[Materialize packaged payload<br/>to a temp directory]
+    CLONE["python3 setup/install.py<br/>(clone or release tarball)"]
+    PYTHON[Validate stable CPython 3.9+<br/>and re-exec if needed]
+    SOURCE[Resolve shared install payload]
+    COPY[Copy runtime payload to<br/>~/.claude/skills/gemini/]
+    CHK[Write .checksums.json<br/>install manifest]
+    VENV[Create or reuse<br/>~/.claude/skills/gemini/.venv]
     PIP["pip install -r setup/requirements.txt<br/>(google-genai==1.33.0 pinned)"]
     VERIFY[Import google.genai<br/>confirm SDK usable]
-    KEY_PROMPT{API key setup}
-    KEY_EXIST[Existing key found<br/>→ keep / update prompt]
-    KEY_NEW[No key<br/>→ getpass prompt]
-    MERGE[Merge env block into<br/>~/.claude/settings.json]
-    LEGACY{"legacy<br/>.env exists?"}
-    MIGRATE[Migrate legacy .env<br/>into settings.json]
-    SUMMARY[Print summary:<br/>venv path + SDK version + settings path]
+    KEY[Prompt / merge env block into<br/>~/.claude/settings.json]
     DONE([Install complete])
 
-    START --> COPY --> CHK --> VENV --> PIP --> VERIFY --> KEY_PROMPT
-    KEY_PROMPT -->|exists| KEY_EXIST
-    KEY_PROMPT -->|absent| KEY_NEW
-    KEY_EXIST --> MERGE
-    KEY_NEW --> MERGE
-    MERGE --> LEGACY
-    LEGACY -->|yes| MIGRATE --> SUMMARY
-    LEGACY -->|no| SUMMARY
-    SUMMARY --> DONE
+    START --> BOOT --> MAT --> SOURCE
+    START --> CLONE --> PYTHON --> SOURCE
+    SOURCE --> COPY --> CHK --> VENV --> PIP --> VERIFY --> KEY --> DONE
 
     classDef new fill:#e1f5ff,stroke:#0277bd,stroke-width:2px
-    class VENV,PIP,VERIFY,KEY_PROMPT,KEY_EXIST,KEY_NEW,MERGE,LEGACY,MIGRATE,CHK new
+    class MAT,PYTHON,CHK,VENV,PIP,VERIFY,KEY new

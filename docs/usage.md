@@ -13,14 +13,25 @@ Getting started with gemini-skill and common workflows.
 ### 1. Install
 
 ```bash
+uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
+```
+
+Fallback from a clone or release tarball:
+
+```bash
 git clone https://github.com/reshinto/gemini-skill.git
 cd gemini-skill
 python3 setup/install.py
 ```
 
-See [install.md](install.md) for detailed setup.
+See [install.md](install.md) for detailed setup and update paths.
 
 ### 2. Set API key
+
+The installer prompts for your Gemini API key and writes it to
+`~/.claude/settings.json`.
+
+For local development from a clone, you can still export it directly:
 
 ```bash
 export GEMINI_API_KEY="your_key_here"
@@ -31,6 +42,10 @@ export GEMINI_API_KEY="your_key_here"
 ```bash
 /gemini text "What is machine learning?"
 ```
+
+Installed use is normally through `/gemini ...` inside Claude Code. Repo-local
+examples elsewhere in the docs may use `python3 scripts/gemini_run.py ...` for
+development and testing from a checkout.
 
 ---
 

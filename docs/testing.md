@@ -15,26 +15,28 @@ Running tests, writing new tests, and maintaining 100% coverage.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt
+pip install -r setup/requirements.txt
+pip install -r setup/requirements-dev.txt
 ```
 
 ### Run all tests
 
 ```bash
-./run_tests.sh
+bash setup/run_tests.sh
 ```
 
 Or directly:
 
 ```bash
-pytest tests/ -v --cov=core --cov=adapters --cov-report=term-missing
+.venv/bin/pytest -c setup/pytest.ini --rootdir="$(pwd)" tests/ -v \
+  --cov=core --cov=adapters --cov-report=term-missing
 ```
 
 ### Run a specific test
 
 ```bash
-pytest tests/core/test_router.py -v
-pytest tests/adapters/generation/test_text.py::test_text_simple -v
+.venv/bin/pytest -c setup/pytest.ini --rootdir="$(pwd)" tests/core/test_router.py -v
+.venv/bin/pytest -c setup/pytest.ini --rootdir="$(pwd)" tests/gemini_skill_install/test_cli.py -v
 ```
 
 ### Check coverage
@@ -110,7 +112,7 @@ tests/
 
 See [Running live integration tests](#running-live-integration-tests) below.
 
-**Total:** 574 tests, 100% coverage.
+**Total:** 1,300+ tests, 100% coverage target on covered modules.
 
 ---
 
@@ -119,7 +121,8 @@ See [Running live integration tests](#running-live-integration-tests) below.
 All code must have 100% test coverage:
 
 ```bash
-pytest tests/ --cov=core --cov=adapters --cov-report=term-missing
+.venv/bin/pytest -c setup/pytest.ini --rootdir="$(pwd)" tests/ \
+  --cov=core --cov=adapters --cov-report=term-missing
 ```
 
 Missing lines show as `MISSING` in the report.
@@ -128,6 +131,27 @@ Missing lines show as `MISSING` in the report.
 - No new code without tests
 - Coverage gates on CI (blocks merge if < 100%)
 - Uncovered lines must be marked `# pragma: no cover` with justification
+
+## Bootstrap Installer Packaging Checks
+
+The branch adds a packaged bootstrap installer (`gemini-skill-install`) that
+must stay healthy alongside the clone-based installer.
+
+Minimum packaging checks:
+
+```bash
+.venv/bin/pytest -c setup/pytest.ini --rootdir="$(pwd)" \
+  tests/setup/test_install.py \
+  tests/gemini_skill_install/test_cli.py
+python -m build
+```
+
+For release readiness, also run:
+
+```bash
+python -m pip install twine
+python -m twine check dist/*
+```
 
 ---
 
@@ -474,7 +498,7 @@ def temp_session_dir():
 
 ## CI/CD Integration
 
-The project uses GitHub Actions for CI (example `.github/workflows/test.yml`):
+The project uses GitHub Actions for CI (see `.github/workflows/ci.yml`):
 
 ```yaml
 name: Tests
@@ -485,18 +509,21 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.13'
       
       - name: Install dependencies
         run: |
-          python -m pip install -r requirements-dev.txt
+          python -m pip install --upgrade pip
+          python -m pip install -r setup/requirements.txt
+          python -m pip install -r setup/requirements-dev.txt
       
       - name: Run tests
         run: |
-          pytest tests/ -v --cov=core --cov=adapters --cov-report=xml
+          pytest -c setup/pytest.ini --rootdir="$PWD" tests/ -v \
+            --cov=core --cov=adapters --cov-report=xml
       
       - name: Upload coverage
         uses: codecov/codecov-action@v3
@@ -589,7 +616,7 @@ Before deploying:
 
 ```bash
 # Run all tests with coverage
-./run_tests.sh
+bash setup/run_tests.sh
 
 # Check coverage
 coverage report --fail-under=100
