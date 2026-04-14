@@ -128,7 +128,9 @@ class TestHealthCheckLauncher:
         expected_root: str = runner._repo_root()
 
         with pytest.MonkeyPatch.context() as monkeypatch:
-            monkeypatch.setattr(sys, "path", [entry for entry in sys.path if entry != expected_root])
+            monkeypatch.setattr(
+                sys, "path", [entry for entry in sys.path if entry != expected_root]
+            )
             resolved_root: str = runner._ensure_repo_root_on_syspath()
 
             assert resolved_root == expected_root
@@ -149,5 +151,7 @@ class TestHealthCheckLauncher:
             pytest.raises(SystemExit, match="bad settings"),
         ):
             monkeypatch.setattr(runner, "_ensure_repo_root_on_syspath", ensure_repo_root_on_syspath)
-            monkeypatch.setattr("core.infra.runtime_env.bootstrap_runtime_env", raise_resolution_error)
+            monkeypatch.setattr(
+                "core.infra.runtime_env.bootstrap_runtime_env", raise_resolution_error
+            )
             runner._bootstrap_runtime_environment()

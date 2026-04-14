@@ -182,9 +182,7 @@ class TestRuntimeEnvFileReads:
         settings_path: Path = tmp_path / "settings.json"
         assert _read_settings_env(settings_path) == {}
 
-    def test_read_settings_env_os_error_is_wrapped(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_read_settings_env_os_error_is_wrapped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from core.infra.errors import EnvironmentResolutionError
         from core.infra.runtime_env import _read_settings_env
 
@@ -212,7 +210,9 @@ class TestBootstrapRuntimeEnv:
         home_directory: Path = tmp_path / "home"
         working_directory.mkdir()
         home_directory.mkdir()
-        (working_directory / ".env").write_text("GEMINI_API_KEY=bootstrapped-key\n", encoding="utf-8")
+        (working_directory / ".env").write_text(
+            "GEMINI_API_KEY=bootstrapped-key\n", encoding="utf-8"
+        )
 
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 

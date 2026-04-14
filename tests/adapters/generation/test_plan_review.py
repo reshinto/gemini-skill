@@ -8,7 +8,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-def _mock_response(review_text: str = "VERDICT: REVISE\nTighten the rollback plan.") -> dict[str, object]:
+def _mock_response(
+    review_text: str = "VERDICT: REVISE\nTighten the rollback plan.",
+) -> dict[str, object]:
     return {
         "candidates": [
             {
@@ -249,7 +251,10 @@ class TestSessionContext:
 
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-        assert _plan_review_sessions_dir() == tmp_path / ".config" / "gemini-skill" / "plan-review-sessions"
+        assert (
+            _plan_review_sessions_dir()
+            == tmp_path / ".config" / "gemini-skill" / "plan-review-sessions"
+        )
 
 
 class TestNormalizeReviewText:
@@ -359,7 +364,9 @@ class TestReviewOnce:
 
 
 class TestRunRepl:
-    def test_run_repl_skips_blank_lines_and_stops_on_quit(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_run_repl_skips_blank_lines_and_stops_on_quit(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         from adapters.generation.plan_review import (
             ResolvedPlanReviewModel,
             SessionContext,
@@ -493,7 +500,9 @@ class TestRun:
             patch("sys.stdin.isatty", return_value=True),
             patch("adapters.generation.plan_review.load_config") as mock_load_config,
             patch("adapters.generation.plan_review._run_repl") as mock_run_repl,
-            patch("adapters.generation.plan_review._plan_review_sessions_dir", return_value=tmp_path),
+            patch(
+                "adapters.generation.plan_review._plan_review_sessions_dir", return_value=tmp_path
+            ),
         ):
             mock_load_config.return_value = MagicMock(output_dir=None)
             run(proposal=None, session="manual-review")

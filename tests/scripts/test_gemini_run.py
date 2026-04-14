@@ -136,7 +136,9 @@ class TestSysPathBootstrap:
         runner = _import_runner()
         expected_root: str = runner._repo_root()
 
-        with mock.patch.object(sys, "path", [entry for entry in sys.path if entry != expected_root]):
+        with mock.patch.object(
+            sys, "path", [entry for entry in sys.path if entry != expected_root]
+        ):
             resolved_root: str = runner._ensure_repo_root_on_syspath()
 
             assert resolved_root == expected_root
@@ -175,7 +177,9 @@ class TestMainEntryPoint:
 
         with (
             mock.patch.object(runner, "_check_python_version"),
-            mock.patch.object(runner, "_bootstrap_runtime_environment", side_effect=record_bootstrap),
+            mock.patch.object(
+                runner, "_bootstrap_runtime_environment", side_effect=record_bootstrap
+            ),
             mock.patch.object(runner, "_maybe_reexec_under_venv", side_effect=record_reexec),
             mock.patch("core.cli.dispatch.main", return_value=0),
         ):

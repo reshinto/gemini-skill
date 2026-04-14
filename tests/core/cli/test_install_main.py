@@ -532,7 +532,10 @@ class TestSettingsBufferFiltering:
             settings_buffer["env"] = ["unexpected"]
 
         with (
-            patch("core.cli.install_main.migrate_legacy_env_to_settings", side_effect=seed_non_dict_env),
+            patch(
+                "core.cli.install_main.migrate_legacy_env_to_settings",
+                side_effect=seed_non_dict_env,
+            ),
             patch("core.cli.install_main.prompt_gemini_api_key"),
             patch("core.cli.install_main.merge_settings_env") as mock_merge_settings_env,
         ):
@@ -563,15 +566,15 @@ class TestSettingsBufferFiltering:
             }
 
         with (
-            patch("core.cli.install_main.migrate_legacy_env_to_settings", side_effect=seed_mixed_env),
+            patch(
+                "core.cli.install_main.migrate_legacy_env_to_settings", side_effect=seed_mixed_env
+            ),
             patch("core.cli.install_main.prompt_gemini_api_key"),
             patch("core.cli.install_main.merge_settings_env") as mock_merge_settings_env,
         ):
             install_main._setup_user_settings(install_dir, yes=False, interactive=False)
 
-        assert mock_merge_settings_env.call_args.kwargs["pre_resolved"] == {
-            "GEMINI_API_KEY": "key"
-        }
+        assert mock_merge_settings_env.call_args.kwargs["pre_resolved"] == {"GEMINI_API_KEY": "key"}
 
 
 class TestManifestCoverage:
@@ -623,8 +626,12 @@ class TestManifestCoverage:
         manifest_path.write_text("{}")
 
         with (
-            patch("core.cli.install_main.read_checksums_file", return_value={"SKILL.md": "abc"}) as mock_read,
-            patch("core.cli.install_main.verify_checksums", return_value=["SKILL.md"]) as mock_verify,
+            patch(
+                "core.cli.install_main.read_checksums_file", return_value={"SKILL.md": "abc"}
+            ) as mock_read,
+            patch(
+                "core.cli.install_main.verify_checksums", return_value=["SKILL.md"]
+            ) as mock_verify,
         ):
             mismatches: list[str] = install_main.verify_install_integrity(install_dir)
 

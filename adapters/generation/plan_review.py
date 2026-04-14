@@ -60,9 +60,7 @@ class ResolvedPlanReviewModel:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the plan-review adapter."""
-    parser: argparse.ArgumentParser = build_base_parser(
-        "Review an implementation plan with Gemini"
-    )
+    parser: argparse.ArgumentParser = build_base_parser("Review an implementation plan with Gemini")
     parser.add_argument(
         "proposal",
         nargs="?",
@@ -195,9 +193,7 @@ def _supports_true_thinking_off(model_id: str) -> bool:
     return False
 
 
-def _build_thinking_config(
-    *, resolved_model_id: str, thinking_mode: str
-) -> dict[str, object]:
+def _build_thinking_config(*, resolved_model_id: str, thinking_mode: str) -> dict[str, object]:
     """Build the request ``thinkingConfig`` block for the selected model."""
     if resolved_model_id.startswith("gemini-3"):
         if thinking_mode == _THINKING_OFF:
