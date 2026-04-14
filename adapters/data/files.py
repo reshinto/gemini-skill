@@ -121,13 +121,13 @@ def _list_files() -> None:
             "count": len(files),
             "files": [
                 {
-                    "name": f.get("name", ""),
-                    "displayName": f.get("displayName", ""),
-                    "mimeType": f.get("mimeType", ""),
-                    "sizeBytes": f.get("sizeBytes", ""),
-                    "state": f.get("state", ""),
+                    "name": file_record.get("name", ""),
+                    "displayName": file_record.get("displayName", ""),
+                    "mimeType": file_record.get("mimeType", ""),
+                    "sizeBytes": file_record.get("sizeBytes", ""),
+                    "state": file_record.get("state", ""),
                 }
-                for f in files
+                for file_record in files
             ],
         }
     )

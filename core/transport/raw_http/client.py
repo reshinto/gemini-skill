@@ -296,21 +296,21 @@ def _execute_with_retry(
                     return cast(JSONObject, payload)
                 return {}
 
-        except ssl.SSLCertVerificationError as e:
+        except ssl.SSLCertVerificationError as ssl_error:
             # Sanitize the message: SSLCertVerificationError.__str__ can echo
             # certificate subject / SAN fields, and a misconfigured proxy
             # could conceivably embed secret material there.
             raise APIError(
                 sanitize(
-                    f"SSL certificate verification failed: {e}. "
+                    f"SSL certificate verification failed: {ssl_error}. "
                     "On macOS, run: /Applications/Python\\ 3.x/Install\\ Certificates.command"
                 ),
                 status_code=None,
-            ) from e
+            ) from ssl_error
 
-        except HTTPError as e:
-            status = e.code
-            error_msg = _extract_error_message(e)
+        except HTTPError as http_error:
+            status = http_error.code
+            error_msg = _extract_error_message(http_error)
 
             if status == 504 and method.upper() == "GET" and attempt == 0:
                 time.sleep(_BACKOFF_BASE)
@@ -321,9 +321,9 @@ def _execute_with_retry(
                     time.sleep(_BACKOFF_BASE * (2**attempt))
                     continue
 
-            raise APIError(error_msg, status_code=status) from e
+            raise APIError(error_msg, status_code=status) from http_error
 
-        except (URLError, socket.timeout, ConnectionError) as e:
+        except (URLError, socket.timeout, ConnectionError) as network_error:
             if attempt < _MAX_RETRIES:
                 time.sleep(_BACKOFF_BASE * (2**attempt))
                 continue
@@ -331,7 +331,7 @@ def _execute_with_retry(
             # could include the request URL in str(e), which in turn could
             # contain a key if a future refactor regressed the header-only
             # auth path. Defense in depth.
-            raise APIError(sanitize(f"Network error: {e}")) from e
+            raise APIError(sanitize(f"Network error: {network_error}")) from network_error
 
     raise APIError("Request retry loop exited unexpectedly.")
 

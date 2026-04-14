@@ -60,7 +60,7 @@ def run(
     response = cast(GeminiResponse, api_call(f"models/{resolved_model}:generateContent", body=body))
 
     parts = extract_parts(response)
-    text_parts = [p["text"] for p in parts if "text" in p]
+    text_parts = [part["text"] for part in parts if "text" in part]
     text = "\n".join(text_parts)
 
     candidates = response.get("candidates", [])

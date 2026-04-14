@@ -49,7 +49,7 @@ def safe_print(*args: object) -> None:
     Args:
         *args: Values to print, same as built-in print().
     """
-    message = " ".join(str(a) for a in args)
+    message = " ".join(str(arg) for arg in args)
     print(sanitize(message))
 
 

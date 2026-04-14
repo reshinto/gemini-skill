@@ -100,7 +100,7 @@ def main(argv: list[str]) -> None:
         _enforce_policy(command, normalized_args)
 
     # Strip policy-only flags before handing off to the adapter
-    adapter_args = [a for a in normalized_args if a != _PRIVACY_OPT_IN_FLAG]
+    adapter_args = [argument for argument in normalized_args if argument != _PRIVACY_OPT_IN_FLAG]
 
     # Import and validate adapter
     adapter_module = importlib.import_module(ALLOWED_COMMANDS[command])

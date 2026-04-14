@@ -120,8 +120,8 @@ def main(argv: list[str]) -> None:
 
         resolve_key()
         safe_print("[OK] API key resolved")
-    except Exception as e:
-        safe_print(f"[FAIL] API key: {e}")
+    except Exception as error:
+        safe_print(f"[FAIL] API key: {error}")
         return
 
     # Check API connectivity.
@@ -132,8 +132,8 @@ def main(argv: list[str]) -> None:
         models_value = response.get("models")
         models = models_value if isinstance(models_value, list) else []
         safe_print(f"[OK] API reachable ({len(models)} models visible)")
-    except Exception as e:
-        safe_print(f"[FAIL] API connectivity: {e}")
+    except Exception as error:
+        safe_print(f"[FAIL] API connectivity: {error}")
         return
 
     safe_print("All checks passed.")

@@ -208,13 +208,15 @@ def load_config(config_dir: Path | None = None) -> Config:
                 # Only the JSON-backed fields are loaded from disk. Backend
                 # priority is env-only so we never let stale config.json
                 # contradict the user's settings.json env block.
-                json_backed_fields = {f.name for f in dataclasses.fields(cfg)} - {
+                json_backed_fields = {
+                    field.name for field in dataclasses.fields(cfg)
+                } - {
                     "is_sdk_priority",
                     "is_rawhttp_priority",
                 }
-                for fld in json_backed_fields:
-                    if fld in data:
-                        setattr(cfg, fld, data[fld])
+                for field_name in json_backed_fields:
+                    if field_name in data:
+                        setattr(cfg, field_name, data[field_name])
         except (json.JSONDecodeError, OSError):
             pass  # Return defaults on any read/parse error
 

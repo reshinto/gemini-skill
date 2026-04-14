@@ -100,12 +100,12 @@ def _positive_int(value: str) -> int:
     surfaces the mistake earlier.
     """
     try:
-        n = int(value)
+        parsed = int(value)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(f"invalid int value: {value!r}") from exc
-    if n < 1:
-        raise argparse.ArgumentTypeError(f"must be >= 1, got {n}")
-    return n
+    if parsed < 1:
+        raise argparse.ArgumentTypeError(f"must be >= 1, got {parsed}")
+    return parsed
 
 
 def get_parser() -> argparse.ArgumentParser:

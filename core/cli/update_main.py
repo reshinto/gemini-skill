@@ -43,8 +43,8 @@ def main(argv: list[str]) -> None:
 
     try:
         latest = _fetch_latest_release()
-    except Exception as e:
-        safe_print(f"[ERROR] Could not fetch release info: {e}")
+    except Exception as error:
+        safe_print(f"[ERROR] Could not fetch release info: {error}")
         return
 
     latest_tag = latest.get("tag_name", "").lstrip("v")

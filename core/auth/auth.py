@@ -153,12 +153,14 @@ def validate_key(key: str) -> bool:
         with urlopen(request, timeout=10) as response:
             response.read()
             return True
-    except HTTPError as e:
-        if e.code == 401:
-            raise AuthError("API key is invalid (401 Unauthorized)") from e
-        raise AuthError(f"API key validation failed: HTTP {e.code}") from e
-    except (URLError, socket.timeout, ssl.SSLError, OSError) as e:
+    except HTTPError as http_error:
+        if http_error.code == 401:
+            raise AuthError("API key is invalid (401 Unauthorized)") from http_error
+        raise AuthError(f"API key validation failed: HTTP {http_error.code}") from http_error
+    except (URLError, socket.timeout, ssl.SSLError, OSError) as network_error:
         # Narrow to realistic network failures. A bare ``Exception`` here
         # would swallow programmer bugs (AttributeError, TypeError) and
         # silently re-wrap them as AuthError, which makes debugging hard.
-        raise AuthError(f"API key validation failed: {sanitize(str(e))}") from e
+        raise AuthError(
+            f"API key validation failed: {sanitize(str(network_error))}"
+        ) from network_error

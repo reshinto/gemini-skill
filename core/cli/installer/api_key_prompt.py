@@ -152,8 +152,8 @@ def _read_api_key_value() -> str:
         # Detect the echo fallback — getpass emits GetPassWarning when
         # it can't disable terminal echo and is about to print in
         # cleartext. Abort rather than accept a leaked key.
-        for w in caught:
-            if issubclass(w.category, getpass.GetPassWarning):
+        for warning in caught:
+            if issubclass(warning.category, getpass.GetPassWarning):
                 raise InstallError(
                     "getpass fell back to echoing input — refusing to "
                     "accept an API key in cleartext. Rerun in a terminal "

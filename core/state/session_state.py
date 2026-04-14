@@ -128,14 +128,14 @@ class SessionState:
 
     def list_sessions(self) -> list[str]:
         """Return IDs of all active sessions."""
-        return sorted(p.stem for p in self._dir.glob("*.json"))
+        return sorted(session_file.stem for session_file in self._dir.glob("*.json"))
 
     def most_recent(self) -> str | None:
         """Return the ID of the most recently modified session, or None."""
         sessions = list(self._dir.glob("*.json"))
         if not sessions:
             return None
-        latest = max(sessions, key=lambda p: p.stat().st_mtime)
+        latest = max(sessions, key=lambda session_path: session_path.stat().st_mtime)
         return latest.stem
 
 

@@ -99,6 +99,6 @@ def run(
         return
 
     # No audio — emit text if available
-    text_parts = [p["text"] for p in parts if "text" in p]
+    text_parts = [part["text"] for part in parts if "text" in part]
     if text_parts:
         emit_output("\n".join(text_parts))
