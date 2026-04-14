@@ -2,9 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, 'feat/**']
-  pull_request:
-    branches: [main]
+    branches: [main, "feat/**"]
 
 permissions:
   contents: read
@@ -16,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.11', '3.13']
+        python-version: ["3.9", "3.11", "3.13"]
 
     steps:
       - name: Checkout
@@ -106,13 +104,13 @@ jobs:
         backend: [sdk, raw_http]
         include:
           - backend: sdk
-            is_sdk_priority: 'true'
-            is_rawhttp_priority: 'false'
+            is_sdk_priority: "true"
+            is_rawhttp_priority: "false"
           - backend: raw_http
-            is_sdk_priority: 'false'
-            is_rawhttp_priority: 'true'
+            is_sdk_priority: "false"
+            is_rawhttp_priority: "true"
     env:
-      GEMINI_LIVE_TESTS: '1'
+      GEMINI_LIVE_TESTS: "1"
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GEMINI_IS_SDK_PRIORITY: ${{ matrix.is_sdk_priority }}
       GEMINI_IS_RAWHTTP_PRIORITY: ${{ matrix.is_rawhttp_priority }}
@@ -123,7 +121,7 @@ jobs:
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: "3.13"
 
       - name: Install runtime + dev dependencies
         run: |

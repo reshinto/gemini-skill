@@ -7,8 +7,12 @@ import sys
 import tempfile
 from collections.abc import Sequence
 from importlib import resources
-from importlib.resources.abc import Traversable
 from pathlib import Path
+
+try:
+    from importlib.resources.abc import Traversable
+except ModuleNotFoundError:
+    from importlib.abc import Traversable
 
 from core.cli import install_main
 from core.cli.installer.payload import iter_install_payload_paths
