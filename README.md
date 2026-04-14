@@ -4,27 +4,40 @@ A Claude Code skill for broad Gemini REST API access — text generation, multim
 
 ## Quick Start
 
-1. **Install without cloning**
-   ```bash
-   uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
-   ```
-   Or with `pipx`:
-   ```bash
-   pipx run --spec git+https://github.com/reshinto/gemini-skill.git gemini-skill-install
-   ```
-   Tagged releases build and publish the same bootstrap installer to PyPI. After the
-   first PyPI release, these simplify to:
+1. **Installation**
+
+   See [install.md](install.md) for detailed setup and update paths.
+
    ```bash
    uvx gemini-skill-install
+   ```
+
+   or fallback if there are errors
+
+   ```bash
+   uvx --python 3.13 gemini-skill-install
+   ```
+
+   Or with `pipx`:
+
+   ```bash
    pipx install gemini-skill-install
    ```
 
+   or fallback if there are errors
+
+   ```bash
+   pipx install --python 3.13 gemini-skill-install
+   ```
+
 2. **Fallback: install from a clone or release tarball**
+
    ```bash
    git clone https://github.com/reshinto/gemini-skill.git
    cd gemini-skill
    python3 setup/install.py
    ```
+
    Both installer entry points call the same core installer. They:
    - Copy operational files to `~/.claude/skills/gemini/`
    - Includes the runtime payload: `SKILL.md`, `VERSION`, `core`, `adapters`, `reference`, `registry`, `scripts`, and `setup/{update.py,requirements.txt}`
@@ -37,6 +50,7 @@ A Claude Code skill for broad Gemini REST API access — text generation, multim
 3. **Set your Gemini API key** (get one at [aistudio.google.com/apikey](https://aistudio.google.com/apikey))
 
    The installer prompts you interactively. If you need to manually edit, add/update the `env` block in `~/.claude/settings.json`:
+
    ```json
    {
      "env": {
@@ -47,6 +61,7 @@ A Claude Code skill for broad Gemini REST API access — text generation, multim
      }
    }
    ```
+
    Claude Code injects these values into the process env at session start.
 
    **Do NOT edit the repo-root `.env`** — that's only for local development from a clone. For the installed skill, use `~/.claude/settings.json` exclusively.
@@ -154,6 +169,7 @@ See [docs/update-sync.md](docs/update-sync.md) for the full release flow.
 By default, the skill uses the **google-genai SDK as the primary backend**, with **urllib raw HTTP as the fallback**. Both backends return identical response shapes via the `normalize` layer — adapters never know which ran.
 
 To invert backend priority (raw HTTP primary, SDK fallback), edit `~/.claude/settings.json`:
+
 ```json
 {
   "env": {

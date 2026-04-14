@@ -12,18 +12,6 @@ Getting started with gemini-skill and common workflows.
 
 ### 1. Install
 
-```bash
-uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
-```
-
-Fallback from a clone or release tarball:
-
-```bash
-git clone https://github.com/reshinto/gemini-skill.git
-cd gemini-skill
-python3 setup/install.py
-```
-
 See [install.md](install.md) for detailed setup and update paths.
 
 ### 2. Set API key
@@ -60,16 +48,19 @@ development and testing from a checkout.
 ### Multi-turn conversation
 
 Start a session:
+
 ```bash
 /gemini text --session chat "Hello, can you help me code?"
 ```
 
 Continue the conversation:
+
 ```bash
 /gemini text --continue "Write a Python function for fibonacci"
 ```
 
 Continue with a specific session:
+
 ```bash
 /gemini text --session chat "What about error handling?"
 ```
@@ -87,6 +78,7 @@ Supports: PDF, images (JPEG/PNG/GIF/WebP), audio (WAV/MP3/FLAC/Opus), video (MP4
 ### Generate structured output
 
 Define a schema:
+
 ```bash
 cat > schema.json << 'EOF'
 {
@@ -102,6 +94,7 @@ EOF
 ```
 
 Extract data (the same `--schema` flag accepts either inline JSON or a file path — the adapter detects which):
+
 ```bash
 /gemini structured "Extract contact info from this text: ..." --schema schema.json
 ```
@@ -109,6 +102,7 @@ Extract data (the same `--schema` flag accepts either inline JSON or a file path
 ### Embeddings for semantic search
 
 Generate embeddings for a document:
+
 ```bash
 /gemini embed "The quick brown fox jumps over the lazy dog" --task-type RETRIEVAL_DOCUMENT
 ```
@@ -126,6 +120,7 @@ The model writes Python code and Gemini executes it in a sandbox.
 ### Count tokens
 
 Before sending expensive requests:
+
 ```bash
 /gemini token_count "This is a long prompt that I want to estimate the cost for"
 ```
@@ -137,11 +132,13 @@ Returns the token count (useful for budgeting).
 `search` and `maps` are privacy-sensitive. The dispatcher auto-applies the internal privacy opt-in flag when you intentionally invoke those commands.
 
 Get latest news:
+
 ```bash
 /gemini search "Latest developments in quantum computing"
 ```
 
 Find nearby restaurants:
+
 ```bash
 /gemini maps "Best coffee shops near downtown"
 ```
@@ -151,17 +148,20 @@ Find nearby restaurants:
 ### Upload and reuse a file
 
 Upload:
+
 ```bash
 /gemini files upload dataset.csv --execute
 # Returns: fileId-12345
 ```
 
 Use in future requests:
+
 ```bash
 /gemini multimodal "Analyze this data" --file fileId-12345
 ```
 
 List uploaded files:
+
 ```bash
 /gemini files list
 ```
@@ -199,12 +199,14 @@ Save to a specific directory:
 ### Create a knowledge base (File Search)
 
 Create a store:
+
 ```bash
 /gemini file_search create research-library --execute
 # Returns: store-id-abc123
 ```
 
 Upload documents:
+
 ```bash
 /gemini files upload article1.pdf --execute
 # Returns: files/abc123
@@ -212,11 +214,13 @@ Upload documents:
 ```
 
 Query the store:
+
 ```bash
 /gemini file_search query "What are the key findings?" --store fileSearchStores/store-id-abc123
 ```
 
 List stores:
+
 ```bash
 /gemini file_search list
 ```
@@ -226,17 +230,20 @@ List stores:
 For high-volume requests, use batch:
 
 Create `requests.jsonl`:
+
 ```json
 {"custom_id": "req-1", "params": {"contents": [{"role": "user", "parts": [{"text": "Summarize the industrial revolution"}]}]}}
 {"custom_id": "req-2", "params": {"contents": [{"role": "user", "parts": [{"text": "Summarize World War II"}]}]}}
 ```
 
 Submit:
+
 ```bash
 /gemini batch create --src requests.jsonl --dest results.jsonl --execute
 ```
 
 Check status:
+
 ```bash
 /gemini batch list
 /gemini batch get batch-xyz
@@ -299,21 +306,22 @@ Multi-turn conversations are stored in local session files.
 Located in: `~/.config/gemini-skill/sessions/<id>.json`
 
 Example session file:
+
 ```json
 {
   "id": "chat",
   "messages": [
     {
       "role": "user",
-      "parts": [{"text": "What is Python?"}]
+      "parts": [{ "text": "What is Python?" }]
     },
     {
       "role": "model",
-      "parts": [{"text": "Python is a high-level programming language..."}]
+      "parts": [{ "text": "Python is a high-level programming language..." }]
     },
     {
       "role": "user",
-      "parts": [{"text": "What are its key features?"}]
+      "parts": [{ "text": "What are its key features?" }]
     }
   ]
 }
@@ -328,11 +336,13 @@ Example session file:
 ### Clearing sessions
 
 Delete a session:
+
 ```bash
 rm ~/.config/gemini-skill/sessions/chat.json
 ```
 
 Delete all sessions:
+
 ```bash
 rm -rf ~/.config/gemini-skill/sessions/
 ```
@@ -374,6 +384,7 @@ Images, videos, and music always save to file:
 ### Handling generated files
 
 After generation, files are saved to disk. You can:
+
 - View them: `/Users/you/Downloads/image_xyz.png`
 - Move them: `mv /tmp/image_xyz.png ~/Pictures/`
 - Analyze them: `/gemini multimodal "Analyze this" --file ~/Pictures/image_xyz.png`
@@ -461,6 +472,7 @@ Stream long responses in real-time:
 Output appears incrementally instead of waiting for the full response.
 
 Useful for:
+
 - Long text generation (articles, stories)
 - Interactive dialogue
 - Seeing early results while generation continues
@@ -476,6 +488,7 @@ Add system instructions to guide the model:
 ```
 
 Works with:
+
 - `text`, `streaming`, `multimodal`, `structured`
 - Any task that uses the text generation API
 
@@ -525,6 +538,7 @@ Solution: Check available commands with `/gemini help`.
 ```
 
 Solution:
+
 ```bash
 export GEMINI_API_KEY="your_key_here"
 ```
@@ -538,6 +552,7 @@ See [install.md](install.md) for detailed setup.
 ```
 
 Solution:
+
 1. Check available models: `/gemini models`
 2. Use a valid model: `/gemini text "prompt" --model gemini-2.5-flash`
 
@@ -548,6 +563,7 @@ Solution:
 ```
 
 Solution:
+
 - Wait and retry (API may be overloaded)
 - Check your internet connection
 - Check API status: https://status.ai.google.dev
@@ -557,6 +573,7 @@ Solution:
 Files over 2GB are rejected by Gemini API.
 
 Solution:
+
 - Use file chunking (outside the skill)
 - Use smaller files
 - Use File Search for document corpus

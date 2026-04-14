@@ -30,10 +30,23 @@ Install directly from GitHub without cloning:
 uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
 ```
 
-Or:
+or fallback if there are errors
+
+```
+uvx --python 3.13 --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
+```
+
+Or with `pipx`:
 
 ```bash
 pipx run --spec git+https://github.com/reshinto/gemini-skill.git gemini-skill-install
+```
+
+or fallback if there are errors
+
+```bash
+pipx run --python 3.13 --spec git+https://github.com/reshinto/gemini-skill.git gemini-skill-install
+
 ```
 
 Tagged releases also build a PyPI package. After the first published PyPI
@@ -41,7 +54,24 @@ release, these simplify to:
 
 ```bash
 uvx gemini-skill-install
+```
+
+or fallback if there are errors
+
+```bash
+uvx --python 3.13 gemini-skill-install
+```
+
+Or with `pipx`:
+
+```bash
 pipx install gemini-skill-install
+```
+
+or fallback if there are errors
+
+```bash
+pipx install --python 3.13 gemini-skill-install
 ```
 
 ### Method 2: Install from a clone or extracted release tarball
