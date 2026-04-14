@@ -19,6 +19,11 @@ from core.state.session_state import SessionState
 from core.transport.base import Content, GeminiResponse
 
 _DEFAULT_PLAN_REVIEW_MODEL: str = "gemini-3.1-pro-preview"
+_DEFAULT_PLAN_REVIEW_MODELS: tuple[str, ...] = (
+    "gemini-3.1-pro-preview",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+)
 _THINKING_ON: str = "on"
 _THINKING_OFF: str = "off"
 _PLAN_REVIEW_SESSION_DIRNAME: str = "plan-review-sessions"
@@ -26,17 +31,7 @@ _THINKING_OFF_FALLBACK_MODELS: tuple[str, ...] = (
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
 )
-_PLAN_REVIEW_SYSTEM_PROMPT: str = (
-    "You are reviewing an implementation plan for technical quality. "
-    "Focus on substantive gaps, unclear decisions, missing tests, behavioral "
-    "regressions, rollout risks, and unsupported assumptions. Ignore style-only "
-    "nitpicks. Approve only when the plan is implementation-ready.\n\n"
-    "Your response must begin with exactly one verdict line:\n"
-    "VERDICT: APPROVED\n"
-    "or\n"
-    "VERDICT: REVISE\n\n"
-    "After the verdict line, provide concise human-readable feedback only."
-)
+_PLAN_REVIEW_SYSTEM_PROMPT: str = ""
 
 
 @dataclass
@@ -60,7 +55,9 @@ class ResolvedPlanReviewModel:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the plan-review adapter."""
-    parser: argparse.ArgumentParser = build_base_parser("Review an implementation plan with Gemini")
+    parser: argparse.ArgumentParser = build_base_parser(
+        "Review an implementation plan with Gemini"
+    )
     parser.add_argument(
         "proposal",
         nargs="?",
@@ -121,13 +118,65 @@ def run(
         continue_session=continue_session,
         force_session=False,
     )
-    review_text: str = _review_once(
+    review_text: str = _review_with_failover(
         proposal=proposal,
         session_context=session_context,
-        resolved_model=resolved_model,
+        registry=registry,
+        requested_model=model,
         thinking_mode=thinking,
     )
     emit_output(review_text, output_dir=config.output_dir)
+
+
+def _plan_review_candidate_models(*, requested_model: str | None) -> tuple[str, ...]:
+    """Return ordered candidate models for plan_review failover."""
+    if requested_model is not None:
+        return (requested_model,)
+
+    return _DEFAULT_PLAN_REVIEW_MODELS
+
+
+def _review_with_failover(
+    *,
+    proposal: str,
+    session_context: SessionContext,
+    registry: Registry,
+    requested_model: str | None,
+    thinking_mode: str,
+) -> str:
+    """Run plan_review with model failover.
+
+    If the caller explicitly requested a model, do not silently fall back.
+    If no model was requested, try the ranked defaults in order.
+    """
+    last_error: Exception | None = None
+    candidate_model: str
+
+    for candidate_model in _plan_review_candidate_models(
+        requested_model=requested_model
+    ):
+        try:
+            resolved_model: ResolvedPlanReviewModel = _resolve_plan_review_model(
+                registry=registry,
+                requested_model=candidate_model,
+                thinking_mode=thinking_mode,
+            )
+            return _review_once(
+                proposal=proposal,
+                session_context=session_context,
+                resolved_model=resolved_model,
+                thinking_mode=thinking_mode,
+            )
+        except Exception as exc:
+            last_error = exc
+            if requested_model is not None:
+                raise
+            continue
+
+    if last_error is not None:
+        raise last_error
+
+    raise RuntimeError("No candidate model available for plan_review.")
 
 
 def _resolve_plan_review_model(
@@ -140,7 +189,9 @@ def _resolve_plan_review_model(
     requested_model_id: str = requested_model or _DEFAULT_PLAN_REVIEW_MODEL
     _validate_text_capable_model(registry=registry, model_id=requested_model_id)
 
-    if thinking_mode == _THINKING_OFF and not _supports_true_thinking_off(requested_model_id):
+    if thinking_mode == _THINKING_OFF and not _supports_true_thinking_off(
+        requested_model_id
+    ):
         fallback_model_id: str = _resolve_thinking_off_fallback_model(registry=registry)
         return ResolvedPlanReviewModel(
             requested_model=requested_model_id,
@@ -193,7 +244,9 @@ def _supports_true_thinking_off(model_id: str) -> bool:
     return False
 
 
-def _build_thinking_config(*, resolved_model_id: str, thinking_mode: str) -> dict[str, object]:
+def _build_thinking_config(
+    *, resolved_model_id: str, thinking_mode: str
+) -> dict[str, object]:
     """Build the request ``thinkingConfig`` block for the selected model."""
     if resolved_model_id.startswith("gemini-3"):
         if thinking_mode == _THINKING_OFF:
@@ -321,8 +374,12 @@ def _review_once(
     request_body: dict[str, object] = {
         "contents": request_contents,
         "generationConfig": generation_config,
-        "systemInstruction": {"parts": [{"text": _PLAN_REVIEW_SYSTEM_PROMPT}]},
     }
+
+    if _PLAN_REVIEW_SYSTEM_PROMPT:
+        request_body["systemInstruction"] = {
+            "parts": [{"text": _PLAN_REVIEW_SYSTEM_PROMPT}]
+        }
 
     response = cast(
         GeminiResponse,
@@ -333,10 +390,17 @@ def _review_once(
     )
 
     normalized_text: str = _normalize_review_text(extract_text(response))
-    if session_context.session_state is not None and session_context.session_id is not None:
+    if (
+        session_context.session_state is not None
+        and session_context.session_id is not None
+    ):
         response_content: Content = response["candidates"][0]["content"]
-        session_context.session_state.append_message(session_context.session_id, user_message)
-        session_context.session_state.append_message(session_context.session_id, response_content)
+        session_context.session_state.append_message(
+            session_context.session_id, user_message
+        )
+        session_context.session_state.append_message(
+            session_context.session_id, response_content
+        )
         session_context.contents.append(user_message)
         session_context.contents.append(response_content)
 
