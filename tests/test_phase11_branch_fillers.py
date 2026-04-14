@@ -789,6 +789,236 @@ class TestSdkTransportValueErrorTranslation:
                 raise ValueError("totally different programmer bug")
 
 
+class TestInstallChecksumWiring:
+    """Coverage for the Phase 11.6 checksum manifest wiring in install_main."""
+
+    def test_iter_manifest_files_excludes_venv_and_pycache(
+        self, tmp_path: Path
+    ) -> None:
+        """``.venv`` and ``__pycache__`` directories are excluded; the
+        manifest file itself is excluded; other files are included."""
+        from core.cli import install_main
+
+        # Build a fake install tree with all the exclusion edge cases
+        (tmp_path / "SKILL.md").write_text("skill")
+        (tmp_path / ".checksums.json").write_text("{}")
+        (tmp_path / ".venv" / "bin").mkdir(parents=True)
+        (tmp_path / ".venv" / "bin" / "python").write_text("interpreter")
+        (tmp_path / "core").mkdir()
+        (tmp_path / "core" / "__pycache__").mkdir()
+        (tmp_path / "core" / "__pycache__" / "cached.pyc").write_text("bytecode")
+        (tmp_path / "core" / "real.py").write_text("module")
+
+        result = install_main._iter_manifest_files(tmp_path)
+        relative = sorted(path.relative_to(tmp_path).as_posix() for path in result)
+
+        # Included: real source files
+        assert "SKILL.md" in relative
+        assert "core/real.py" in relative
+        # Excluded: manifest, venv, pycache
+        assert ".checksums.json" not in relative
+        assert ".venv/bin/python" not in relative
+        assert "core/__pycache__/cached.pyc" not in relative
+
+    def test_iter_manifest_files_skips_symlinks(self, tmp_path: Path) -> None:
+        """Symlinks are skipped — the install flow never creates them
+        intentionally and an unexpected symlink is treated as drift."""
+        import os
+
+        from core.cli import install_main
+
+        (tmp_path / "real.py").write_text("real")
+        link_path = tmp_path / "link.py"
+        os.symlink(tmp_path / "real.py", link_path)
+
+        result = install_main._iter_manifest_files(tmp_path)
+        relative = sorted(path.relative_to(tmp_path).as_posix() for path in result)
+        assert "real.py" in relative
+        assert "link.py" not in relative
+
+    def test_write_install_manifest_creates_checksums_file(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Walking the install dir and writing the manifest produces
+        a ``.checksums.json`` file with one entry per real file."""
+        from core.cli import install_main
+
+        (tmp_path / "SKILL.md").write_text("alpha")
+        (tmp_path / "VERSION").write_text("1.0")
+
+        install_main._write_install_manifest(tmp_path)
+
+        manifest_path = tmp_path / ".checksums.json"
+        assert manifest_path.is_file()
+        captured = capsys.readouterr().out
+        assert "Install manifest written" in captured
+
+    def test_main_warns_when_manifest_write_fails(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """If ``_write_install_manifest`` raises OSError, ``main`` warns
+        but does not abort the install (lines 137-138)."""
+        from unittest.mock import patch
+
+        from core.cli import install_main
+
+        source_dir = tmp_path / "src"
+        source_dir.mkdir()
+        (source_dir / "SKILL.md").write_text("source")
+        install_dir = tmp_path / "install"
+
+        def fake_write_manifest(target: Path) -> None:
+            raise OSError("simulated disk full")
+
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=source_dir),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch.object(install_main, "_write_install_manifest", side_effect=fake_write_manifest),
+            patch.object(install_main, "_setup_venv", return_value=None),
+            patch.object(install_main, "_setup_user_settings"),
+        ):
+            install_main.main(["--yes"])
+
+        captured = capsys.readouterr().out
+        assert "manifest write failed" in captured.lower()
+        # Install still completed
+        assert "Installed to" in captured
+
+    def test_verify_install_integrity_returns_empty_when_no_manifest(
+        self, tmp_path: Path
+    ) -> None:
+        """Installs predating Phase 11.6 (no manifest file) yield an
+        empty mismatch list — drift detection is opt-in by manifest
+        existence."""
+        from core.cli.install_main import verify_install_integrity
+
+        # tmp_path has no .checksums.json
+        assert verify_install_integrity(tmp_path) == []
+
+    def test_verify_install_integrity_detects_drift(self, tmp_path: Path) -> None:
+        """A file modified after manifest write is reported as drifted."""
+        from core.cli import install_main
+
+        (tmp_path / "SKILL.md").write_text("original")
+        install_main._write_install_manifest(tmp_path)
+
+        # Tamper with the file
+        (tmp_path / "SKILL.md").write_text("tampered")
+
+        mismatches = install_main.verify_install_integrity(tmp_path)
+        assert "SKILL.md" in mismatches
+
+    def test_verify_install_integrity_returns_empty_for_clean_install(
+        self, tmp_path: Path
+    ) -> None:
+        """An untouched install verifies cleanly."""
+        from core.cli import install_main
+
+        (tmp_path / "SKILL.md").write_text("original")
+        install_main._write_install_manifest(tmp_path)
+
+        assert install_main.verify_install_integrity(tmp_path) == []
+
+
+class TestHealthMainInstallIntegrity:
+    """Coverage for ``_report_install_integrity`` in health_main."""
+
+    def test_no_manifest_file_prints_info(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A fresh install dir without a manifest prints an INFO line."""
+        from core.cli.health_main import _report_install_integrity
+
+        _report_install_integrity(tmp_path)
+        captured = capsys.readouterr().out
+        assert "[INFO] Install integrity" in captured
+        assert "no .checksums.json" in captured
+
+    def test_clean_manifest_prints_ok_with_count(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A clean install reports OK with the file count."""
+        from core.cli import install_main
+        from core.cli.health_main import _report_install_integrity
+
+        (tmp_path / "alpha.py").write_text("a")
+        (tmp_path / "beta.py").write_text("b")
+        install_main._write_install_manifest(tmp_path)
+
+        _report_install_integrity(tmp_path)
+        captured = capsys.readouterr().out
+        assert "[OK] Install integrity" in captured
+        assert "2 files verified" in captured
+
+    def test_drifted_manifest_lists_mismatches(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A drifted file shows up in the WARN list."""
+        from core.cli import install_main
+        from core.cli.health_main import _report_install_integrity
+
+        (tmp_path / "alpha.py").write_text("original")
+        install_main._write_install_manifest(tmp_path)
+        (tmp_path / "alpha.py").write_text("tampered")
+
+        _report_install_integrity(tmp_path)
+        captured = capsys.readouterr().out
+        assert "[WARN] Install integrity" in captured
+        assert "alpha.py" in captured
+        assert "Re-run setup/install.py" in captured
+
+    def test_drifted_manifest_truncates_long_lists(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """When more than 10 files drift, the report truncates with a count."""
+        from core.cli import install_main
+        from core.cli.health_main import _report_install_integrity
+
+        for index in range(15):
+            (tmp_path / f"file_{index:02d}.py").write_text(f"original {index}")
+        install_main._write_install_manifest(tmp_path)
+        # Tamper with all 15
+        for index in range(15):
+            (tmp_path / f"file_{index:02d}.py").write_text(f"tampered {index}")
+
+        _report_install_integrity(tmp_path)
+        captured = capsys.readouterr().out
+        assert "15 file(s) drifted" in captured
+        assert "and 5 more" in captured
+
+    def test_corrupted_manifest_reports_fail(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A manifest file with malformed JSON reports FAIL, not crash."""
+        from core.cli.health_main import _report_install_integrity
+
+        (tmp_path / ".checksums.json").write_text("{not valid json")
+
+        _report_install_integrity(tmp_path)
+        captured = capsys.readouterr().out
+        assert "[FAIL] Install integrity" in captured
+        assert "corrupted" in captured
+
+    def test_unreadable_manifest_reports_fail(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """An OSError opening the manifest reports FAIL with the OS error."""
+        from unittest.mock import patch
+
+        from core.cli.health_main import _report_install_integrity
+
+        (tmp_path / ".checksums.json").write_text("{}")
+
+        with patch(
+            "core.cli.install_main.verify_install_integrity",
+            side_effect=OSError("permission denied"),
+        ):
+            _report_install_integrity(tmp_path)
+        captured = capsys.readouterr().out
+        assert "[FAIL] Install integrity" in captured
+        assert "cannot read manifest" in captured
+
+
 class TestInstallMainCleanInstallMissingFile:
     """Coverage: _clean_install skips operational files that don't exist (branch 309→307)."""
 

@@ -100,6 +100,67 @@ def _report_backend_and_venv(install_dir: Path) -> None:
         )
 
 
+def _report_install_integrity(install_dir: Path) -> None:
+    """Report install-manifest verification status.
+
+    Reads ``<install_dir>/.checksums.json`` (written by install_main
+    at install time) and compares every entry against the current
+    bytes on disk. Three outcome classes:
+
+    1. Manifest file missing → legacy install (Phase <11.6) or manual
+       copy. Print a one-line INFO pointing the user at re-running
+       setup/install.py to get drift detection.
+    2. Manifest loads but some files have drifted → list the
+       mismatched relative paths so the user can see exactly what
+       was edited / corrupted / tampered with.
+    3. Manifest loads and every hash matches → print OK with the
+       total file count for transparency.
+
+    Errors while loading the manifest itself (corrupted JSON, wrong
+    shape) are surfaced as FAIL rather than swallowed — a corrupted
+    manifest is just as much a signal of tampering as mismatched
+    hashes.
+
+    Args:
+        install_dir: The skill install directory. Must exist — the
+            caller guarantees this via ``_install_dir()``.
+    """
+    manifest_path = install_dir / ".checksums.json"
+    if not manifest_path.is_file():
+        safe_print(
+            "[INFO] Install integrity: no .checksums.json manifest "
+            "(install predates Phase 11.6 — re-run setup/install.py "
+            "to enable drift detection)"
+        )
+        return
+    try:
+        from core.cli.install_main import verify_install_integrity
+
+        mismatches = verify_install_integrity(install_dir)
+    except ValueError as manifest_error:
+        safe_print(f"[FAIL] Install integrity: manifest corrupted — {manifest_error}")
+        return
+    except OSError as io_error:
+        safe_print(f"[FAIL] Install integrity: cannot read manifest — {io_error}")
+        return
+    if not mismatches:
+        # Count the manifest entries for the user-facing OK line so
+        # they see "how thorough was this check". Reading the file
+        # twice (once here, once inside verify_install_integrity) is
+        # cheap — it's a small JSON file.
+        from core.infra.checksums import read_checksums_file
+
+        total = len(read_checksums_file(manifest_path))
+        safe_print(f"[OK] Install integrity: {total} files verified")
+        return
+    safe_print(f"[WARN] Install integrity: {len(mismatches)} file(s) drifted from manifest:")
+    for relative_path in mismatches[:10]:
+        safe_print(f"        {relative_path}")
+    if len(mismatches) > 10:
+        safe_print(f"        ... and {len(mismatches) - 10} more")
+    safe_print("        Re-run setup/install.py to restore a clean install.")
+
+
 def main(argv: list[str]) -> None:
     """Run the health check.
 
@@ -113,6 +174,10 @@ def main(argv: list[str]) -> None:
     # picture even if subsequent network checks fail.
     install_dir = _install_dir()
     _report_backend_and_venv(install_dir)
+
+    # Install-manifest drift detection runs before any network call
+    # so tampering is visible even when the user is offline.
+    _report_install_integrity(install_dir)
 
     # Check API key resolution.
     try:

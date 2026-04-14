@@ -25,6 +25,12 @@ from core.cli.installer.settings_merge import (
     merge_settings_env,
 )
 from core.cli.installer.venv import InstallError
+from core.infra.checksums import (
+    generate_checksums,
+    read_checksums_file,
+    verify_checksums,
+    write_checksums_file,
+)
 from core.infra.sanitize import safe_print
 from core.types import SettingsBuffer
 
@@ -47,6 +53,22 @@ _OPERATIONAL_DIRS = ["core", "adapters", "reference", "registry", "scripts"]
 # installer (Phase 5) reads to install google-genai. Must ship with the
 # install so re-running install or update can re-resolve the same pin.
 _SETUP_FILES = ["setup/update.py", "setup/requirements.txt"]
+
+# The SHA-256 install-integrity manifest the installer writes into the
+# install directory after copying files. ``health_main`` reads this file
+# to detect drift (files hand-edited or tampered with after install),
+# and a future ``update_main`` will verify it before applying updates.
+# The filename uses a leading dot so ``shutil.ignore_patterns`` in the
+# operational-file copy doesn't accidentally re-copy it from a dev tree
+# during repeat installs.
+_CHECKSUMS_FILENAME = ".checksums.json"
+
+# Directories INSIDE the install tree that should NOT be included in
+# the checksum manifest. ``.venv`` is a live user-owned artifact
+# (pip mutates it on every upgrade), and ``__pycache__`` is byte-code
+# cache that changes on every import. Including either would make
+# every install "drift" from its own manifest the moment it ran.
+_CHECKSUMS_EXCLUDED_DIRS: frozenset[str] = frozenset({".venv", "__pycache__"})
 
 
 def _is_interactive_stdin() -> bool:
@@ -102,6 +124,22 @@ def main(argv: list[str]) -> None:
     # live in ~/.claude/settings.json (merged by the helpers below).
     # Legacy .env files at the install dir are picked up by the
     # migration step below and deleted.
+
+    # Phase 11.6: write the SHA-256 integrity manifest. The manifest
+    # covers every operational file just copied by ``_clean_install``.
+    # ``.venv`` and ``__pycache__`` are intentionally excluded — both
+    # are live user-owned artifacts that pip / the import system
+    # mutates on every run, so including them would make the
+    # manifest "drift" by definition on the first health-check.
+    # Failures here are warned but do not abort the install.
+    try:
+        _write_install_manifest(install_dir)
+    except OSError as manifest_error:
+        safe_print(
+            f"[WARN] Install manifest write failed: {manifest_error}. "
+            "health_check will not be able to detect drift; re-run "
+            "setup/install.py if this persists."
+        )
 
     # Phase 5: create the skill-local venv + install pinned google-genai.
     # Failures here do NOT abort the install — the file copy succeeded
@@ -323,6 +361,107 @@ def _clean_install(source_dir: Path, install_dir: Path) -> None:
             dest = install_dir / rel_path
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest)
+
+
+def _iter_manifest_files(install_dir: Path) -> list[Path]:
+    """Walk ``install_dir`` and return every file eligible for the manifest.
+
+    Excludes:
+    - Directories listed in ``_CHECKSUMS_EXCLUDED_DIRS`` (``.venv``,
+      ``__pycache__``) because they are live user-owned artifacts.
+    - The manifest file itself (``.checksums.json``) — the manifest
+      cannot meaningfully hash itself.
+    - Hidden top-level files other than the manifest (future-proofing
+      for dot-files like ``.env`` that may live in the install dir).
+    - Symlinks — hashing the target bytes would drift whenever the
+      target changes, and the install flow never creates symlinks
+      intentionally. Unexpected symlinks are a sign the install tree
+      was tampered with and should surface as drift, not be silently
+      hashed.
+
+    Args:
+        install_dir: The install directory to walk.
+
+    Returns:
+        A sorted list of file paths, all under ``install_dir``. The
+        sort order is purely cosmetic — ``generate_checksums`` stores
+        the manifest as a dict so order doesn't affect verification.
+    """
+    candidates: list[Path] = []
+    for entry in install_dir.rglob("*"):
+        if not entry.is_file() or entry.is_symlink():
+            continue
+        # Exclude the manifest file itself and anything under an
+        # excluded directory. ``entry.relative_to(install_dir).parts``
+        # lets us check the top-level component AND any ancestor.
+        relative_parts = entry.relative_to(install_dir).parts
+        if relative_parts == (_CHECKSUMS_FILENAME,):
+            continue
+        if any(component in _CHECKSUMS_EXCLUDED_DIRS for component in relative_parts):
+            continue
+        candidates.append(entry)
+    candidates.sort()
+    return candidates
+
+
+def _write_install_manifest(install_dir: Path) -> None:
+    """Compute and write the SHA-256 install-integrity manifest.
+
+    Called from ``main`` immediately after ``_clean_install``. The
+    manifest covers every operational file but deliberately excludes
+    ``.venv`` (pip mutates this on every upgrade) and ``__pycache__``
+    (byte-code cache). The manifest is written to
+    ``<install_dir>/.checksums.json`` atomically via the checksums
+    module's own writer.
+
+    Args:
+        install_dir: The directory where the operational files were
+            just copied. Must exist (``_clean_install`` guarantees
+            this).
+
+    Raises:
+        OSError: If the manifest file cannot be written (e.g. disk
+            full, permission denied). The caller in ``main`` catches
+            this and surfaces a non-fatal warning — an install
+            without a manifest is still usable, it just can't detect
+            drift later.
+    """
+    manifest_path = install_dir / _CHECKSUMS_FILENAME
+    files = _iter_manifest_files(install_dir)
+    manifest = generate_checksums(install_dir, files)
+    write_checksums_file(manifest, manifest_path)
+    safe_print(f"Install manifest written: {len(manifest)} files in {_CHECKSUMS_FILENAME}")
+
+
+def verify_install_integrity(install_dir: Path) -> list[str]:
+    """Verify the installed files against ``.checksums.json``.
+
+    Public helper exported for use by ``health_main`` and any future
+    ``update_main`` pre-flight check. Reads the manifest from
+    ``<install_dir>/.checksums.json`` and compares every entry
+    against the current bytes on disk.
+
+    Args:
+        install_dir: The directory to verify.
+
+    Returns:
+        A list of relative paths whose current hash does NOT match
+        the manifest (missing files, hand-edited files, or bit-rot).
+        An empty list means the install is byte-identical to what
+        the installer wrote. Returns an empty list if the manifest
+        file does not exist (installs predating Phase 11.6 don't
+        ship one).
+
+    Raises:
+        ValueError: If the manifest file exists but is invalid JSON
+            or has a non-string entry. The caller must decide whether
+            to treat that as drift or abort.
+    """
+    manifest_path = install_dir / _CHECKSUMS_FILENAME
+    if not manifest_path.is_file():
+        return []
+    expected = read_checksums_file(manifest_path)
+    return verify_checksums(install_dir, expected)
 
 
 def _prompt(message: str) -> str:
