@@ -25,9 +25,7 @@ class TestMaterializePayload:
 
 
 class TestBootstrapInstallerCli:
-    def test_main_installs_using_materialized_payload(
-        self, tmp_path: Path, monkeypatch
-    ) -> None:
+    def test_main_installs_using_materialized_payload(self, tmp_path: Path, monkeypatch) -> None:
         from gemini_skill_install.cli import main
 
         home_dir = tmp_path / "home"
@@ -38,9 +36,7 @@ class TestBootstrapInstallerCli:
         with (
             patch("core.cli.installer.venv.create_venv"),
             patch("core.cli.installer.venv.install_requirements"),
-            patch(
-                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
-            ),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
             patch("core.cli.install_main._is_interactive_stdin", return_value=False),
         ):
             main(["--yes"], install_dir=install_dir)

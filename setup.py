@@ -24,16 +24,12 @@ def _iter_install_payload_paths() -> tuple[str, ...]:
         "gemini_skill_install_payload_manifest", payload_module_path
     )
     if module_spec is None or module_spec.loader is None:
-        raise RuntimeError(
-            f"Could not load payload manifest from {payload_module_path}"
-        )
+        raise RuntimeError(f"Could not load payload manifest from {payload_module_path}")
     payload_module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(payload_module)
     manifest = getattr(payload_module, "iter_install_payload_paths", None)
     if manifest is None:
-        raise RuntimeError(
-            "Payload manifest module does not export iter_install_payload_paths"
-        )
+        raise RuntimeError("Payload manifest module does not export iter_install_payload_paths")
     return tuple(manifest())
 
 
@@ -84,9 +80,7 @@ setup(
     include_package_data=False,
     install_requires=["typing-extensions>=4.0; python_version<'3.10'"],
     entry_points={
-        "console_scripts": [
-            "gemini-skill-install=gemini_skill_install.cli:console_main"
-        ]
+        "console_scripts": ["gemini-skill-install=gemini_skill_install.cli:console_main"]
     },
     cmdclass={"build_py": build_py},
 )
