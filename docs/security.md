@@ -1,7 +1,5 @@
 # Security
 
-[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
-
 This page covers how `gemini-skill` resolves secrets, what it stores locally, and what the privacy-sensitive commands do.
 
 ## Secret Resolution
