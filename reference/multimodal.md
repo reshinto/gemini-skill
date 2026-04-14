@@ -51,3 +51,7 @@ Responses exceeding 50KB save to a file; only the path is printed.
 ---
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: maps](maps.md) · [Next: music_gen](music_gen.md)

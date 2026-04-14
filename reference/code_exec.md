@@ -48,3 +48,7 @@ Code execution is non-mutating — it does not require `--execute`. The sandbox 
 ---
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: cache](cache.md) · [Next: computer_use](computer_use.md)

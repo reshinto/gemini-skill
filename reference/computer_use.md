@@ -58,3 +58,7 @@ Computer use is a preview feature and may change. Model behavior and API surface
 ## Notes
 
 Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
+
+---
+
+[← Back](index.md) · [Previous: code_exec](code_exec.md) · [Next: deep_research](deep_research.md)

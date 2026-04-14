@@ -69,3 +69,7 @@ Deep Research is designed for thorough, multi-step investigation. Simpler querie
 ---
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: computer_use](computer_use.md) · [Next: embed](embed.md)

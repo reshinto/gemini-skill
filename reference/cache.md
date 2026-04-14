@@ -55,3 +55,7 @@ List and get return JSON metadata. Create returns the cache ID and expiry time.
 ---
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: batch](batch.md) · [Next: code_exec](code_exec.md)

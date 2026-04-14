@@ -189,6 +189,22 @@ def _wrap_sdk_errors() -> Iterator[None]:
         # status_code=0 signals "no HTTP code available" (matches the
         # sentinel used elsewhere in this module).
         raise APIError(sanitize(str(exc)), status_code=0) from None
+    except ValueError as exc:
+        # google-genai 1.33.0 raises bare ``ValueError`` from
+        # ``models._Tool_to_mldev`` when a Tool kwarg the Gemini API doesn't
+        # accept is passed in (e.g. ``google_maps``, ``computer_use``).
+        # The SDK message format is consistently
+        # ``"<param> parameter is not supported in Gemini API."``. Translate
+        # only those into BackendUnavailableError so the coordinator's
+        # fallback policy routes the call to raw HTTP deterministically.
+        # Every other ValueError remains a programmer bug and propagates
+        # unchanged (this narrow string match is load-bearing for the
+        # cross-backend parity contract).
+        if "not supported in Gemini API" in str(exc):
+            raise BackendUnavailableError(
+                sanitize(f"SDK rejected unsupported tool surface: {exc}")
+            ) from None
+        raise
 
 
 # ----------------------------------------------------------------------

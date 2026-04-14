@@ -45,3 +45,7 @@ Responses exceeding 50KB are saved to a file; only the path and size are printed
 ---
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: structured](structured.md) · [Next: token_count](token_count.md)

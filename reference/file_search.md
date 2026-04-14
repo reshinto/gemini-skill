@@ -65,3 +65,7 @@ File Search is Gemini's hosted RAG. Upload documents once, then run grounded que
 ## Notes
 
 Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
+
+---
+
+[← Back](index.md) · [Previous: embed](embed.md) · [Next: files](files.md)

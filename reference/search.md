@@ -60,3 +60,7 @@ With `--show-grounding`, output is JSON with structured grounding metadata.
 ---
 
 Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
+
+---
+
+[← Back](index.md) · [Previous: music_gen](music_gen.md) · [Next: streaming](streaming.md)

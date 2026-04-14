@@ -65,3 +65,7 @@ Batch jobs are long-running and asynchronous. Check status regularly with `get`.
 ---
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: (none)](batch.md) · [Next: cache](cache.md)

@@ -83,6 +83,10 @@ Each generation counts toward your Gemini API quota. Nano Banana is designed for
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
 
+---
+
+[← Back](index.md) · [Previous: function_calling](function_calling.md) · [Next: imagen](imagen.md)
+
 ## Related
 
 - Live smoke test (dry-run, no billing): [tests/integration/test_image_gen_live.py](../tests/integration/test_image_gen_live.py)

@@ -754,6 +754,60 @@ class TestInstallMainSettingsBufferEdges:
         assert captured == [{"GEMINI_API_KEY": "AIzaSy-real-string"}]
 
 
+class TestNormalizeBytesHandling:
+    """Coverage: normalize layer base64-encodes bytes to match raw HTTP shape."""
+
+    def test_bytes_value_base64_encoded(self) -> None:
+        """A bytes primitive is base64-encoded into a string."""
+        from core.transport.normalize import _translate_keys
+
+        result = _translate_keys(b"hello")
+        assert result == "aGVsbG8="
+
+    def test_nested_bytes_in_dict_encoded(self) -> None:
+        """A bytes value inside a dict is base64-encoded recursively.
+
+        The key ``thoughtSignature`` is not in ``_SNAKE_TO_CAMEL`` (snake
+        form is also not), so the key passes through unchanged. Only the
+        value translation is exercised here.
+        """
+        from core.transport.normalize import _translate_keys
+
+        result = _translate_keys({"someField": b"\x01\x02\x03"})
+        assert result == {"someField": "AQID"}
+
+    def test_nested_bytes_in_list_encoded(self) -> None:
+        """A bytes element inside a list is base64-encoded recursively."""
+        from core.transport.normalize import _translate_keys
+
+        result = _translate_keys([b"a", b"b"])
+        assert result == ["YQ==", "Yg=="]
+
+
+class TestSdkTransportValueErrorTranslation:
+    """Coverage: _wrap_sdk_errors translates SDK 'not supported' ValueError to BackendUnavailableError."""
+
+    def test_not_supported_in_gemini_api_translates_to_backend_unavailable(self) -> None:
+        """A ValueError with the SDK's "not supported in Gemini API" string
+        is translated to BackendUnavailableError so the coordinator falls
+        back to raw HTTP."""
+        from core.transport.base import BackendUnavailableError
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(BackendUnavailableError, match="unsupported tool surface"):
+            with _wrap_sdk_errors():
+                raise ValueError("google_maps parameter is not supported in Gemini API.")
+
+    def test_unrelated_value_error_propagates_unchanged(self) -> None:
+        """A ValueError NOT matching the SDK pattern propagates as-is
+        (preserving the architect-mandated "no string-matching on bugs" contract)."""
+        from core.transport.sdk.transport import _wrap_sdk_errors
+
+        with pytest.raises(ValueError, match="totally different"):
+            with _wrap_sdk_errors():
+                raise ValueError("totally different programmer bug")
+
+
 class TestInstallMainCleanInstallMissingFile:
     """Coverage: _clean_install skips operational files that don't exist (branch 309→307)."""
 

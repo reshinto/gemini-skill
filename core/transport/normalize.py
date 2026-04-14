@@ -139,8 +139,21 @@ def _translate_keys(value: object) -> object:
         # list-of-dicts gets translated element-wise.
         return [_translate_keys(item) for item in value]
 
+    if isinstance(value, bytes):
+        # Cross-backend parity: the raw HTTP path receives every binary
+        # field as a base64 string (because it crosses the JSON wire), so
+        # the SDK path — which preserves Python ``bytes`` after pydantic
+        # ``model_dump()`` — must base64-encode here to match. Without
+        # this, downstream adapters crash on ``json.dumps(bytes)`` with
+        # ``TypeError: Object of type bytes is not JSON serializable``.
+        # Affected fields seen in 1.33.0: ``thought_signature`` on
+        # function_call parts, ``inline_data.data`` on multimodal parts.
+        import base64
+
+        return base64.b64encode(value).decode("ascii")
+
     # Primitive: return as-is. ``str``, ``int``, ``float``, ``bool``,
-    # ``None``, ``bytes`` all reach this branch.
+    # ``None`` all reach this branch.
     return value
 
 

@@ -75,3 +75,7 @@ List and get return JSON metadata. Upload returns the file ID and name. Download
 ---
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: file_search](file_search.md) · [Next: function_calling](function_calling.md)

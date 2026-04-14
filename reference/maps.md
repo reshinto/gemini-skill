@@ -1,3 +1,4 @@
+
 # maps
 
 Ground text generation in Google Maps data. Privacy-sensitive, with dispatcher-managed opt-in and a mandatory output schema.
@@ -65,3 +66,7 @@ Maps grounding adds per-request cost. Check pricing.
 ## Notes
 
 Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
+
+---
+
+[← Back](index.md) · [Previous: live](live.md) · [Next: multimodal](multimodal.md)

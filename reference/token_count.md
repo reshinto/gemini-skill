@@ -1,3 +1,4 @@
+
 # token_count
 
 Count the number of tokens a prompt will consume before making an API call.
@@ -47,3 +48,7 @@ Use this command to estimate API costs before calling generateContent, or to ver
 ---
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: text](text.md) · [Next: video_gen](video_gen.md)

@@ -50,3 +50,7 @@ Embeddings are used for semantic search, retrieval-augmented generation (RAG), a
 ---
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: deep_research](deep_research.md) · [Next: file_search](file_search.md)

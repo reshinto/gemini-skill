@@ -47,3 +47,7 @@ Responses exceeding 50KB save to a file.
 ---
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: streaming](streaming.md) · [Next: text](text.md)

@@ -45,3 +45,7 @@ Streaming is useful for long responses or interactive workflows. For one-shot re
 ---
 
 Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: search](search.md) · [Next: structured](structured.md)

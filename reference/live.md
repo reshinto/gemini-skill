@@ -1,3 +1,4 @@
+
 # live
 
 Realtime bidirectional session with the Gemini Live API.
@@ -46,3 +47,7 @@ python3 scripts/gemini_run.py live "hello" --model gemini-live-2.5-flash-preview
 ## Backend-agnostic
 
 This command is **SDK-only**. It requires `google-genai` in the skill venv and `GEMINI_IS_SDK_PRIORITY=true`. There is no raw HTTP fallback.
+
+---
+
+[← Back](index.md) · [Previous: imagen](imagen.md) · [Next: maps](maps.md)
