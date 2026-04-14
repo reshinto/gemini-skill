@@ -91,9 +91,7 @@ def main(
     interactive = _is_interactive_stdin()
 
     resolved_source_dir = source_dir if source_dir is not None else _get_source_dir()
-    resolved_install_dir = (
-        install_dir if install_dir is not None else _get_install_dir()
-    )
+    resolved_install_dir = install_dir if install_dir is not None else _get_install_dir()
 
     if resolved_install_dir.exists():
         safe_print(f"Skill already installed at {resolved_install_dir}")
@@ -406,9 +404,7 @@ def _write_install_manifest(install_dir: Path) -> None:
     files = _iter_manifest_files(install_dir)
     manifest = generate_checksums(install_dir, files)
     write_checksums_file(manifest, manifest_path)
-    safe_print(
-        f"Install manifest written: {len(manifest)} files in {_CHECKSUMS_FILENAME}"
-    )
+    safe_print(f"Install manifest written: {len(manifest)} files in {_CHECKSUMS_FILENAME}")
 
 
 def verify_install_integrity(install_dir: Path) -> list[str]:

@@ -151,9 +151,7 @@ class TestInstallRequirements:
         req.write_text("google-genai==1.33.0\n")
 
         with mock.patch("core.cli.installer.venv.subprocess.run") as mock_run:
-            mock_run.return_value = mock.Mock(
-                returncode=1, stdout="", stderr="pip resolver error"
-            )
+            mock_run.return_value = mock.Mock(returncode=1, stdout="", stderr="pip resolver error")
             with pytest.raises(InstallError, match="pip install failed"):
                 install_requirements(venv_dir, req)
 
@@ -173,9 +171,7 @@ class TestVerifySdkImportable:
 
         venv_dir = tmp_path / ".venv"
         with mock.patch("core.cli.installer.venv.subprocess.run") as mock_run:
-            mock_run.return_value = mock.Mock(
-                returncode=0, stdout="1.33.0\n", stderr=""
-            )
+            mock_run.return_value = mock.Mock(returncode=0, stdout="1.33.0\n", stderr="")
             version = verify_sdk_importable(venv_dir)
 
         assert version == "1.33.0"
@@ -198,9 +194,7 @@ class TestVerifySdkImportable:
             with pytest.raises(InstallError, match="SDK not importable"):
                 verify_sdk_importable(venv_dir)
 
-    def test_probe_asserts_import_resolved_from_inside_venv(
-        self, tmp_path: Path
-    ) -> None:
+    def test_probe_asserts_import_resolved_from_inside_venv(self, tmp_path: Path) -> None:
         """Defense in depth: the probe code must include an assertion
         that ``sys.executable`` (inside the venv subprocess) lives
         under the venv path. Otherwise a buggy venv setup that fell

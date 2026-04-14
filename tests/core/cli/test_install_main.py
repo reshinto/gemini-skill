@@ -305,9 +305,7 @@ class TestVenvWiring:
             patch.object(install_main, "_get_install_dir", return_value=install_dir),
             patch("core.cli.installer.venv.create_venv") as mock_create,
             patch("core.cli.installer.venv.install_requirements") as mock_install_req,
-            patch(
-                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
-            ),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
         ):
             install_main.main([])
 
@@ -387,9 +385,7 @@ class TestVenvWiring:
             patch.object(install_main, "_get_install_dir", return_value=install_dir),
             patch("core.cli.installer.venv.create_venv"),
             patch("core.cli.installer.venv.install_requirements"),
-            patch(
-                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
-            ),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
         ):
             install_main.main([])
 
@@ -447,9 +443,7 @@ class TestVenvPreservation:
             patch("core.cli.install_main.subprocess.run") as mock_probe_run,
             patch("core.cli.installer.venv.create_venv") as mock_create,
             patch("core.cli.installer.venv.install_requirements"),
-            patch(
-                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
-            ),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
         ):
             mock_probe_run.return_value = MagicMock(
                 returncode=0, stdout="Python 3.13.8\n", stderr=""
@@ -475,9 +469,7 @@ class TestVenvPreservation:
             patch.object(install_main, "_get_install_dir", return_value=install_dir),
             patch("core.cli.installer.venv.create_venv") as mock_create,
             patch("core.cli.installer.venv.install_requirements"),
-            patch(
-                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
-            ),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
         ):
             install_main.main([])
 
@@ -503,9 +495,7 @@ class TestVenvPreservation:
             patch("core.cli.install_main.subprocess.run") as mock_probe_run,
             patch("core.cli.installer.venv.create_venv"),
             patch("core.cli.installer.venv.install_requirements"),
-            patch(
-                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
-            ),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
         ):
             mock_probe_run.return_value = MagicMock(
                 returncode=0, stdout="Python 3.13.8\n", stderr=""
@@ -541,9 +531,7 @@ class TestSettingsBufferFiltering:
                 side_effect=seed_non_dict_env,
             ),
             patch("core.cli.install_main.prompt_gemini_api_key"),
-            patch(
-                "core.cli.install_main.merge_settings_env"
-            ) as mock_merge_settings_env,
+            patch("core.cli.install_main.merge_settings_env") as mock_merge_settings_env,
         ):
             install_main._setup_user_settings(install_dir, yes=False, interactive=False)
 
@@ -577,21 +565,15 @@ class TestSettingsBufferFiltering:
                 side_effect=seed_mixed_env,
             ),
             patch("core.cli.install_main.prompt_gemini_api_key"),
-            patch(
-                "core.cli.install_main.merge_settings_env"
-            ) as mock_merge_settings_env,
+            patch("core.cli.install_main.merge_settings_env") as mock_merge_settings_env,
         ):
             install_main._setup_user_settings(install_dir, yes=False, interactive=False)
 
-        assert mock_merge_settings_env.call_args.kwargs["pre_resolved"] == {
-            "GEMINI_API_KEY": "key"
-        }
+        assert mock_merge_settings_env.call_args.kwargs["pre_resolved"] == {"GEMINI_API_KEY": "key"}
 
 
 class TestManifestCoverage:
-    def test_manifest_write_failure_is_warned_and_install_continues(
-        self, tmp_path, capsys
-    ):
+    def test_manifest_write_failure_is_warned_and_install_continues(self, tmp_path, capsys):
         from core.cli import install_main
 
         src = _setup_fake_source(tmp_path)
@@ -688,9 +670,7 @@ class TestSettingsJsonWiring:
             patch.object(install_main, "_get_install_dir", return_value=install_dir),
             patch("core.cli.installer.venv.create_venv"),
             patch("core.cli.installer.venv.install_requirements"),
-            patch(
-                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
-            ),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
             patch.object(install_main, "_is_interactive_stdin", return_value=False),
         ):
             # yes=False but non-interactive stdin → auto-skip prompts.
@@ -729,9 +709,7 @@ class TestSettingsJsonWiring:
             patch.object(install_main, "_get_install_dir", return_value=install_dir),
             patch("core.cli.installer.venv.create_venv"),
             patch("core.cli.installer.venv.install_requirements"),
-            patch(
-                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
-            ),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
             patch.object(install_main, "_is_interactive_stdin", return_value=False),
         ):
             with pytest.raises(SettingsFileCorrupted):
@@ -743,9 +721,7 @@ class TestSettingsJsonWiring:
         # File copy still happened before the error bubbled up.
         assert (install_dir / "SKILL.md").exists()
 
-    def test_generic_install_error_is_demoted_to_warn(
-        self, tmp_path, monkeypatch, capsys
-    ):
+    def test_generic_install_error_is_demoted_to_warn(self, tmp_path, monkeypatch, capsys):
         """A non-abort, non-corrupted InstallError (e.g. a helper
         raising because of an unexpected edge case) is caught by the
         generic except clause and demoted to a [WARN] line so the
@@ -768,9 +744,7 @@ class TestSettingsJsonWiring:
             patch.object(install_main, "_get_install_dir", return_value=install_dir),
             patch("core.cli.installer.venv.create_venv"),
             patch("core.cli.installer.venv.install_requirements"),
-            patch(
-                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
-            ),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
             patch.object(install_main, "_is_interactive_stdin", return_value=False),
             patch(
                 "core.cli.install_main.merge_settings_env",
@@ -810,9 +784,7 @@ class TestSettingsJsonWiring:
             patch.object(install_main, "_get_install_dir", return_value=install_dir),
             patch("core.cli.installer.venv.create_venv"),
             patch("core.cli.installer.venv.install_requirements"),
-            patch(
-                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
-            ),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
             patch.object(install_main, "_is_interactive_stdin", return_value=True),
             # The API-key prompt runs before the generic merge. Leave
             # the key empty so it doesn't matter, then script the
@@ -851,9 +823,7 @@ class TestSettingsJsonWiring:
             patch.object(install_main, "_prompt", return_value="o"),
             patch("core.cli.installer.venv.create_venv"),
             patch("core.cli.installer.venv.install_requirements"),
-            patch(
-                "core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"
-            ),
+            patch("core.cli.installer.venv.verify_sdk_importable", return_value="1.33.0"),
             patch.object(install_main, "_is_interactive_stdin", return_value=False),
         ):
             install_main.main([])
