@@ -1,5 +1,9 @@
 # Usage
 
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
 **Last Updated:** 2026-04-14
 
 Getting started with gemini-skill and common workflows.

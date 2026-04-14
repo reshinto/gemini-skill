@@ -1,5 +1,9 @@
 # Update and Sync Mechanism
 
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
 **Last Updated:** 2026-04-13
 
 How the install, update, and sync process works. For end-users, see [install.md](install.md).

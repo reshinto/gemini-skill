@@ -1,5 +1,9 @@
 # Commands
 
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
 **Last Updated:** 2026-04-14
 
 A human-facing index of all gemini-skill commands, organized by capability family.

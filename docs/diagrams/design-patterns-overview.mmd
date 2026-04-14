@@ -1,0 +1,79 @@
+classDiagram
+    class Transport {
+        <<Protocol>>
+        +api_call(request, timeout) dict
+        +stream_generate_content(request) Iterator
+        +upload_file(path) dict
+    }
+
+    class SdkTransport {
+        _SUPPORTED_CAPABILITIES: frozenset
+        -client: google.genai.Client
+        +api_call(request, timeout) dict
+        +stream_generate_content(request) Iterator
+        +upload_file(path) dict
+    }
+
+    class RawHttpTransport {
+        _SUPPORTED_CAPABILITIES: frozenset
+        -http_client: httpx.Client
+        +api_call(request, timeout) dict
+        +stream_generate_content(request) Iterator
+        +upload_file(path) dict
+    }
+
+    class TransportCoordinator {
+        -primary: Transport
+        -fallback: Transport | None
+        +api_call(request, timeout) dict
+        +stream_generate_content(request) Iterator
+        +upload_file(path) dict
+    }
+
+    class Facade {
+        <<module: core/transport/__init__.py>>
+        -_COORDINATOR: TransportCoordinator | None
+        +api_call(request, timeout) dict
+        +stream_generate_content(request) Iterator
+        +upload_file(path) dict
+        +get_coordinator() TransportCoordinator
+        +reset_coordinator() void
+    }
+
+    class Policy {
+        <<module: core/transport/policy.py>>
+        +is_fallback_eligible(error) bool
+        +should_attempt_capability_gate(capability) bool
+    }
+
+    class Normalize {
+        <<module: core/transport/normalize.py>>
+        -_SNAKE_TO_CAMEL: dict
+        +normalize_response(sdk_response) dict
+    }
+
+    class Config {
+        <<dataclass>>
+        api_key: str | None
+        model: str
+        backend_priority: list[str]
+        +primary_backend: Transport (computed)
+        +fallback_backend: Transport | None (computed)
+    }
+
+    class ErrorTranslation {
+        <<context manager: _wrap_sdk_errors>>
+        __enter__() None
+        __exit__() None
+    }
+
+    Transport <|-- SdkTransport
+    Transport <|-- RawHttpTransport
+    TransportCoordinator --> Transport
+    TransportCoordinator --> Transport
+    Facade --> TransportCoordinator
+    TransportCoordinator --> Policy
+    SdkTransport --> Normalize
+    SdkTransport --> ErrorTranslation
+    Config --> TransportCoordinator
+    Facade --> Config

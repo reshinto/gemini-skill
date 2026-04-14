@@ -1,5 +1,9 @@
 # Capabilities
 
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
 **Last Updated:** 2026-04-13
 
 A conceptual overview of every gemini-skill capability, with status, limitations, and use cases.

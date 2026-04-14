@@ -1,10 +1,53 @@
 # Architecture
 
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
 **Last Updated:** 2026-04-14
 
 ## System Overview
 
 The gemini-skill is a Claude Code skill providing REST API access to Google Gemini. It uses a dual-backend transport layer (SDK primary, raw HTTP fallback) with modular adapters and policy enforcement.
+
+## Why SKILL.md Is Terse
+
+The `SKILL.md` file (gemini-skill's manifest in Claude Code) is intentionally minimal: ~1 KB, three quick-start commands, and a pointer to the full reference. This design reflects a core principle: **token budgets matter at scale**.
+
+**The Token Economics:**
+
+When a user starts a VSCode session, Claude Code auto-loads SKILL.md into context. That file is read *once* and stays in context for the entire session. Here's the cost:
+
+- A typical SKILL.md today: ~1 KB = ~300 tokens
+- A verbose SKILL.md with full command catalog: ~10 KB = ~3,000 tokens
+- Across N users, M sessions per day, for a month: massive cumulative cost
+
+Example math: If 100 users run 10 sessions/day for 30 days, and each session runs an average of 2 times, a verbose SKILL.md costs (100 × 10 × 30 × 2 × 2,700 tokens) = 162 million extra tokens per month. A terse SKILL.md costs 16.2 million tokens. That's real money.
+
+**Principle of Least Information:**
+
+SKILL.md is read at session start. The model doesn't know yet whether it will invoke the gemini skill. Why load detailed reference into context for something it might never use?
+
+Instead, SKILL.md says: "The gemini skill does X, Y, Z. For the full command reference, see `reference/index.md` (or specific commands like `reference/text.md`)."
+
+If the model decides to invoke the skill, it reads the specific `reference/<command>.md` file *on demand*. That file (~2–3 KB per command) is loaded only when needed, and only the one command the model is about to invoke.
+
+**How This Actually Works:**
+
+1. **Session start:** Claude Code loads SKILL.md (~300 tokens). Model knows "gemini skill exists, does text/image/video generation" but doesn't see full command details.
+2. **Model decides to use gemini:** Model reads `reference/text.md` or `reference/image_gen.md` on demand (~600 tokens total for one command). Model sees full syntax, examples, flags, and edge cases.
+3. **Model invokes skill:** Executes the command with flags it just read.
+
+**Result:** A user who runs a gemini skill command in a session loads:
+- SKILL.md: ~300 tokens (once at session start)
+- Relevant `reference/*.md` file(s): ~600 tokens (loaded only if invoked)
+- Total: ~900 tokens
+
+A verbose, all-in-one SKILL.md would cost ~3,000 tokens *just at session start*, before the user even invokes the skill.
+
+**Cross-Reference:** This design mirrors the `Facade Pattern` (see [Design Patterns — Facade Pattern](design-patterns.md#facade-pattern)). Just as the skill's facade hides coordinator complexity behind three simple functions, SKILL.md hides reference complexity behind a terse launcher. Both examples of "minimal surface area at the boundary."
+
+For more details on how token optimization influences architecture, see the `docs/diagrams/token-optimization-flow.mmd` diagram.
 
 ![Dual-backend transport architecture](diagrams/architecture-dual-backend.svg)
 <sub>Source: [`docs/diagrams/architecture-dual-backend.mmd`](diagrams/architecture-dual-backend.mmd) — regenerate with `bash scripts/render_diagrams.sh`</sub>

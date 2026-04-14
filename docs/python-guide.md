@@ -1,5 +1,9 @@
 # Python Design Decisions
 
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
 **Last Updated:** 2026-04-14
 
 Python requirements and architectural decisions for gemini-skill.

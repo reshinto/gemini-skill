@@ -1,5 +1,9 @@
 # Contributing
 
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
 **Last Updated:** 2026-04-14
 
 Guidelines for extending gemini-skill with new adapters and features.

@@ -1,5 +1,9 @@
 # Model Routing
 
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
 **Last Updated:** 2026-04-13
 
 How gemini-skill selects models based on task type, complexity, and user preferences.
