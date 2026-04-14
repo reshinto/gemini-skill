@@ -36,6 +36,12 @@ python3 setup/install.py
 The installer copies the runtime payload into `~/.claude/skills/gemini/`, creates or reuses `~/.claude/skills/gemini/.venv`, installs the pinned `google-genai` SDK, and writes the canonical env block into `~/.claude/settings.json`.
 
 ### Configure credentials
+Create a Gemini API key in Google AI Studio:
+
+- Google AI Studio: https://aistudio.google.com/
+- API key guide: https://ai.google.dev/gemini-api/docs/api-key
+
+The Gemini API is not an unlimited flat-rate service. Google offers a free tier for getting started and a paid pay-as-you-go tier for higher-volume or production use. If you enable the paid tier, prompts and responses can incur usage-based charges depending on the model and features you use.
 
 The launcher resolves canonical Gemini env keys from the current working directory first, then Claude settings files, then existing process env:
 
