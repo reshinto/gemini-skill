@@ -205,11 +205,13 @@ class TestImagenRun:
 
     def test_positive_int_rejects_non_numeric(self) -> None:
         """``argparse`` feeds ``_positive_int`` the raw string. Non-numeric
-        input must raise ValueError so argparse surfaces it as a clean
-        usage error instead of a traceback."""
+        input must raise ``argparse.ArgumentTypeError`` so argparse surfaces
+        it as a clean usage error instead of a traceback."""
+        import argparse
+
         from adapters.generation.imagen import _positive_int
 
-        with pytest.raises(ValueError, match="invalid int"):
+        with pytest.raises(argparse.ArgumentTypeError, match="invalid int"):
             _positive_int("abc")
 
     def test_skips_items_without_image_bytes(

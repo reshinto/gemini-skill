@@ -26,7 +26,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from urllib.error import HTTPError
+import socket
+import ssl
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from core.infra.errors import AuthError
@@ -154,7 +156,10 @@ def validate_key(key: str) -> bool:
         if e.code == 401:
             raise AuthError("API key is invalid (401 Unauthorized)") from e
         raise AuthError(f"API key validation failed: HTTP {e.code}") from e
-    except Exception as e:
+    except (URLError, socket.timeout, ssl.SSLError, OSError) as e:
+        # Narrow to realistic network failures. A bare ``Exception`` here
+        # would swallow programmer bugs (AttributeError, TypeError) and
+        # silently re-wrap them as AuthError, which makes debugging hard.
         raise AuthError(
             f"API key validation failed: {sanitize(str(e))}"
         ) from e

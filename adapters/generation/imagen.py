@@ -101,9 +101,9 @@ def _positive_int(value: str) -> int:
     try:
         n = int(value)
     except ValueError as exc:
-        raise ValueError(f"invalid int value: {value!r}") from exc
+        raise argparse.ArgumentTypeError(f"invalid int value: {value!r}") from exc
     if n < 1:
-        raise ValueError(f"must be >= 1, got {n}")
+        raise argparse.ArgumentTypeError(f"must be >= 1, got {n}")
     return n
 
 

@@ -391,6 +391,7 @@ class TestStreamGenerateContent:
 
         mock_response = MagicMock()
         mock_response.read.return_value = sse_data
+        mock_response.__iter__ = lambda self: iter(sse_data.splitlines(keepends=True))
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
@@ -431,6 +432,7 @@ class TestStreamGenerateContent:
 
         mock_response = MagicMock()
         mock_response.read.return_value = sse_data
+        mock_response.__iter__ = lambda self: iter(sse_data.splitlines(keepends=True))
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 
@@ -449,6 +451,7 @@ class TestStreamGenerateContent:
 
         mock_response = MagicMock()
         mock_response.read.return_value = sse_data
+        mock_response.__iter__ = lambda self: iter(sse_data.splitlines(keepends=True))
         mock_response.__enter__ = MagicMock(return_value=mock_response)
         mock_response.__exit__ = MagicMock(return_value=False)
 

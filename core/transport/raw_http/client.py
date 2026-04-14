@@ -47,6 +47,7 @@ from core.auth.auth import resolve_key
 from core.infra.errors import APIError
 from core.infra.sanitize import sanitize
 from core.transport._validation import validate_mime_type as _validate_mime_type
+from core.transport._validation import validate_no_crlf as _validate_no_crlf
 from core.types import JSONObject
 
 # Gemini API base URL — all requests are relative to this
@@ -132,20 +133,22 @@ def stream_generate_content(
     data = json.dumps(body).encode("utf-8")
     request = Request(url, data=data, headers=headers, method="POST")
 
+    # Iterate the response line-by-line inside the context manager so chunks
+    # are yielded as they arrive over the wire, not after the whole SSE body
+    # has been buffered. This preserves the progressive-output promise of the
+    # streaming endpoint and bounds memory consumption to one line at a time.
     with urlopen(request, timeout=timeout) as response:
-        raw = response.read().decode("utf-8")
-
-    for line in raw.split("\n"):
-        line = line.strip()
-        if not line.startswith("data: "):
-            continue
-        json_str = line[6:]  # Strip "data: " prefix
-        try:
-            chunk = json.loads(json_str)
+        for raw_line in response:
+            line = raw_line.decode("utf-8").strip()
+            if not line.startswith("data: "):
+                continue
+            json_str = line[6:]  # Strip "data: " prefix
+            try:
+                chunk = json.loads(json_str)
+            except json.JSONDecodeError:
+                continue
             if isinstance(chunk, dict):
                 yield cast(JSONObject, chunk)
-        except json.JSONDecodeError:
-            continue
 
 
 def upload_file(
@@ -248,6 +251,12 @@ def download_file_bytes(
     Raises:
         APIError: On HTTP errors (403/404/5xx) or network failures.
     """
+    # Defense-in-depth: reject CR/LF in the file resource name before it
+    # flows into URL construction. In practice ``name`` comes from prior API
+    # responses (e.g. ``files/abc123``) so this should never fire — but any
+    # upstream bug that lets a caller pass a tainted value would otherwise
+    # enable header injection against the Files API host.
+    _validate_no_crlf(name, field_name="name")
     key = resolve_key()
     url = f"{BASE_URL}/v1beta/{name}?alt=media"
     headers = {"x-goog-api-key": key}

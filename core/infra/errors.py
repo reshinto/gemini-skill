@@ -17,7 +17,6 @@ from __future__ import annotations
 from core.infra.sanitize import sanitize as _sanitize
 
 
-
 class GeminiSkillError(Exception):
     """Base error for all gemini-skill errors.
 
