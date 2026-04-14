@@ -88,7 +88,7 @@ This catalog lists every CLI flag the skill accepts, grouped by category. For ea
 
 **Applies to:** text, multimodal, structured, function_calling, code_exec
 
-**Rationale:** Start or continue a multi-turn conversation. On first use with a new ID, the skill creates a session directory under `~/.claude/gemini-skill/sessions/` and stores the conversation history there. Subsequent calls with the same ID append to the history and include all prior messages in the context. Useful for back-and-forth reasoning or iterative refinement. See `reference/text.md` for session examples.
+**Rationale:** Start or continue a multi-turn conversation. On first use with a new ID, the skill creates a session file under `~/.config/gemini-skill/sessions/<id>.json` and stores the conversation history there. Subsequent calls with the same ID append to the history and include all prior messages in the context. Useful for back-and-forth reasoning or iterative refinement. See `reference/text.md` for session examples.
 
 ---
 

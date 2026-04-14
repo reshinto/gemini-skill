@@ -32,20 +32,14 @@ from core.infra.checksums import (
     verify_checksums,
     write_checksums_file,
 )
+from core.infra.runtime_env import CANONICAL_ENV_DEFAULTS
 from core.infra.sanitize import safe_print
 from core.types import SettingsBuffer
 
-# The canonical default env keys the installer writes into
-# ~/.claude/settings.json. Iteration order is preserved in the
-# resulting JSON so reviewers diffing a freshly-installed file see a
-# deterministic key ordering. Kept at module top so tests and other
-# installer submodules can import it without a circular risk.
-_DEFAULT_ENV_KEYS: dict[str, str] = {
-    "GEMINI_API_KEY": "",
-    "GEMINI_IS_SDK_PRIORITY": "true",
-    "GEMINI_IS_RAWHTTP_PRIORITY": "false",
-    "GEMINI_LIVE_TESTS": "0",
-}
+# Shared canonical env defaults. Re-exported under the historical private
+# name so existing installer code and tests can keep their current import
+# surface while the source of truth lives in ``core.infra.runtime_env``.
+_DEFAULT_ENV_KEYS: dict[str, str] = CANONICAL_ENV_DEFAULTS
 
 # The SHA-256 install-integrity manifest the installer writes into the
 # install directory after copying files. ``health_main`` reads this file

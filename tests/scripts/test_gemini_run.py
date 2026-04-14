@@ -23,13 +23,14 @@ from __future__ import annotations
 
 import importlib
 import sys
+from types import ModuleType
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
 
-def _import_runner():
+def _import_runner() -> ModuleType:
     """Reload scripts.gemini_run cleanly so each test sees fresh module state."""
     # The launcher script lives at scripts/gemini_run.py — it isn't
     # part of any package, so we import it via importlib from a
@@ -130,6 +131,18 @@ class TestSkillVenvPython:
         assert path.parts[-3:] == (".venv", "Scripts", "python.exe")
 
 
+class TestSysPathBootstrap:
+    def test_ensure_repo_root_on_syspath_inserts_missing_root(self) -> None:
+        runner = _import_runner()
+        expected_root: str = runner._repo_root()
+
+        with mock.patch.object(sys, "path", [entry for entry in sys.path if entry != expected_root]):
+            resolved_root: str = runner._ensure_repo_root_on_syspath()
+
+            assert resolved_root == expected_root
+            assert sys.path[0] == expected_root
+
+
 class TestMainEntryPoint:
     """``main()`` orchestrates version check, venv re-exec, and dispatch."""
 
@@ -139,28 +152,75 @@ class TestMainEntryPoint:
         runner = _import_runner()
         with (
             mock.patch.object(runner, "_check_python_version") as mock_check,
+            mock.patch.object(runner, "_bootstrap_runtime_environment") as mock_bootstrap,
             mock.patch.object(runner, "_maybe_reexec_under_venv") as mock_reexec,
             mock.patch("core.cli.dispatch.main", return_value=0) as mock_dispatch,
         ):
             runner.main(["text", "hello"])
 
         mock_check.assert_called_once()
+        mock_bootstrap.assert_called_once()
         mock_reexec.assert_called_once()
         mock_dispatch.assert_called_once_with(["text", "hello"])
+
+    def test_main_bootstraps_before_reexec(self) -> None:
+        runner = _import_runner()
+        call_order: list[str] = []
+
+        def record_bootstrap() -> None:
+            call_order.append("bootstrap")
+
+        def record_reexec() -> None:
+            call_order.append("reexec")
+
+        with (
+            mock.patch.object(runner, "_check_python_version"),
+            mock.patch.object(runner, "_bootstrap_runtime_environment", side_effect=record_bootstrap),
+            mock.patch.object(runner, "_maybe_reexec_under_venv", side_effect=record_reexec),
+            mock.patch("core.cli.dispatch.main", return_value=0),
+        ):
+            runner.main(["text", "hello"])
+
+        assert call_order == ["bootstrap", "reexec"]
+
+
+class TestBootstrapRuntimeEnvironment:
+    def test_bootstrap_runtime_environment_exits_cleanly_on_resolution_error(self) -> None:
+        runner = _import_runner()
+        from core.infra.errors import EnvironmentResolutionError
+
+        def raise_resolution_error() -> dict[str, str]:
+            raise EnvironmentResolutionError("bad settings")
+
+        with (
+            mock.patch.object(runner, "_ensure_repo_root_on_syspath"),
+            mock.patch(
+                "core.infra.runtime_env.bootstrap_runtime_env",
+                side_effect=raise_resolution_error,
+            ),
+        ):
+            with pytest.raises(SystemExit, match="bad settings"):
+                runner._bootstrap_runtime_environment()
 
 
 class TestRunAsMain:
     """Exercises the ``if __name__ == '__main__'`` guard at the file bottom."""
 
-    def test_run_path_triggers_main_entry(self) -> None:
+    def test_run_path_triggers_main_entry(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Running the file via runpy with __main__ invokes main(argv[1:])."""
         import runpy
-        from pathlib import Path
 
         script_path = Path(__file__).resolve().parents[2] / "scripts" / "gemini_run.py"
         fake_dispatch = mock.MagicMock(return_value=None)
         fake_dispatch_module = mock.MagicMock()
         fake_dispatch_module.main = fake_dispatch
+        home_directory: Path = tmp_path / "home"
+        home_directory.mkdir()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(home_directory))
+
         with (
             mock.patch.dict(sys.modules, {"core.cli.dispatch": fake_dispatch_module}),
             mock.patch.object(sys, "argv", ["gemini_run.py", "text", "hi"]),

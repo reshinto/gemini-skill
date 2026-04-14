@@ -59,6 +59,23 @@ class TestBuildGenerateContentKwargs:
         assert config is not None
         assert getattr(config, "temperature", None) == 0.5
 
+    def test_thinking_config_is_preserved_in_generation_config(self) -> None:
+        """CamelCase ``thinkingConfig`` must survive SDK config translation."""
+        body: dict[str, object] = {
+            "contents": [],
+            "generationConfig": {"thinkingConfig": {"thinkingBudget": 0}},
+        }
+        _, config = _build_generate_content_kwargs(body)
+        assert config is not None
+        dumped_config: dict[str, object] = cast(
+            dict[str, object],
+            config.model_dump(
+                by_alias=True,
+                exclude_none=True,
+            ),
+        )
+        assert dumped_config == {"thinkingConfig": {"thinkingBudget": 0}}
+
     def test_system_instruction_sibling_merged_into_config(self) -> None:
         """``systemInstruction`` is a top-level sibling but lives on the config object."""
         body: dict[str, object] = {

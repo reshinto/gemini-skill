@@ -10,6 +10,13 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _isolate_home_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    home_directory: Path = tmp_path / "home"
+    (home_directory / ".claude").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("HOME", str(home_directory))
+
+
 def _setup_fake_source(tmp_path: Path) -> Path:
     """Create a minimal fake source repo."""
     src = tmp_path / "source"
@@ -57,7 +64,7 @@ class TestInstallClean:
         from core.cli import install_main
 
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
-        (tmp_path / "home" / ".claude").mkdir(parents=True)
+        (tmp_path / "home" / ".claude").mkdir(parents=True, exist_ok=True)
 
         src = _setup_fake_source(tmp_path)
         install_dir = tmp_path / "install"
@@ -83,7 +90,7 @@ class TestInstallClean:
         from core.cli import install_main
 
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
-        (tmp_path / "home" / ".claude").mkdir(parents=True)
+        (tmp_path / "home" / ".claude").mkdir(parents=True, exist_ok=True)
 
         src = _setup_fake_source(tmp_path)
         install_dir = tmp_path / "install"
@@ -196,7 +203,7 @@ class TestChmodFailures:
         from core.cli import install_main
 
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
-        (tmp_path / "home" / ".claude").mkdir(parents=True)
+        (tmp_path / "home" / ".claude").mkdir(parents=True, exist_ok=True)
 
         src = _setup_fake_source(tmp_path)
         install_dir = tmp_path / "install"
@@ -505,6 +512,127 @@ class TestVenvPreservation:
         assert (install_dir / ".venv" / "marker").read_text() == "keep"
 
 
+class TestSettingsBufferFiltering:
+    def test_non_dict_buffer_env_produces_empty_pre_resolved(self, tmp_path):
+        from core.cli import install_main
+
+        install_dir: Path = tmp_path / "install"
+        install_dir.mkdir()
+
+        def seed_non_dict_env(
+            legacy_env_path: Path,
+            settings_buffer: dict[str, object],
+            *,
+            yes: bool,
+            interactive: bool,
+        ) -> None:
+            del legacy_env_path
+            del yes
+            del interactive
+            settings_buffer["env"] = ["unexpected"]
+
+        with (
+            patch("core.cli.install_main.migrate_legacy_env_to_settings", side_effect=seed_non_dict_env),
+            patch("core.cli.install_main.prompt_gemini_api_key"),
+            patch("core.cli.install_main.merge_settings_env") as mock_merge_settings_env,
+        ):
+            install_main._setup_user_settings(install_dir, yes=False, interactive=False)
+
+        assert mock_merge_settings_env.call_args.kwargs["pre_resolved"] == {}
+
+    def test_non_string_buffer_entries_are_filtered(self, tmp_path):
+        from core.cli import install_main
+
+        install_dir: Path = tmp_path / "install"
+        install_dir.mkdir()
+
+        def seed_mixed_env(
+            legacy_env_path: Path,
+            settings_buffer: dict[str, object],
+            *,
+            yes: bool,
+            interactive: bool,
+        ) -> None:
+            del legacy_env_path
+            del yes
+            del interactive
+            settings_buffer["env"] = {
+                "GEMINI_API_KEY": "key",
+                "GEMINI_LIVE_TESTS": 1,
+                3: "ignored",
+            }
+
+        with (
+            patch("core.cli.install_main.migrate_legacy_env_to_settings", side_effect=seed_mixed_env),
+            patch("core.cli.install_main.prompt_gemini_api_key"),
+            patch("core.cli.install_main.merge_settings_env") as mock_merge_settings_env,
+        ):
+            install_main._setup_user_settings(install_dir, yes=False, interactive=False)
+
+        assert mock_merge_settings_env.call_args.kwargs["pre_resolved"] == {
+            "GEMINI_API_KEY": "key"
+        }
+
+
+class TestManifestCoverage:
+    def test_manifest_write_failure_is_warned_and_install_continues(self, tmp_path, capsys):
+        from core.cli import install_main
+
+        src = _setup_fake_source(tmp_path)
+        install_dir = tmp_path / "install"
+
+        with (
+            patch.object(install_main, "_get_source_dir", return_value=src),
+            patch.object(install_main, "_get_install_dir", return_value=install_dir),
+            patch.object(install_main, "_write_install_manifest", side_effect=OSError("disk full")),
+            patch.object(install_main, "_setup_user_settings"),
+        ):
+            install_main.main([])
+
+        captured = capsys.readouterr()
+        assert "Install manifest write failed" in captured.out
+        assert (install_dir / "SKILL.md").exists()
+
+    def test_iter_manifest_files_skips_checksums_file(self, tmp_path):
+        from core.cli.install_main import _iter_manifest_files
+
+        install_dir: Path = tmp_path / "install"
+        install_dir.mkdir()
+        (install_dir / ".checksums.json").write_text("{}")
+        kept_file: Path = install_dir / "SKILL.md"
+        kept_file.write_text("# skill")
+
+        manifest_files: list[Path] = _iter_manifest_files(install_dir)
+
+        assert manifest_files == [kept_file]
+
+    def test_verify_install_integrity_returns_empty_without_manifest(self, tmp_path):
+        from core.cli.install_main import verify_install_integrity
+
+        install_dir: Path = tmp_path / "install"
+        install_dir.mkdir()
+
+        assert verify_install_integrity(install_dir) == []
+
+    def test_verify_install_integrity_reads_existing_manifest(self, tmp_path):
+        from core.cli import install_main
+
+        install_dir: Path = tmp_path / "install"
+        install_dir.mkdir()
+        manifest_path: Path = install_dir / ".checksums.json"
+        manifest_path.write_text("{}")
+
+        with (
+            patch("core.cli.install_main.read_checksums_file", return_value={"SKILL.md": "abc"}) as mock_read,
+            patch("core.cli.install_main.verify_checksums", return_value=["SKILL.md"]) as mock_verify,
+        ):
+            mismatches: list[str] = install_main.verify_install_integrity(install_dir)
+
+        mock_read.assert_called_once_with(manifest_path)
+        mock_verify.assert_called_once_with(install_dir, {"SKILL.md": "abc"})
+        assert mismatches == ["SKILL.md"]
+
+
 # TestOverlayBufferOnSettings removed — the Phase 5 squash review
 # collapsed the two-step merge + overlay design into a single
 # atomic write via the ``pre_resolved`` kwarg on merge_settings_env.
@@ -524,7 +652,7 @@ class TestSettingsJsonWiring:
         from core.cli import install_main
 
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
-        (tmp_path / "home" / ".claude").mkdir(parents=True)
+        (tmp_path / "home" / ".claude").mkdir(parents=True, exist_ok=True)
 
         src = _setup_fake_source(tmp_path)
         (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
@@ -562,7 +690,7 @@ class TestSettingsJsonWiring:
 
         home = tmp_path / "home"
         monkeypatch.setenv("HOME", str(home))
-        (home / ".claude").mkdir(parents=True)
+        (home / ".claude").mkdir(parents=True, exist_ok=True)
         (home / ".claude" / "settings.json").write_text("not json {")
 
         src = _setup_fake_source(tmp_path)
@@ -595,7 +723,7 @@ class TestSettingsJsonWiring:
         from core.cli.installer.venv import InstallError
 
         monkeypatch.setenv("HOME", str(tmp_path / "home"))
-        (tmp_path / "home" / ".claude").mkdir(parents=True)
+        (tmp_path / "home" / ".claude").mkdir(parents=True, exist_ok=True)
 
         src = _setup_fake_source(tmp_path)
         (src / "setup" / "requirements.txt").write_text("google-genai==1.33.0\n")
@@ -634,7 +762,7 @@ class TestSettingsJsonWiring:
 
         home = tmp_path / "home"
         monkeypatch.setenv("HOME", str(home))
-        (home / ".claude").mkdir(parents=True)
+        (home / ".claude").mkdir(parents=True, exist_ok=True)
         # Pre-existing settings.json with a conflict so the prompt fires.
         (home / ".claude" / "settings.json").write_text(
             _json.dumps({"env": {"GEMINI_IS_SDK_PRIORITY": "false"}})
@@ -674,7 +802,7 @@ class TestSettingsJsonWiring:
 
         home = tmp_path / "home"
         monkeypatch.setenv("HOME", str(home))
-        (home / ".claude" / "skills" / "gemini").mkdir(parents=True)
+        (home / ".claude" / "skills" / "gemini").mkdir(parents=True, exist_ok=True)
         legacy_env = home / ".claude" / "skills" / "gemini" / ".env"
         legacy_env.write_text("GEMINI_LIVE_TESTS=1\n")
 

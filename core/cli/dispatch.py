@@ -25,6 +25,7 @@ from core.infra.sanitize import safe_print
 ALLOWED_COMMANDS: dict[str, str] = {
     # Generation
     "text": "adapters.generation.text",
+    "plan_review": "adapters.generation.plan_review",
     "multimodal": "adapters.generation.multimodal",
     "structured": "adapters.generation.structured",
     "streaming": "adapters.generation.streaming",
