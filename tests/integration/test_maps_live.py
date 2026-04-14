@@ -1,8 +1,9 @@
 """Live smoke test for `gemini maps` — one cheap real API call.
 
-Maps grounding is privacy-sensitive, so this test passes the explicit
-opt-in flag. Gate: requires GEMINI_LIVE_TESTS=1 and GEMINI_API_KEY.
+Maps grounding is privacy-sensitive, but the dispatcher auto-injects
+the internal opt-in flag. Gate: requires GEMINI_LIVE_TESTS=1 and GEMINI_API_KEY.
 """
+
 from __future__ import annotations
 
 import os
@@ -30,10 +31,16 @@ pytestmark = [
 
 def test_maps_live() -> None:
     result = subprocess.run(
-        [sys.executable, str(_RUNNER), "maps",
-         "In which city is the Eiffel Tower? One word answer.",
-         "--i-understand-privacy"],
-        capture_output=True, text=True, timeout=60, cwd=str(_REPO_ROOT),
+        [
+            sys.executable,
+            str(_RUNNER),
+            "maps",
+            "In which city is the Eiffel Tower? One word answer.",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=str(_REPO_ROOT),
     )
     assert result.returncode == 0, f"stderr={result.stderr}"
     assert result.stdout.strip(), "expected grounded response"

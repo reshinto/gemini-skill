@@ -6,16 +6,19 @@ Handles file reading and MIME detection for local files.
 Dependencies: core/infra/client.py, core/adapter/helpers.py,
     core/infra/mime.py, core/state/identity.py
 """
+
 from __future__ import annotations
 
+import argparse
 import base64
 from pathlib import Path
-from typing import Any
 
 from core.adapter.helpers import build_base_parser, emit_output, extract_text
 from core.infra.client import api_call
 from core.infra.config import load_config
 from core.infra.mime import guess_mime_for_path
+from core.transport.base import GeminiResponse, Part
+from typing import cast
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -23,11 +26,14 @@ def get_parser() -> argparse.ArgumentParser:
     parser = build_base_parser("Send multimodal content to Gemini")
     parser.add_argument("prompt", help="Text prompt accompanying the media.")
     parser.add_argument(
-        "--file", action="append", default=[],
+        "--file",
+        action="append",
+        default=[],
         help="Path to a local file to include (can be repeated).",
     )
     parser.add_argument(
-        "--mime", default=None,
+        "--mime",
+        default=None,
         help="Override MIME type for the file.",
     )
     return parser
@@ -38,7 +44,7 @@ def run(
     file: list[str] | None = None,
     mime: str | None = None,
     model: str | None = None,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute multimodal generation with file inputs."""
     from core.routing.router import Router
@@ -50,27 +56,29 @@ def run(
     )
     resolved_model = model or router.select_model("multimodal")
 
-    parts: list[dict[str, Any]] = []
+    parts: list[Part] = []
 
     # Add file parts
-    for file_path in (file or []):
+    for file_path in file or []:
         path = Path(file_path)
         mime_type = mime or guess_mime_for_path(path)
         data = base64.b64encode(path.read_bytes()).decode("utf-8")
-        parts.append({
-            "inlineData": {
-                "mimeType": mime_type,
-                "data": data,
+        parts.append(
+            {
+                "inlineData": {
+                    "mimeType": mime_type,
+                    "data": data,
+                }
             }
-        })
+        )
 
     # Add text prompt
     parts.append({"text": prompt})
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": [{"role": "user", "parts": parts}],
     }
 
-    response = api_call(f"models/{resolved_model}:generateContent", body=body)
+    response = cast(GeminiResponse, api_call(f"models/{resolved_model}:generateContent", body=body))
     text = extract_text(response)
     emit_output(text, output_dir=config.output_dir)

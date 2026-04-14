@@ -10,15 +10,17 @@ Session IDs are validated to prevent path traversal.
 
 Dependencies: core/infra/filelock.py, core/infra/atomic_write.py
 """
+
 from __future__ import annotations
 
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import TypedDict, cast
 
 from core.infra.atomic_write import atomic_write_json
 from core.infra.filelock import FileLock
+from core.transport.base import Content
 
 _LOCK_SUFFIX = ".lock"
 
@@ -62,7 +64,7 @@ class SessionState:
         """Get the lock file path for a session."""
         return self._dir / f"{session_id}{_LOCK_SUFFIX}"
 
-    def _load(self, session_id: str) -> list[dict[str, Any]]:
+    def _load(self, session_id: str) -> list[Content]:
         """Load session history from disk."""
         path = self._session_path(session_id)
         if not path.is_file():
@@ -70,12 +72,14 @@ class SessionState:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             if isinstance(data, dict) and "contents" in data:
-                return data["contents"]
+                contents = data["contents"]
+                if isinstance(contents, list):
+                    return cast(list[Content], contents)
         except (json.JSONDecodeError, OSError):
             pass
         return []
 
-    def _save(self, session_id: str, contents: list[dict[str, Any]]) -> None:
+    def _save(self, session_id: str, contents: list[Content]) -> None:
         """Atomically write session history to disk under lock."""
         with FileLock(self._lock_path(session_id)):
             data = json.dumps({"contents": contents}, indent=2)
@@ -91,7 +95,7 @@ class SessionState:
         self._validate_session_id(session_id)
         return self._session_path(session_id).is_file()
 
-    def get_history(self, session_id: str) -> list[dict[str, Any]]:
+    def get_history(self, session_id: str) -> list[Content]:
         """Get the conversation history for a session.
 
         Returns empty list if session does not exist or is corrupt.
@@ -99,7 +103,7 @@ class SessionState:
         self._validate_session_id(session_id)
         return self._load(session_id)
 
-    def append_message(self, session_id: str, message: dict[str, Any]) -> None:
+    def append_message(self, session_id: str, message: Content) -> None:
         """Append a message to the session history.
 
         No error if the session does not exist.
@@ -124,14 +128,18 @@ class SessionState:
 
     def list_sessions(self) -> list[str]:
         """Return IDs of all active sessions."""
-        return sorted(
-            p.stem for p in self._dir.glob("*.json")
-        )
+        return sorted(session_file.stem for session_file in self._dir.glob("*.json"))
 
     def most_recent(self) -> str | None:
         """Return the ID of the most recently modified session, or None."""
         sessions = list(self._dir.glob("*.json"))
         if not sessions:
             return None
-        latest = max(sessions, key=lambda p: p.stat().st_mtime)
+        latest = max(sessions, key=lambda session_path: session_path.stat().st_mtime)
         return latest.stem
+
+
+class SessionEnvelope(TypedDict):
+    """On-disk JSON shape for one persisted session."""
+
+    contents: list[Content]

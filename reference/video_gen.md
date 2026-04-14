@@ -57,3 +57,11 @@ Without `--execute`, prints dry-run. Use `--execute` to generate.
 ## Default model
 
 Veo (Gemini's video model).
+
+---
+
+Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: token_count](token_count.md) · [Next: (none)](video_gen.md)

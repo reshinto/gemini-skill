@@ -3,6 +3,7 @@
 Verifies pre-flight estimation, post-response tracking with usageMetadata,
 daily accumulation with file locking, daily limit checking, and date rollover.
 """
+
 from __future__ import annotations
 
 import json
@@ -48,11 +49,7 @@ class TestEstimateCost:
             cached_tokens=200,
         )
         # 800 regular input + 200 cached input + 500 output
-        expected = (
-            (800 * 0.15 / 1_000_000) +
-            (200 * 0.0375 / 1_000_000) +
-            (500 * 0.60 / 1_000_000)
-        )
+        expected = (800 * 0.15 / 1_000_000) + (200 * 0.0375 / 1_000_000) + (500 * 0.60 / 1_000_000)
         assert abs(cost - expected) < 1e-10
 
     def test_estimate_zero_tokens(self):
@@ -97,7 +94,11 @@ class TestRecordActualCost:
 
         pricing = {"input_per_1m": 1.0, "output_per_1m": 1.0, "cached_per_1m": 0.5}
         tracker = CostTracker(state_dir=tmp_path)
-        usage = {"promptTokenCount": 1000, "candidatesTokenCount": 1000, "cachedContentTokenCount": 0}
+        usage = {
+            "promptTokenCount": 1000,
+            "candidatesTokenCount": 1000,
+            "cachedContentTokenCount": 0,
+        }
 
         tracker.record_actual_cost(pricing=pricing, usage_metadata=usage)
         tracker.record_actual_cost(pricing=pricing, usage_metadata=usage)
@@ -110,7 +111,11 @@ class TestRecordActualCost:
         from core.infra.cost import CostTracker
 
         pricing = {"input_per_1m": 1.0, "output_per_1m": 1.0, "cached_per_1m": 0.5}
-        usage = {"promptTokenCount": 1000, "candidatesTokenCount": 500, "cachedContentTokenCount": 0}
+        usage = {
+            "promptTokenCount": 1000,
+            "candidatesTokenCount": 500,
+            "cachedContentTokenCount": 0,
+        }
 
         tracker1 = CostTracker(state_dir=tmp_path)
         tracker1.record_actual_cost(pricing=pricing, usage_metadata=usage)
@@ -196,7 +201,9 @@ class TestCostTrackerSaveErrors:
         from core.infra.cost import CostTracker
 
         tracker = CostTracker(state_dir=tmp_path)
-        monkeypatch.setattr(os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed")))
+        monkeypatch.setattr(
+            os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed"))
+        )
         with pytest.raises(OSError, match="replace failed"):
             tracker._write_daily(1.0)
 
@@ -204,7 +211,9 @@ class TestCostTrackerSaveErrors:
         from core.infra.cost import CostTracker
 
         tracker = CostTracker(state_dir=tmp_path)
-        monkeypatch.setattr(os, "write", lambda fd, data: (_ for _ in ()).throw(OSError("write failed")))
+        monkeypatch.setattr(
+            os, "write", lambda fd, data: (_ for _ in ()).throw(OSError("write failed"))
+        )
         with pytest.raises(OSError, match="write failed"):
             tracker._write_daily(1.0)
 
@@ -212,7 +221,9 @@ class TestCostTrackerSaveErrors:
         from core.infra.cost import CostTracker
 
         tracker = CostTracker(state_dir=tmp_path)
-        monkeypatch.setattr(os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed")))
+        monkeypatch.setattr(
+            os, "replace", lambda s, d: (_ for _ in ()).throw(OSError("replace failed"))
+        )
         monkeypatch.setattr(os, "unlink", lambda p: (_ for _ in ()).throw(OSError("unlink failed")))
         with pytest.raises(OSError, match="replace failed"):
             tracker._write_daily(1.0)

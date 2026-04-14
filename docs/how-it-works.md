@@ -1,6 +1,10 @@
 # How It Works: Execution Trace
 
-**Last Updated:** 2026-04-13
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
+**Last Updated:** 2026-04-14
 
 This document traces the complete execution path for a simple command: `gemini text "hello"`.
 
@@ -18,7 +22,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/gemini_run.py text "hello"
 
 From this point, execution is deterministic.
 
-## Step 1: Launcher checks Python version
+## Step 1: Launcher re-execs under venv
 
 File: `scripts/gemini_run.py`
 
@@ -26,14 +30,20 @@ File: `scripts/gemini_run.py`
 if sys.version_info < (3, 9):
     sys.exit("gemini-skill requires Python 3.9+. Found: {}.{}".format(...))
 
+# If not already running under .venv, re-exec under it
+venv_python = Path(__file__).parent.parent / ".venv" / "bin" / "python"
+if venv_python.exists() and sys.prefix != str(venv_python.parent.parent):
+    os.execv(str(venv_python), [str(venv_python)] + sys.argv)
+
+# Now running under venv (or venv doesn't exist — raw HTTP fallback OK)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.cli.dispatch import main
 main(sys.argv[1:])  # ["text", "hello"]
 ```
 
-The launcher is **2.7-compatible syntax** so that even Python 2 or early 3.x versions get a readable error instead of a SyntaxError.
+The launcher is **2.7-compatible syntax** so Python 2 or early 3.x versions get a readable error instead of a SyntaxError.
 
-Once Python 3.9 is confirmed, the repo root is added to sys.path and `dispatch.main()` is called.
+Once Python 3.9 is confirmed, the script re-execs under `~/.claude/skills/gemini/.venv/bin/python` if it exists (gives access to the google-genai SDK). If the venv doesn't exist, execution continues with the system Python (raw HTTP backend still works).
 
 ## Step 2: Dispatcher validates and routes
 
@@ -53,17 +63,24 @@ def main(argv: list[str]) -> None:
     adapter_module_path = ALLOWED_COMMANDS["text"]  # "adapters.generation.text"
     adapter_module = importlib.import_module(adapter_module_path)
     
-    # Parse arguments
-    parser = adapter_module.get_parser()  # ArgumentParser from text.py
-    args = parser.parse_args(remaining)  # Parse ["hello"] → Namespace(prompt="hello", ...)
-    
-    # Invoke the adapter
-    adapter_module.run(**vars(args))  # run(prompt="hello", model=None, system=None, ...)
+    # Check if adapter is async (IS_ASYNC = True flag)
+    if getattr(adapter_module, "IS_ASYNC", False):
+        # Async path: run via asyncio.run(run_async(...))
+        parser = adapter_module.get_parser()
+        args = parser.parse_args(remaining)
+        asyncio.run(adapter_module.run_async(**vars(args)))
+    else:
+        # Sync path (most adapters)
+        parser = adapter_module.get_parser()
+        args = parser.parse_args(remaining)
+        adapter_module.run(**vars(args))
 ```
 
 The dispatcher is the **policy boundary**. It enforces:
 - Command whitelist (only commands in `ALLOWED_COMMANDS` allowed)
+- IS_ASYNC detection (async adapters like `live` run via `asyncio.run()`)
 - Argument parsing (each adapter's parser)
+- Privacy opt-in injection for privacy-sensitive commands
 - Dry-run enforcement (mutating ops require `--execute`)
 
 ## Step 3: Adapter executes
@@ -97,11 +114,13 @@ def run(
         }
     }
     
-    # Call API
+    # Call API via the dual-backend facade
+    # The coordinator routes via primary (SDK) or fallback (raw HTTP) transparently
     response = api_call(
         f"models/{resolved_model}:generateContent",
         body=body
     )
+    # response is normalized GeminiResponse dict shape (identical from both backends)
     
     # Extract and emit response
     text = response["candidates"][0]["content"]["parts"][0]["text"]
@@ -151,49 +170,79 @@ For task type `"text"` (a general task) and complexity `"medium"` (default):
 - Validate that `"gemini-2.5-flash"` exists in the registry
 - Return `"gemini-2.5-flash"`
 
-## Step 5: API call
+## Step 5: Dual-backend coordinator dispatch
 
-File: `core/infra/client.py`
+File: `core/transport/coordinator.py`
+
+The `TransportCoordinator` is invoked by the facade (`core/transport/__init__.py::api_call`):
 
 ```python
-def api_call(
-    endpoint: str = "models/gemini-2.5-flash:generateContent",
-    body: dict = {...},
-    method: str = "POST",
-    api_version: str = "v1beta",
-    timeout: int = 30,
-    api_key: str | None = None
-) -> dict:
-    # Resolve API key
-    key = api_key or resolve_key()  # From GOOGLE_API_KEY or GEMINI_API_KEY env var
-    
-    # Construct URL
-    url = f"{BASE_URL}/{api_version}/{endpoint}"
-    # = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-    
-    # Build request
-    request = Request(url, method=method)
-    request.add_header("Content-Type", "application/json")
-    request.add_header("x-goog-api-key", key)
-    
-    # Send request with retry logic
-    response_json = _request_with_retry(request, body, timeout=30)
-    return response_json
+def api_call(endpoint: str, body: dict, ...) -> dict:
+    coordinator = _get_or_init_coordinator()
+    return coordinator.api_call(endpoint=endpoint, body=body, ...)
+
+# Inside TransportCoordinator:
+def api_call(self, ...) -> dict:
+    try:
+        # Try primary backend (SDK by default, or raw HTTP if inverted)
+        return self._primary.api_call(...)
+    except Exception as exc:
+        if policy.is_fallback_eligible(exc) and self._fallback:
+            # Log and retry with fallback
+            logger.warning("Primary backend failed, trying fallback", 
+                         extra={"primary": "sdk", "fallback": "raw_http"})
+            return self._fallback.api_call(...)
+        else:
+            # Not eligible for fallback — re-raise
+            raise
 ```
 
-The client:
-- Resolves the API key from environment
-- Builds the request URL
-- Sets authentication header (`x-goog-api-key`)
-- Sends the request with exponential backoff retry
-- Returns parsed JSON response
+The coordinator:
+- Routes to primary backend (SDK or raw HTTP) based on `GEMINI_IS_SDK_PRIORITY` / `GEMINI_IS_RAWHTTP_PRIORITY`
+- Checks **capability support** before probing SDK (deterministic routing for unsupported capabilities)
+- Catches exceptions and decides fallback eligibility via `policy.is_fallback_eligible()`
+- Normalizes both backends' responses to identical `GeminiResponse` dict shape
+- Logs all fallbacks so silent degradation is visible in production
 
-Retry logic handles:
-- 429 (rate limited) — exponential backoff
-- 5xx errors — exponential backoff
-- Network errors — exponential backoff
-- 504 timeout on GET — one retry (idempotent)
-- 504 timeout on POST — fail immediately (may have side effects)
+### Primary Backend: SdkTransport
+
+File: `core/transport/sdk/transport.py`
+
+```python
+class SdkTransport(Transport):
+    _SUPPORTED_CAPABILITIES = frozenset({
+        "text", "multimodal", "structured", "streaming",
+        "embeddings", "token_count", "function_calling", "code_exec"
+    })
+    # Capabilities like "maps", "music_gen" are NOT in the set → route to raw HTTP
+    
+    def api_call(self, endpoint: str, body: dict, ...) -> dict:
+        client = self._client_factory.get_client()
+        response = client.models.generate_content(...)
+        return normalize_sdk_response(response)  # Unified GeminiResponse shape
+```
+
+### Fallback Backend: RawHttpTransport
+
+File: `core/transport/raw_http/transport.py`
+
+```python
+class RawHttpTransport(Transport):
+    def api_call(self, endpoint: str, body: dict, ...) -> dict:
+        key = resolve_key()
+        url = f"{BASE_URL}/{api_version}/{endpoint}"
+        request = Request(url, method="POST")
+        request.add_header("Content-Type", "application/json")
+        request.add_header("x-goog-api-key", key)
+        
+        response_json = _request_with_retry(request, body, timeout=timeout)
+        return normalize_http_response(response_json)  # Unified GeminiResponse shape
+```
+
+Both transports:
+- Resolve API key from environment (`GEMINI_API_KEY`)
+- Support retries (exponential backoff for 429, 5xx, network errors)
+- Return normalized responses (`GeminiResponse` dict)
 
 ## Step 6: API response
 
@@ -320,18 +369,17 @@ If the user runs:
 /gemini files upload dataset.csv
 ```
 
-Without `--execute`:
+Without `--execute`, the dispatcher exits before the adapter runs:
 
 ```python
-def run(..., execute: bool = False, ...):
-    if check_dry_run(execute, "upload file: dataset.csv"):
-        return  # Prints dry-run message and exits
+_enforce_policy("files", ["upload", "dataset.csv"])
+# prints [DRY RUN] 'files' is a mutating operation. Pass --execute to actually run it.
+# exits before adapter.run(...)
 ```
 
 Output:
 ```
-[DRY RUN] upload file: dataset.csv
-[To execute, add --execute flag]
+[DRY RUN] 'files' is a mutating operation. Pass --execute to actually run it.
 ```
 
 The file is NOT uploaded. To actually upload:
@@ -372,11 +420,13 @@ Instead of waiting for the full response, the user sees text as it arrives.
 
 ## Key takeaways
 
-1. **Dispatcher is the policy boundary:** Whitelists commands, enforces flags, routes to adapters.
-2. **Adapter implements the business logic:** Loads config, selects model, validates inputs, calls API.
-3. **Router abstracts model selection:** Hides complexity tree and specialty task logic.
-4. **Client handles HTTP:** Retries, authentication, streaming, and error handling.
-5. **Atomic state:** Multi-turn sessions and file tracking use file locking.
-6. **Fail closed:** Errors are clear and actionable.
+1. **Venv re-exec:** Launcher runs under `~/.claude/skills/gemini/.venv` if available (gives SDK access); falls back to system Python (raw HTTP only).
+2. **Dispatcher is the policy boundary:** Whitelists commands, detects IS_ASYNC for async adapters, enforces flags, routes to adapters.
+3. **Adapter implements business logic:** Loads config, selects model, validates inputs, calls facade (backend-agnostic).
+4. **Coordinator owns backend dispatch:** Primary/fallback routing via capability gate + error-driven fallback, transparent to adapters.
+5. **Normalized responses:** Both backends normalize to identical `GeminiResponse` dict shape via `normalize.py`.
+6. **Router abstracts model selection:** Hides complexity tree and specialty task logic.
+7. **Atomic state:** Multi-turn sessions and file tracking use file locking.
+8. **Fail closed:** Errors are clear and actionable; fallbacks are logged.
 
-This layered design makes the codebase easy to understand, test, and extend.
+This layered design makes the codebase easy to understand, test, and extend. The dual-backend transport is transparent to adapters — they never know (or care) which backend ran.

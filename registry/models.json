@@ -119,6 +119,30 @@
         "output_per_1m": 10.00,
         "cached_per_1m": 0.3125
       }
+    },
+    "imagen-3.0-generate-002": {
+      "display_name": "Imagen 3.0 Generate",
+      "description": "Dedicated photoreal image generation model (Imagen family)",
+      "status": "preview",
+      "api_version": "v1beta",
+      "capabilities": ["imagen"],
+      "pricing": {
+        "input_per_1m": 0.0,
+        "output_per_1m": 0.0,
+        "cached_per_1m": 0.0
+      }
+    },
+    "gemini-live-2.5-flash-preview": {
+      "display_name": "Gemini Live 2.5 Flash Preview",
+      "description": "Realtime bidirectional streaming model (Live API)",
+      "status": "preview",
+      "api_version": "v1beta",
+      "capabilities": ["live"],
+      "pricing": {
+        "input_per_1m": 0.15,
+        "output_per_1m": 0.60,
+        "cached_per_1m": 0.0375
+      }
     }
   }
 }

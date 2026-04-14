@@ -3,6 +3,7 @@
 Gate: requires GEMINI_LIVE_TESTS=1 and GEMINI_API_KEY.
 Sends a 1x1 PNG inline with a short prompt.
 """
+
 from __future__ import annotations
 
 import base64
@@ -38,9 +39,18 @@ def test_multimodal_live(tmp_path: Path) -> None:
     img = tmp_path / "pixel.png"
     img.write_bytes(_PNG_1X1)
     result = subprocess.run(
-        [sys.executable, str(_RUNNER), "multimodal",
-         "Reply with one word describing this image.", "--file", str(img)],
-        capture_output=True, text=True, timeout=60, cwd=str(_REPO_ROOT),
+        [
+            sys.executable,
+            str(_RUNNER),
+            "multimodal",
+            "Reply with one word describing this image.",
+            "--file",
+            str(img),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=str(_REPO_ROOT),
     )
     assert result.returncode == 0, f"stderr={result.stderr}"
     assert result.stdout.strip(), "expected non-empty response"

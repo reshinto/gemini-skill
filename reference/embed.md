@@ -46,3 +46,11 @@ gemini_run.py embed "Text sample" --task-type SEMANTIC_SIMILARITY
 ## Use case
 
 Embeddings are used for semantic search, retrieval-augmented generation (RAG), and similarity comparisons. Store the returned `values` array in a vector database.
+
+---
+
+Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: deep_research](deep_research.md) · [Next: file_search](file_search.md)

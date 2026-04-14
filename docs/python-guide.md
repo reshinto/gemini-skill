@@ -1,31 +1,57 @@
 # Python Design Decisions
 
-**Last Updated:** 2026-04-13
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
 
-Why gemini-skill is written in pure Python stdlib and how to maintain compatibility.
+---
 
-## Why Stdlib Only
+**Last Updated:** 2026-04-14
 
-### Rationale
+Python requirements and architectural decisions for gemini-skill.
 
-1. **Zero runtime dependencies** — eliminates supply-chain attacks and version conflicts
-2. **Easier installation** — `python3 setup/install.py` with no pip/conda
-3. **Maximum compatibility** — runs on any Python 3.9+ installation
-4. **Simpler maintenance** — no dependency updates, no deprecated packages
-5. **Claude Code friendly** — doesn't require package installation in user environment
+## Python 3.9+ Requirement
 
-### Trade-offs
+The skill requires **Python 3.9 or higher**. This is enforced at launch in `scripts/gemini_run.py` with a readable error message.
 
-We reinvent wheels for:
+### Why 3.9?
 
-| Library | Use case | Alternative |
-|---------|----------|-------------|
-| `requests` | HTTP client | `urllib` (stdlib) |
-| `pyyaml` | Config parsing | `json` (stdlib) + simple `.env` parser |
-| `pillow` | Image processing | Base64 inline (API returns base64-encoded images) |
-| `numpy` | Math/arrays | Minimal math, no arrays (embeddings are small JSON) |
+- Type hints with `dict[str, Any]` (PEP 585, lowercase generics) require 3.9+
+- `from __future__ import annotations` allows modern type syntax in earlier syntax parsing (available 3.7+, but full modern syntax support is 3.9+)
+- macOS ships Python 3.9+ by default (as of ~2021)
+- Most Linux distros have 3.9 in standard repos
+- Python 3.8 reached EOL in October 2024
 
-These trade-offs are acceptable for a thin skill that mostly forwards to the API.
+### Mandatory Annotations Import
+
+All new Python modules in the codebase **must** include this import at the top:
+
+```python
+from __future__ import annotations
+```
+
+This enables:
+- `dict[str, Any]` instead of `Dict[str, Any]`
+- `str | None` instead of `Optional[str]`
+- Cleaner type hints aligned with Python 3.10+ syntax (but running on 3.9+)
+
+### Runtime vs Development Venvs
+
+**Runtime venv (end-users):**
+```
+~/.claude/skills/gemini/.venv/bin/python
+```
+- Managed by installer
+- Pinned `google-genai==1.33.0` for SDK backend
+- Small footprint (runtime deps only)
+- Controlled by `setup/requirements.txt`
+
+**Development venv (contributors):**
+```
+<repo>/.venv/bin/python
+```
+- Local to repository clone
+- Full dev deps: `setup/requirements-dev.txt` (pytest, black, ruff, etc.)
+- Used for local testing and CI
+- Initialize with: `python3 -m venv .venv && source .venv/bin/activate && pip install -r setup/requirements-dev.txt`
 
 ---
 
@@ -118,12 +144,9 @@ CI should test against multiple Python versions:
 ```python
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
-
-# Instead of:
-# import requests
 ```
 
-urllib is lower-level but sufficient for REST APIs with explicit headers and timeouts.
+The skill uses `urllib` (stdlib) for HTTP calls in the raw HTTP transport (`RawHttpTransport` in `core/transport/raw_http.py`). This provides full control over headers, timeouts, and multipart encoding without external dependencies.
 
 **Advantages:**
 - Stdlib, zero deps
@@ -306,11 +329,11 @@ Each adapter is a simple module with `get_parser()` and `run(**kwargs)`.
 
 ## Type Hints
 
-The codebase uses Python 3.9+ type hints:
+The codebase uses Python 3.9+ type hints with the mandatory `from __future__ import annotations` import:
 
 ```python
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Any
 
 def api_call(
     endpoint: str,
@@ -320,16 +343,12 @@ def api_call(
     """Make an API call."""
 ```
 
-### Compatibility Notes
+**All new code must use:**
+- `dict[str, Any]` (lowercase generics, 3.9+ syntax)
+- `str | None` (union syntax, available under `from __future__ import annotations`)
+- The mandatory `from __future__ import annotations` at the module top
 
-- `dict[str, Any]` is 3.9+ (lowercase generic)
-- `str | None` is 3.10+ (union syntax)
-- `from __future__ import annotations` (3.7+) allows this syntax to work in 3.9
-
-To support Python 3.8:
-- Replace `dict[str, Any]` with `Dict[str, Any]`
-- Replace `str | None` with `Optional[str]`
-- Keep `from __future__ import annotations`
+This ensures consistency across the codebase and leverages Python 3.9+ capabilities.
 
 ---
 

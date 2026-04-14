@@ -1,5 +1,9 @@
 # Update and Sync Mechanism
 
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
 **Last Updated:** 2026-04-13
 
 How the install, update, and sync process works. For end-users, see [install.md](install.md).
@@ -104,10 +108,26 @@ python3 setup/update.py
 The `update.py` script (in `core.cli.update_main`):
 
 1. **Verify installation exists** (fail if not installed)
-2. **Fetch latest model registry** (optional, if API accessible)
-3. **Sync operational files** from repo to `~/.claude/skills/gemini/`
-4. **Preserve user config** (`.env`, session history, cost tracking)
-5. **Verify updated installation** (test help command)
+2. **Preserve pinned google-genai version** — Does NOT upgrade the SDK silently; respects `setup/requirements.txt` pinning
+3. **Preserve `.venv`** — Does not delete or re-create the runtime venv; allows existing virtual environment to persist
+4. **Fetch latest model registry** (optional, if API accessible)
+5. **Sync operational files** from repo to `~/.claude/skills/gemini/`
+6. **Preserve user config** (`~/.claude/settings.json` env block, session history, cost tracking)
+7. **Verify updated installation** (test help command)
+
+### Bumping the SDK Version
+
+To upgrade the pinned `google-genai` version:
+
+1. Edit `setup/requirements.txt` and change the version pin (e.g., `google-genai==1.33.0` → `google-genai==1.34.0`)
+2. Run `python3 setup/install.py` (updates the runtime venv)
+3. Run the full integration test suite under **both** backends:
+   ```bash
+   GEMINI_IS_SDK_PRIORITY=true pytest tests/integration/ -v
+   GEMINI_IS_RAWHTTP_PRIORITY=true pytest tests/integration/ -v
+   ```
+4. If all tests pass, open a pull request with the version bump and test results
+5. Users update via `cd gemini-skill && git pull && python3 setup/update.py`
 
 ### Atomic Update
 
@@ -268,29 +288,31 @@ Users can still use them with `--model gemini-1.5-flash`, but they're warned in 
 
 ## Integrity Checking
 
-### File Checksums (TODO)
+### File Checksums (SHA-256)
 
-The install script could verify file integrity:
+The install script verifies file integrity using SHA-256 checksums stored in `.checksums.json`:
 
 ```python
-# Generate checksums during release
-sha256sums = {}
-for file in operational_files:
-    sha256sums[str(file)] = hashlib.sha256(file.read_bytes()).hexdigest()
-
-with open(".checksums", "w") as f:
-    json.dump(sha256sums, f)
+# Stored in .checksums.json at repo root
+{
+  "scripts/gemini_run.py": "abc123...",
+  "core/cli/dispatch.py": "def456...",
+  ...
+}
 
 # Verify during install
-with open(".checksums") as f:
+with open(".checksums.json") as f:
     expected = json.load(f)
 
 for file, expected_hash in expected.items():
     actual_hash = hashlib.sha256(Path(file).read_bytes()).hexdigest()
-    assert actual_hash == expected_hash, f"Checksum mismatch: {file}"
+    if actual_hash != expected_hash:
+        raise IntegrityError(f"Checksum mismatch: {file}")
 ```
 
-**Current status:** Not implemented (added to TODO for security hardening).
+**Behavior:** If a user has modified files locally, the install refuses to proceed and reports which files have been altered. This prevents silent corruption and ensures the installation matches the released version.
+
+**Updating checksums:** Before each release, run `python3 setup/generate_checksums.py` to regenerate `.checksums.json` based on the current operational files.
 
 ### GPG Signatures (Future)
 

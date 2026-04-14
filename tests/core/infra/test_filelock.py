@@ -3,6 +3,7 @@
 Verifies that the FileLock context manager acquires and releases locks,
 handles timeouts, and works correctly for concurrent access protection.
 """
+
 from __future__ import annotations
 
 import json

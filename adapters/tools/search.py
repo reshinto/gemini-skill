@@ -1,32 +1,46 @@
 """Google Search grounding adapter.
 
 Sends a prompt with Google Search grounding enabled. The model can
-access real-time web information. Privacy-sensitive — requires explicit
-opt-in. Outputs are untrusted external content.
+access real-time web information. Privacy-sensitive, with dispatcher-
+managed opt-in. Outputs are untrusted external content.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
-from typing import Any
+from typing import cast
 
-from core.adapter.helpers import build_base_parser, emit_output, extract_parts
+from core.adapter.helpers import build_base_parser, emit_json, emit_output, extract_parts
 from core.infra.client import api_call
 from core.infra.config import load_config
+from core.transport.base import GeminiResponse
 
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the search adapter."""
     parser = build_base_parser("Generate text with Google Search grounding")
     parser.add_argument("prompt", help="The text prompt.")
+    # Phase 7: emit grounding metadata as JSON alongside the answer so
+    # agent callers can structurally consume the grounding chunks (web
+    # queries, search entry point, chunk URIs). Opt-in — the default
+    # preserves the legacy human-readable "Sources:" footer output.
+    parser.add_argument(
+        "--show-grounding",
+        action="store_true",
+        default=False,
+        help="Emit the full grounding metadata as JSON instead of the text footer.",
+    )
     return parser
 
 
 def run(
     prompt: str,
     model: str | None = None,
-    **kwargs: Any,
+    show_grounding: bool = False,
+    **kwargs: object,
 ) -> None:
     """Execute search-grounded generation."""
     from core.routing.router import Router
@@ -38,19 +52,30 @@ def run(
     )
     resolved_model = model or router.select_model("search")
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "tools": [{"googleSearch": {}}],
     }
 
-    response = api_call(f"models/{resolved_model}:generateContent", body=body)
+    response = cast(GeminiResponse, api_call(f"models/{resolved_model}:generateContent", body=body))
 
     parts = extract_parts(response)
-    text_parts = [p["text"] for p in parts if "text" in p]
+    text_parts = [part["text"] for part in parts if "text" in part]
     text = "\n".join(text_parts)
 
-    # Append grounding metadata if present
-    grounding = response.get("candidates", [{}])[0].get("groundingMetadata")
+    candidates = response.get("candidates", [])
+    grounding = candidates[0].get("groundingMetadata") if candidates else None
+
+    # Phase 7: when --show-grounding is passed, emit a structured JSON
+    # payload with both the text and the raw grounding metadata so
+    # agent callers don't have to re-parse the human-readable footer.
+    # The ``grounding`` field is None when the model didn't attach any
+    # (asking a question that didn't need web search, for example).
+    if show_grounding:
+        emit_json({"text": text, "grounding": grounding})
+        return
+
+    # Default path: append a human-readable sources footer if present.
     if grounding:
         chunks = grounding.get("groundingChunks", [])
         if chunks:

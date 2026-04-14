@@ -1,0 +1,25 @@
+%% Backend priority truth table — how the two env flags resolve into
+%% primary/fallback assignment at coordinator build time.
+flowchart TD
+    SDK_T{"GEMINI_IS_SDK_PRIORITY<br/>= true?"}
+    RAW_T_A{"GEMINI_IS_RAWHTTP_PRIORITY<br/>= true?"}
+    RAW_T_B{"GEMINI_IS_RAWHTTP_PRIORITY<br/>= true?"}
+
+    BOTH["Primary: SDK<br/>Fallback: raw HTTP<br/><i>(SDK wins when both enabled)</i>"]
+    SDK_ONLY["Primary: SDK<br/>Fallback: none"]
+    RAW_ONLY["Primary: raw HTTP<br/>Fallback: none"]
+    ERROR[/"ConfigError at build time<br/>'At least one must be true'"/]
+
+    SDK_T -->|true| RAW_T_A
+    SDK_T -->|false| RAW_T_B
+    RAW_T_A -->|true| BOTH
+    RAW_T_A -->|false| SDK_ONLY
+    RAW_T_B -->|true| RAW_ONLY
+    RAW_T_B -->|false| ERROR
+
+    classDef ok fill:#e8f5e9,stroke:#2e7d32
+    classDef warn fill:#fff3e0,stroke:#ef6c00
+    classDef err fill:#ffebee,stroke:#c62828
+    class BOTH ok
+    class SDK_ONLY,RAW_ONLY warn
+    class ERROR err

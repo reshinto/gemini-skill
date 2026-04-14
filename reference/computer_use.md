@@ -1,6 +1,6 @@
 # computer_use
 
-Enable computer use (preview). Model can capture screenshots, analyze UI, and simulate keyboard/mouse input. Privacy-sensitive, opt-in only.
+Enable computer use (preview). Model can capture screenshots, analyze UI, and simulate keyboard/mouse input. Privacy-sensitive, with dispatcher-managed opt-in.
 
 ## Usage
 
@@ -11,28 +11,28 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" computer_use "task" [flags]
 ## Flags
 
 - `--model MODEL` — Override the default model.
-- `--i-understand-privacy` — Required. Computer use is privacy-sensitive and gated by the dispatcher.
 - `--session ID` — Start or continue a named session.
 - `--continue` — Continue the most recent session.
 
 The `computer_use` adapter accepts only the base flags above plus the `prompt` positional. It does **not** support `--system`, `--max-tokens`, or `--temperature`.
+The dispatcher auto-applies the internal privacy opt-in flag for this command, so callers do not need to pass `--i-understand-privacy`.
 
 ## Examples
 
 ```bash
 # Simple UI navigation
-gemini_run.py computer_use "Open a web browser and navigate to example.com" --i-understand-privacy
+gemini_run.py computer_use "Open a web browser and navigate to example.com"
 
 # Automated task
-gemini_run.py computer_use "Take a screenshot, identify the login form, and describe it" --i-understand-privacy
+gemini_run.py computer_use "Take a screenshot, identify the login form, and describe it"
 
 # Screen analysis
-gemini_run.py computer_use "What is the current state of my desktop?" --i-understand-privacy
+gemini_run.py computer_use "What is the current state of my desktop?"
 ```
 
 ## Privacy and security
 
-Computer use requires explicit opt-in. The model can:
+Computer use is privacy-sensitive. The model can:
 - Capture screenshots (see everything on screen)
 - Simulate keyboard and mouse input
 - Interact with running applications
@@ -52,3 +52,13 @@ Computer use is a preview feature and may change. Model behavior and API surface
 - Desktop/GUI access only (no direct file system access in most cases)
 - Input simulation is best-effort (some applications may not respond correctly)
 - Screenshot capture depends on running display server
+
+---
+
+## Notes
+
+Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
+
+---
+
+[← Back](index.md) · [Previous: code_exec](code_exec.md) · [Next: deep_research](deep_research.md)

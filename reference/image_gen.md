@@ -11,6 +11,8 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" image_gen "prompt" [--model 
 ## Flags
 
 - `--model MODEL` — Override the model. Must be a model registered in [registry/models.json](../registry/models.json) that declares the `image_gen` capability. If omitted, the router picks the default for the `image_gen` capability.
+- `--aspect-ratio RATIO` — Image aspect ratio. Valid values: `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`. Default: model-determined (typically `1:1`). Applies to Gemini 3 Pro Image models.
+- `--image-size SIZE` — Image size preset. Valid values: `1K`, `2K`, `4K`. Default: model-determined. Applies to Gemini 3 Pro Image models.
 - `--output-dir DIR` — Directory for output images (default: OS temp dir, or `output_dir` from config).
 - `--execute` — Required. Image generation is mutating; without this flag the command prints a dry-run message and exits without calling the API.
 
@@ -26,6 +28,16 @@ The router-selected default for the `image_gen` capability, set in [registry/cap
 # Use the registered default (Nano Banana / gemini-3.1-flash-image-preview)
 gemini_run.py image_gen "A serene mountain landscape at sunset" --execute
 
+# Specify aspect ratio (for Gemini 3 Pro Image models)
+gemini_run.py image_gen "Mountain landscape" --aspect-ratio 16:9 --execute
+
+# Specify image size preset
+gemini_run.py image_gen "Abstract geometric art" --image-size 4K --execute
+
+# Combine aspect ratio + size
+gemini_run.py image_gen "Landscape photo" \
+  --aspect-ratio 3:2 --image-size 2K --execute
+
 # Pin the model explicitly (recommended for reproducibility)
 gemini_run.py image_gen "A serene mountain landscape at sunset" \
   --model gemini-3.1-flash-image-preview --execute
@@ -33,12 +45,6 @@ gemini_run.py image_gen "A serene mountain landscape at sunset" \
 # Save to a specific directory
 gemini_run.py image_gen "Abstract geometric art in blue and gold" \
   --output-dir ~/Pictures/gemini --execute
-
-# Combine: pinned model + custom output dir
-gemini_run.py image_gen "Futuristic city skyline at night" \
-  --model gemini-3.1-flash-image-preview \
-  --output-dir ~/Pictures/gemini \
-  --execute
 ```
 
 ## Using a different model
@@ -73,8 +79,16 @@ Without `--execute`, the dispatcher prints `[DRY RUN] 'image_gen' is a mutating 
 
 Each generation counts toward your Gemini API quota. Nano Banana is designed for fast, cost-effective image generation but every `--execute` call is billable.
 
+---
+
+Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: function_calling](function_calling.md) · [Next: imagen](imagen.md)
+
 ## Related
 
 - Live smoke test (dry-run, no billing): [tests/integration/test_image_gen_live.py](../tests/integration/test_image_gen_live.py)
-- Live real-API test against Nano Banana 2 (billable, extra opt-in via `GEMINI_LIVE_IMAGE_GEN=1`): [tests/integration/test_image_gen_nano_banana_2_live.py](../tests/integration/test_image_gen_nano_banana_2_live.py)
+- Live real-API test against Nano Banana 2 (billable; runs whenever `GEMINI_LIVE_TESTS=1` — filter out with `pytest -k "not nano_banana"` to skip): [tests/integration/test_image_gen_nano_banana_2_live.py](../tests/integration/test_image_gen_nano_banana_2_live.py)
 - Upstream API docs: https://ai.google.dev/gemini-api/docs/image-generation

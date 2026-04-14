@@ -1,0 +1,24 @@
+graph LR
+    A["User Starts VSCode Session"]
+    B["Claude Code Loads SKILL.md<br/>(~1 KB)<br/>Terse launcher only"]
+    C["SKILL.md Points to:<br/>reference/index.md<br/>for full command list"]
+    D{"User Needs<br/>Command Help?"}
+    E["Claude Code JIT Loads:<br/>reference/&lt;command&gt;.md<br/>(~2-3 KB per file)"]
+    F["Model Sees Full<br/>Command Details<br/>and Examples"]
+    G["Model Invokes<br/>gemini skill<br/>with chosen flags"]
+    H["Output Returned<br/>to User"]
+
+    A -->|"Session starts"| B
+    B -->|"Token cost: ~300 tokens"| C
+    C -->|"Yes, needs details"| D
+    D -->|"Check specific<br/>reference file"| E
+    E -->|"Token cost: ~600 tokens"| F
+    F -->|"On demand only"| G
+    G -->|"Execute command"| H
+    D -->|"No, already knows"| G
+
+    style B fill:#4ecdc4,stroke:#333,color:#fff
+    style E fill:#95e1d3,stroke:#333,color:#000
+    style F fill:#f9ca24,stroke:#333,color:#000
+
+    note1["Why this works:<br/>- SKILL.md is read ONCE per session<br/>- Most sessions don't need full reference<br/>- reference files loaded JIT when model decides to invoke skill<br/>- Token savings: ~N users × M sessions × cost of 1KB SKILL.md<br/>- Principle of Least Information: model only reads<br/>  what it actually needs to emit a command"]

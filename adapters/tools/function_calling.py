@@ -7,16 +7,19 @@ loops with state preservation via core/routing/tool_state.py.
 Dependencies: core/infra/client.py, core/adapter/helpers.py,
     core/routing/tool_state.py
 """
+
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 from core.adapter.helpers import build_base_parser, emit_json, emit_output, extract_parts
 from core.infra.client import api_call
 from core.infra.config import load_config
 from core.routing.tool_state import extract_tool_state
+from core.transport.base import GeminiResponse
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -24,7 +27,8 @@ def get_parser() -> argparse.ArgumentParser:
     parser = build_base_parser("Execute function/tool calling")
     parser.add_argument("prompt", help="The text prompt.")
     parser.add_argument(
-        "--tools", required=True,
+        "--tools",
+        required=True,
         help="JSON string or file path containing tool declarations.",
     )
     return parser
@@ -34,7 +38,7 @@ def run(
     prompt: str,
     tools: str,
     model: str | None = None,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute function calling with tool declarations."""
     from core.routing.router import Router
@@ -53,12 +57,12 @@ def run(
     else:
         tools_obj = json.loads(tools)
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "tools": tools_obj if isinstance(tools_obj, list) else [tools_obj],
     }
 
-    response = api_call(f"models/{resolved_model}:generateContent", body=body)
+    response = cast(GeminiResponse, api_call(f"models/{resolved_model}:generateContent", body=body))
 
     # Extract response parts
     parts = extract_parts(response)
@@ -66,11 +70,13 @@ def run(
     # Check for function calls
     tool_parts = extract_tool_state(parts)
     if tool_parts:
-        emit_json({
-            "type": "function_calls",
-            "calls": tool_parts,
-        })
+        emit_json(
+            {
+                "type": "function_calls",
+                "calls": tool_parts,
+            }
+        )
     else:
         # Model responded with text instead of function calls
-        text_parts = [p["text"] for p in parts if "text" in p]
+        text_parts = [part["text"] for part in parts if "text" in part]
         emit_output("\n".join(text_parts), output_dir=config.output_dir)

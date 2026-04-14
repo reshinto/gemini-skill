@@ -1,3 +1,27 @@
-pytest>=7.0
-pytest-cov>=4.0
+# Development and test dependencies for gemini-skill.
+#
+# Install into the contributor's repo-root .venv:
+#     pip install -r setup/requirements-dev.txt
+#
+# These are NOT installed into the runtime venv at ~/.claude/skills/gemini/.venv
+# — that venv is governed by setup/requirements.txt only.
+
+# Existing test runner deps (preserved from the previous version of this file).
+pytest>=8.0
+pytest-cov>=4.1
 pytest-split>=0.8
+
+# Async test support (Phase 6 onwards — Live API adapter is async).
+pytest-asyncio==0.23.7
+
+# Cross-backend response equivalence assertions (Phase 2 parity tests).
+deepdiff==7.0.1
+
+# Static analysis. Strict typing is mandatory on the new code surface.
+mypy>=1.8
+ruff>=0.5
+
+# Auto-formatter. Enforced by the local pre-push git hook installed in
+# pre-implementation step 6 part j; runs on every push and auto-commits any
+# formatting changes before allowing the push to proceed.
+black==24.8.0

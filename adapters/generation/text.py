@@ -7,14 +7,17 @@ for conversation history management.
 Dependencies: core/infra/client.py, core/adapter/helpers.py,
     core/routing/router.py, core/state/session_state.py
 """
+
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 from core.adapter.helpers import build_base_parser, emit_output, extract_text
 from core.infra.client import api_call
 from core.infra.config import load_config
+from core.transport.base import Content, GeminiResponse
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -22,15 +25,20 @@ def get_parser() -> argparse.ArgumentParser:
     parser = build_base_parser("Generate text using Gemini models")
     parser.add_argument("prompt", help="The text prompt to send.")
     parser.add_argument(
-        "--system", default=None,
+        "--system",
+        default=None,
         help="System instruction for the model.",
     )
     parser.add_argument(
-        "--max-tokens", type=int, default=8192,
+        "--max-tokens",
+        type=int,
+        default=8192,
         help="Maximum output tokens.",
     )
     parser.add_argument(
-        "--temperature", type=float, default=1.0,
+        "--temperature",
+        type=float,
+        default=1.0,
         help="Sampling temperature (0.0-2.0).",
     )
     return parser
@@ -45,7 +53,7 @@ def run(
     session: str | None = None,
     continue_session: bool = False,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute text generation.
 
@@ -62,10 +70,11 @@ def run(
     resolved_model = model or router.select_model("text")
 
     # Build contents array
-    contents: list[dict[str, Any]] = []
+    contents: list[Content] = []
 
     if session or continue_session:
         from core.state.session_state import SessionState
+
         config_dir = Path.home() / ".config" / "gemini-skill"
         sessions = SessionState(sessions_dir=config_dir / "sessions")
         session_id = session
@@ -78,7 +87,7 @@ def run(
 
     contents.append({"role": "user", "parts": [{"text": prompt}]})
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": contents,
         "generationConfig": {
             "maxOutputTokens": max_tokens,
@@ -88,9 +97,12 @@ def run(
     if system:
         body["systemInstruction"] = {"parts": [{"text": system}]}
 
-    response = api_call(
-        f"models/{resolved_model}:generateContent",
-        body=body,
+    response = cast(
+        GeminiResponse,
+        api_call(
+            f"models/{resolved_model}:generateContent",
+            body=body,
+        ),
     )
 
     # Extract text from response (raises ValueError on safety blocks)

@@ -7,12 +7,22 @@ to prevent redundant uploads of identical content.
 
 Dependencies: core/infra/mime.py (guess_mime_for_path)
 """
+
 from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TypedDict
+
+
+class DocumentIdentityPayload(TypedDict):
+    """JSON-serializable representation of :class:`DocumentIdentity`."""
+
+    content_sha256: str
+    mime_type: str
+    source_path: str | None
+    source_uri: str | None
 
 
 @dataclass(frozen=True)
@@ -34,7 +44,7 @@ class DocumentIdentity:
     source_path: str | None
     source_uri: str | None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> DocumentIdentityPayload:
         """Serialize to a JSON-compatible dictionary."""
         return {
             "content_sha256": self.content_sha256,
@@ -44,7 +54,7 @@ class DocumentIdentity:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> DocumentIdentity:
+    def from_dict(cls, data: DocumentIdentityPayload) -> DocumentIdentity:
         """Deserialize from a dictionary."""
         return cls(
             content_sha256=data["content_sha256"],

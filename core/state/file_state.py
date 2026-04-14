@@ -10,16 +10,17 @@ to prevent TOCTOU races from concurrent processes.
 Dependencies: core/infra/filelock.py, core/infra/atomic_write.py,
     core/state/identity.py
 """
+
 from __future__ import annotations
 
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import TypedDict, cast
 
 from core.infra.atomic_write import atomic_write_json
 from core.infra.filelock import FileLock
-from core.state.identity import DocumentIdentity
+from core.state.identity import DocumentIdentity, DocumentIdentityPayload
 
 # Default near-expiry threshold: 10 minutes before actual expiry
 _NEAR_EXPIRY_SECONDS = 600
@@ -46,19 +47,21 @@ class FileState:
         self._state_file = self._state_dir / _STATE_FILENAME
         self._lock_path = self._state_dir / _LOCK_FILENAME
 
-    def _load(self) -> dict[str, Any]:
+    def _load(self) -> dict[str, FileRecord]:
         """Load state from disk or return empty structure."""
         if not self._state_file.is_file():
             return {}
         try:
             raw = json.loads(self._state_file.read_text(encoding="utf-8"))
             if isinstance(raw, dict) and "files" in raw:
-                return raw["files"]
+                files = raw["files"]
+                if isinstance(files, dict):
+                    return cast(dict[str, FileRecord], files)
         except (json.JSONDecodeError, OSError):
             pass
         return {}
 
-    def _save(self, data: dict[str, Any]) -> None:
+    def _save(self, data: dict[str, FileRecord]) -> None:
         """Atomically write state to disk. Must be called under lock."""
         self._state_dir.mkdir(parents=True, exist_ok=True)
         atomic_write_json(
@@ -66,11 +69,11 @@ class FileState:
             json.dumps({"files": data}, indent=2),
         )
 
-    def get_all(self) -> dict[str, Any]:
+    def get_all(self) -> dict[str, FileRecord]:
         """Return all tracked file entries."""
         return dict(self._load())
 
-    def get(self, identity: DocumentIdentity) -> dict[str, Any] | None:
+    def get(self, identity: DocumentIdentity) -> FileRecord | None:
         """Look up a file entry by document identity."""
         return self._load().get(identity.content_sha256)
 
@@ -121,12 +124,18 @@ class FileState:
         with FileLock(self._lock_path):
             data = self._load()
             now = time.time()
-            expired_keys = [
-                key for key, entry in data.items()
-                if now >= entry["expiry"]
-            ]
+            expired_keys = [key for key, entry in data.items() if now >= entry["expiry"]]
             for key in expired_keys:
                 del data[key]
             if expired_keys:
                 self._save(data)
             return len(expired_keys)
+
+
+class FileRecord(TypedDict):
+    """One tracked uploaded file entry."""
+
+    identity: DocumentIdentityPayload
+    gemini_uri: str
+    gemini_name: str
+    expiry: float

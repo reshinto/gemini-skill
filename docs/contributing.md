@@ -1,6 +1,10 @@
 # Contributing
 
-**Last Updated:** 2026-04-13
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
+**Last Updated:** 2026-04-14
 
 Guidelines for extending gemini-skill with new adapters and features.
 
@@ -9,10 +13,11 @@ Guidelines for extending gemini-skill with new adapters and features.
 Before contributing, understand the architecture:
 
 - **SKILL.md** — Skill manifest: `name`, `description`, `disable-model-invocation: true`, and the markdown body shown to the model when the user invokes `/gemini`. Note: `allowed-tools`, `argument-hint`, and `model` are slash-command-only frontmatter fields and must **not** appear in `SKILL.md` — the Claude Code skill loader silently rejects the file if they do (see [install.md](install.md) troubleshooting).
-- **dispatch.py** — Policy boundary (whitelist, argument parsing, dry-run enforcement)
-- **Adapters** — Modular command implementations (one file per command)
+- **dispatch.py** — Policy boundary (whitelist, IS_ASYNC detection, argument parsing, dry-run enforcement)
+- **Adapters** — Modular command implementations (one file per command, backend-agnostic via facade)
+- **Transport** — Dual-backend coordinator (SDK primary + raw HTTP fallback, capability gate, fallback policy)
 - **Router** — Model selection logic
-- **Client** — HTTP wrapper (urllib, retries, SSE streaming)
+- **Facade** (`core/transport/__init__.py`) — Unified API (api_call, stream_generate_content, upload_file)
 
 See [architecture.md](architecture.md) for details.
 
@@ -22,14 +27,14 @@ See [architecture.md](architecture.md) for details.
 
 ### Step 1: Create the adapter
 
-Create a new file in `adapters/<category>/<command>.py`:
+Create a new file in `adapters/<category>/<command>.py`. Adapters are **backend-agnostic** — they call `core.infra.client.api_call()` (a shim) or the new canonical import `from core.transport import api_call`. Both backends return identical `GeminiResponse` dict shapes:
 
 ```python
 """New command adapter.
 
 Brief description of what this command does.
 
-Dependencies: core/infra/client.py, core/adapter/helpers.py
+Dependencies: core/transport (facade), core/adapter/helpers.py
 """
 from __future__ import annotations
 
@@ -37,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from core.adapter.helpers import build_base_parser, emit_output
-from core.infra.client import api_call
+from core.transport import api_call  # Facade (either SDK or raw HTTP)
 from core.infra.config import load_config
 
 
@@ -65,7 +70,7 @@ def run(
         prompt: Main input from user.
         model: Optional model override.
         custom_flag: Optional custom flag.
-        execute: Required for mutating commands (--execute flag).
+        execute: Include only for mutating commands or mutating subcommands.
         **kwargs: Additional arguments (session, continue, etc.).
     """
     # Check dry-run for mutating commands
@@ -242,15 +247,27 @@ def run(...):
 - **O**pen/Closed: Easy to add new adapters without modifying existing ones
 - **L**iskov: All adapters follow same interface (get_parser, run)
 - **I**nterface Segregation: Adapters only use what they need
-- **D**ependency Inversion: Adapters depend on abstractions (client, config) not implementations
+- **D**ependency Inversion: Adapters depend on abstractions (facade, config) not implementations
 
-### TDD (Test-Driven Development)
+### TDD + 100% Coverage (MANDATORY)
 
 1. Write test first (red)
 2. Write adapter (green)
 3. Refactor (refactor)
+4. Verify 100% coverage: `pytest --cov=<module> --cov-branch --cov-fail-under=100`
 
-All code must have tests before merge.
+**Policy:** Every new module under `core/transport/`, every new adapter, every new `core/infra/` file, every modified install/update/health module must hit 100% line + branch coverage. No `# pragma: no cover` on new code.
+
+### Strict Typing (MANDATORY)
+
+New code uses **mypy --strict** and NO `Any`:
+```python
+from __future__ import annotations
+from typing import TypedDict, Protocol, Union, TypeVar
+from dataclasses import dataclass
+```
+
+Use `TypedDict`, `Protocol`, `dataclass`, `Union`, `TypeVar` instead of `Any`.
 
 ### Code organization
 
@@ -265,7 +282,7 @@ from pathlib import Path
 from typing import Any
 
 from core.adapter.helpers import build_base_parser
-from core.infra.client import api_call
+from core.transport import api_call
 
 # Constants (uppercase)
 DEFAULT_TIMEOUT = 30
@@ -303,6 +320,18 @@ Avoid:
 from typing import Dict, Optional
 def api_call(endpoint: str, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 ```
+
+### Development Environment
+
+For contributors working from a clone:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install -r setup/requirements-dev.txt
+```
+
+This dev venv is separate from the skill runtime venv at `~/.claude/skills/gemini/.venv`.
 
 ---
 
@@ -418,6 +447,24 @@ Update model defaults for specialty tasks:
 ```
 
 ---
+
+## Adding a New Capability
+
+1. Write failing test in `tests/adapters/<category>/test_<cmd>.py`
+2. Implement adapter in `adapters/<category>/<cmd>.py` (backend-agnostic)
+3. Register in `registry/capabilities.json`
+4. If SDK supports it, add to `_SUPPORTED_CAPABILITIES` in `core/transport/sdk/transport.py`
+5. Add endpoint mapping to `SdkTransport.api_call()` if SDK-specific
+6. Create reference doc at `reference/<cmd>.md` (< 60 lines)
+7. Test: `pytest tests/adapters/<category>/test_<cmd>.py --cov=adapters.<category>.<cmd> --cov-fail-under=100`
+
+### How to Bump the google-genai Pin
+
+1. Edit `setup/requirements.txt`: `google-genai==X.YZ.W`
+2. Run `python3 setup/install.py` to test venv creation
+3. Run live integration suite under both backends (see docs/testing.md dual-backend matrix)
+4. Verify health check reports no drift
+5. Open PR with clear justification for the version bump
 
 ## Deprecation Policy
 

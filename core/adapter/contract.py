@@ -8,10 +8,11 @@ adapters at import time.
 
 Dependency: none (leaf module, stdlib only).
 """
+
 from __future__ import annotations
 
 import argparse
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -27,7 +28,7 @@ class AdapterProtocol(Protocol):
         """Return an ArgumentParser for this adapter's CLI arguments."""
         ...
 
-    def run(self, **kwargs: Any) -> None:
+    def run(self, **kwargs: object) -> None:
         """Execute the adapter's main logic.
 
         Standard flow: parse_args → build_request → call_api →

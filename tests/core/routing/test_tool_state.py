@@ -3,6 +3,7 @@
 Verifies that id, tool_type, thought_signature, and unknown fields
 are preserved exactly as returned by the API in multi-turn tool loops.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -113,6 +114,7 @@ class TestExtractToolState:
 
     def test_empty_parts_returns_empty(self):
         from core.routing.tool_state import extract_tool_state
+
         assert extract_tool_state([]) == []
 
     def test_round_trip_preserves_all_data(self):
@@ -184,28 +186,35 @@ class TestHasToolState:
 
     def test_function_call_detected(self):
         from core.routing.tool_state import has_tool_state
+
         assert has_tool_state({"functionCall": {"name": "f"}}) is True
 
     def test_executable_code_detected(self):
         from core.routing.tool_state import has_tool_state
+
         assert has_tool_state({"executableCode": {"code": "x"}}) is True
 
     def test_function_response_detected(self):
         from core.routing.tool_state import has_tool_state
+
         assert has_tool_state({"functionResponse": {"name": "f"}}) is True
 
     def test_code_execution_result_detected(self):
         from core.routing.tool_state import has_tool_state
+
         assert has_tool_state({"codeExecutionResult": {"output": "x"}}) is True
 
     def test_text_only_not_detected(self):
         from core.routing.tool_state import has_tool_state
+
         assert has_tool_state({"text": "hello"}) is False
 
     def test_inline_data_not_detected(self):
         from core.routing.tool_state import has_tool_state
+
         assert has_tool_state({"inlineData": {}}) is False
 
     def test_empty_part_not_detected(self):
         from core.routing.tool_state import has_tool_state
+
         assert has_tool_state({}) is False

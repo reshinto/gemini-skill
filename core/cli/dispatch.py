@@ -10,6 +10,7 @@ concatenate user text into shell commands.
 
 Dependencies: all adapter modules, core/routing/registry.py
 """
+
 from __future__ import annotations
 
 import importlib
@@ -27,6 +28,8 @@ ALLOWED_COMMANDS: dict[str, str] = {
     "multimodal": "adapters.generation.multimodal",
     "structured": "adapters.generation.structured",
     "streaming": "adapters.generation.streaming",
+    "imagen": "adapters.generation.imagen",
+    "live": "adapters.generation.live",
     # Data
     "embed": "adapters.data.embeddings",
     "token_count": "adapters.data.token_count",
@@ -50,6 +53,8 @@ ALLOWED_COMMANDS: dict[str, str] = {
 
 # Environment/argument flag for opting into privacy-sensitive operations
 _PRIVACY_OPT_IN_FLAG = "--i-understand-privacy"
+_FLAGS_WITH_VALUES = {"--model", "--session"}
+_BOOLEAN_FLAGS = {"--continue", "--execute", _PRIVACY_OPT_IN_FLAG}
 
 
 def main(argv: list[str]) -> None:
@@ -82,11 +87,20 @@ def main(argv: list[str]) -> None:
         safe_print("Run 'help' to see available commands.")
         sys.exit(1)
 
-    # Enforce registry-driven policy before invoking the adapter
-    _enforce_policy(command, remaining)
+    # Normalize privacy opt-in before policy enforcement so normal CLI
+    # callers do not need to pass the dispatcher-only flag manually.
+    normalized_args = _inject_privacy_opt_in_if_needed(command, remaining)
+
+    # ``--help`` / ``-h`` bypasses every policy gate. Argparse handles
+    # help rendering + exit; blocking help on mutating or privacy-
+    # sensitive commands would make those commands undiscoverable
+    # without first flipping flags users don't yet understand.
+    if "--help" not in normalized_args and "-h" not in normalized_args:
+        # Enforce registry-driven policy before invoking the adapter.
+        _enforce_policy(command, normalized_args)
 
     # Strip policy-only flags before handing off to the adapter
-    adapter_args = [a for a in remaining if a != _PRIVACY_OPT_IN_FLAG]
+    adapter_args = [argument for argument in normalized_args if argument != _PRIVACY_OPT_IN_FLAG]
 
     # Import and validate adapter
     adapter_module = importlib.import_module(ALLOWED_COMMANDS[command])
@@ -94,7 +108,35 @@ def main(argv: list[str]) -> None:
 
     parser = adapter_module.get_parser()
     args = parser.parse_args(adapter_args)
+
+    # Phase 6: adapters may opt in to async dispatch by declaring
+    # ``IS_ASYNC = True`` at module level and implementing ``async def
+    # run_async(**kwargs)`` instead of (or alongside) the sync ``run``.
+    # Async adapters are used for the Live API and any future ``--parallel``
+    # feature. The 19 existing sync adapters don't carry this attribute,
+    # so the default ``getattr(..., False)`` preserves the sync path.
+    if getattr(adapter_module, "IS_ASYNC", False):
+        import asyncio
+
+        asyncio.run(adapter_module.run_async(**vars(args)))
+        return
+
     adapter_module.run(**vars(args))
+
+
+def _inject_privacy_opt_in_if_needed(command: str, args: list[str]) -> list[str]:
+    """Append the privacy opt-in flag for privacy-sensitive commands."""
+    from core.routing.registry import Registry
+
+    try:
+        reg = Registry(root_dir=_get_repo_root())
+        cap = reg.get_capability(command)
+    except CapabilityUnavailableError:
+        return args
+
+    if cap.get("privacy_sensitive") and _PRIVACY_OPT_IN_FLAG not in args:
+        return args + [_PRIVACY_OPT_IN_FLAG]
+    return args
 
 
 def _enforce_policy(command: str, args: list[str]) -> None:
@@ -125,24 +167,58 @@ def _enforce_policy(command: str, args: list[str]) -> None:
         )
         sys.exit(1)
 
-    if cap.get("mutating") and "--execute" not in args:
+    if _is_mutating_invocation(cap, args) and "--execute" not in args:
         safe_print(
-            f"[DRY RUN] '{command}' is a mutating operation. "
-            "Pass --execute to actually run it."
+            f"[DRY RUN] '{command}' is a mutating operation. " "Pass --execute to actually run it."
         )
         sys.exit(0)
+
+
+def _extract_action_token(args: list[str]) -> str | None:
+    """Return the subcommand/action token from raw CLI args, if any."""
+    i = 0
+    while i < len(args):
+        token = args[i]
+        if token in _FLAGS_WITH_VALUES:
+            i += 2
+            continue
+        if token in _BOOLEAN_FLAGS:
+            i += 1
+            continue
+        if token.startswith("-"):
+            i += 1
+            continue
+        return token
+    return None
+
+
+def _is_mutating_invocation(cap: object, args: list[str]) -> bool:
+    """Resolve whether this specific invocation is mutating."""
+    if not isinstance(cap, dict):
+        return False
+    action = _extract_action_token(args)
+    mutating_actions = cap.get("mutating_actions")
+    if isinstance(mutating_actions, list):
+        return action in mutating_actions
+    return bool(cap.get("mutating", False))
 
 
 def _validate_adapter_protocol(command: str, adapter_module: ModuleType) -> None:
     """Verify an adapter module implements AdapterProtocol.
 
-    Checks for the presence of get_parser and run attributes. Exits
-    with a clear error if the contract is violated.
+    Every adapter needs ``get_parser``. Sync adapters expose ``run``;
+    async adapters (those declaring ``IS_ASYNC = True``) expose
+    ``run_async`` instead. Accepting either keeps the 19 existing
+    sync adapters unchanged while letting Phase 7's ``live`` adapter
+    declare only the async entry point.
     """
-    if not (hasattr(adapter_module, "get_parser") and hasattr(adapter_module, "run")):
+    has_parser = hasattr(adapter_module, "get_parser")
+    has_sync_run = hasattr(adapter_module, "run")
+    has_async_run = hasattr(adapter_module, "run_async")
+    if not has_parser or not (has_sync_run or has_async_run):
         safe_print(
             f"[ERROR] Adapter '{command}' does not implement AdapterProtocol. "
-            "Missing get_parser() or run()."
+            "Missing get_parser() or run()/run_async()."
         )
         sys.exit(1)
 
@@ -166,12 +242,13 @@ def _print_help() -> None:
     safe_print("")
     safe_print("Policy:")
     safe_print("  - Mutating commands require --execute (dry-run default)")
-    safe_print(f"  - Privacy-sensitive commands require {_PRIVACY_OPT_IN_FLAG}")
+    safe_print("  - Privacy-sensitive commands are opt-in internally at dispatch")
 
 
 def _list_models() -> None:
     """List all models from the registry."""
     from core.routing.registry import Registry
+
     reg = Registry(root_dir=_get_repo_root())
     for model_id in sorted(reg.list_models()):
         model = reg.get_model(model_id)

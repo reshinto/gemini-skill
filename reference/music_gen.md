@@ -1,3 +1,4 @@
+
 # music_gen
 
 Generate music using Gemini's music generation model (Lyria 3). 30-second maximum duration, SynthID watermark applied.
@@ -56,6 +57,12 @@ Without `--execute`, prints dry-run. Use `--execute` to generate.
 
 Lyria 3 (Gemini's music model).
 
-## Note
+## Notes
 
 Music generation is non-commercial in most jurisdictions. Check your terms of service before publishing generated music.
+
+Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
+
+---
+
+[← Back](index.md) · [Previous: multimodal](multimodal.md) · [Next: search](search.md)

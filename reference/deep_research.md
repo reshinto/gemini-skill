@@ -1,6 +1,6 @@
 # deep_research
 
-Conduct deep research using Gemini's Interactions API (not generateContent). Asynchronous, server-stored, with resumption support.
+Conduct deep research using Gemini's Interactions API (not generateContent). Asynchronous, privacy-sensitive, server-stored, with resumption support.
 
 ## Usage
 
@@ -14,6 +14,8 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" deep_research "research quer
 - `--max-wait SECONDS` — Maximum wait time for polling (default: 300).
 - `--execute` — Confirm and start. **Mutating, required.**
 - `--model MODEL` — Override the default model.
+
+The dispatcher auto-applies the internal privacy opt-in flag for this command, but `--execute` is still required because starting or resuming research is mutating.
 
 ## Examples
 
@@ -63,3 +65,11 @@ Deep research takes 30–120 seconds depending on query complexity.
 ## Note
 
 Deep Research is designed for thorough, multi-step investigation. Simpler queries may be faster with regular `text` command.
+
+---
+
+Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: computer_use](computer_use.md) · [Next: embed](embed.md)

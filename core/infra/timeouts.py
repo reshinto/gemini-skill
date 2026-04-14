@@ -12,12 +12,15 @@ Python constraints:
 
 Dependency: none (leaf module, stdlib only).
 """
+
 from __future__ import annotations
 
 import signal
 import sys
 import threading
+from types import TracebackType
 from types import FrameType
+from typing import cast
 
 
 class TimeoutExpired(Exception):
@@ -46,7 +49,7 @@ class TimeoutGuard:
         self.seconds = seconds
         self.message = message or f"Operation exceeded {seconds}s limit"
         self._use_signal = False
-        self._old_handler = None
+        self._old_handler: object | None = None
         self._watchdog: threading.Timer | None = None
 
     def __enter__(self) -> TimeoutGuard:
@@ -62,11 +65,16 @@ class TimeoutGuard:
             self._watchdog.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         if self._use_signal:
             signal.alarm(0)
             if self._old_handler is not None:
-                signal.signal(signal.SIGALRM, self._old_handler)
+                signal.signal(signal.SIGALRM, cast(signal.Handlers, self._old_handler))
         elif self._watchdog is not None:
             self._watchdog.cancel()
             self._watchdog = None

@@ -1,25 +1,79 @@
 # Architecture
 
-**Last Updated:** 2026-04-13
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
+**Last Updated:** 2026-04-14
 
 ## System Overview
 
-The gemini-skill is a Claude Code skill providing REST API access to Google Gemini. It uses a modular adapter architecture with a policy-enforcing dispatcher.
+The gemini-skill is a Claude Code skill providing REST API access to Google Gemini. It uses a dual-backend transport layer (SDK primary, raw HTTP fallback) with modular adapters and policy enforcement.
+
+## Why SKILL.md Is Terse
+
+The `SKILL.md` file (gemini-skill's manifest in Claude Code) is intentionally minimal: ~1 KB, three quick-start commands, and a pointer to the full reference. This design reflects a core principle: **token budgets matter at scale**.
+
+**The Token Economics:**
+
+When a user starts a VSCode session, Claude Code auto-loads SKILL.md into context. That file is read *once* and stays in context for the entire session. Here's the cost:
+
+- A typical SKILL.md today: ~1 KB = ~300 tokens
+- A verbose SKILL.md with full command catalog: ~10 KB = ~3,000 tokens
+- Across N users, M sessions per day, for a month: massive cumulative cost
+
+Example math: If 100 users run 10 sessions/day for 30 days, and each session runs an average of 2 times, a verbose SKILL.md costs (100 × 10 × 30 × 2 × 2,700 tokens) = 162 million extra tokens per month. A terse SKILL.md costs 16.2 million tokens. That's real money.
+
+**Principle of Least Information:**
+
+SKILL.md is read at session start. The model doesn't know yet whether it will invoke the gemini skill. Why load detailed reference into context for something it might never use?
+
+Instead, SKILL.md says: "The gemini skill does X, Y, Z. For the full command reference, see `reference/index.md` (or specific commands like `reference/text.md`)."
+
+If the model decides to invoke the skill, it reads the specific `reference/<command>.md` file *on demand*. That file (~2–3 KB per command) is loaded only when needed, and only the one command the model is about to invoke.
+
+**How This Actually Works:**
+
+1. **Session start:** Claude Code loads SKILL.md (~300 tokens). Model knows "gemini skill exists, does text/image/video generation" but doesn't see full command details.
+2. **Model decides to use gemini:** Model reads `reference/text.md` or `reference/image_gen.md` on demand (~600 tokens total for one command). Model sees full syntax, examples, flags, and edge cases.
+3. **Model invokes skill:** Executes the command with flags it just read.
+
+**Result:** A user who runs a gemini skill command in a session loads:
+- SKILL.md: ~300 tokens (once at session start)
+- Relevant `reference/*.md` file(s): ~600 tokens (loaded only if invoked)
+- Total: ~900 tokens
+
+A verbose, all-in-one SKILL.md would cost ~3,000 tokens *just at session start*, before the user even invokes the skill.
+
+**Cross-Reference:** This design mirrors the `Facade Pattern` (see [Design Patterns — Facade Pattern](design-patterns.md#facade-pattern)). Just as the skill's facade hides coordinator complexity behind three simple functions, SKILL.md hides reference complexity behind a terse launcher. Both examples of "minimal surface area at the boundary."
+
+For more details on how token optimization influences architecture, see the `docs/diagrams/token-optimization-flow.mmd` diagram.
+
+![Dual-backend transport architecture](diagrams/architecture-dual-backend.svg)
+<sub>Source: [`docs/diagrams/architecture-dual-backend.mmd`](diagrams/architecture-dual-backend.mmd) — regenerate with `bash scripts/render_diagrams.sh`</sub>
 
 ```
 SKILL.md (Claude Code launcher)
     ↓
-scripts/gemini_run.py (2.7-safe launcher, version check)
+scripts/gemini_run.py (re-execs under ~/.claude/skills/gemini/.venv/bin/python)
     ↓
-core/cli/dispatch.py (policy boundary: whitelist, flags, enforcement)
+core/cli/dispatch.py (policy: whitelist, IS_ASYNC detection, routing)
     ↓
-adapters/ (19 adapters: generation, data, tools, media, experimental)
+adapters/ (21 adapters: generation, data, tools, media, experimental)
     ↓
-core/routing/router.py (model selection: complexity tree + specialty tasks)
+core/transport (facade: api_call / stream_generate_content / upload_file)
     ↓
-core/infra/client.py (HTTP/REST using urllib, x-goog-api-key header)
+core/transport/coordinator.py (TransportCoordinator: primary/fallback dispatch)
     ↓
-Gemini API (v1 and v1beta endpoints)
+┌─ SdkTransport (google-genai SDK)          ─ primary by default
+│  └─ core/transport/sdk/{client_factory, transport, async_transport}
+│
+└─ RawHttpTransport (urllib)                ─ fallback / always available
+   └─ core/transport/raw_http/{client, transport}
+    ↓
+core/transport/normalize.py (unified GeminiResponse envelope)
+    ↓
+Gemini API (v1 / v1beta endpoints)
 ```
 
 ## Directory Layout
@@ -27,29 +81,50 @@ Gemini API (v1 and v1beta endpoints)
 ```
 .
 ├── SKILL.md                  # Claude Code skill definition (launcher metadata)
+├── VERSION                   # Semantic version
 ├── scripts/
-│   └── gemini_run.py         # Entry point (Python 3.9+ check, dispatches to dispatch.py)
+│   ├── gemini_run.py         # Entry point (version check, venv re-exec, dispatch)
+│   └── health_check.py       # Health check utility
 ├── setup/
-│   ├── install.py            # Install to ~/.claude/skills/gemini/
-│   └── update.py             # Sync operational files (no docs, no tests)
+│   ├── install.py            # Install to ~/.claude/skills/gemini/ + venv + settings merge
+│   ├── update.py             # Sync operational files, refresh venv
+│   └── requirements.txt      # Pinned google-genai==1.33.0
 ├── core/
 │   ├── cli/
-│   │   ├── dispatch.py       # Subcommand whitelist, policy enforcement
-│   │   ├── install_main.py   # Setup/install handler
+│   │   ├── dispatch.py       # Subcommand whitelist, IS_ASYNC detection, policy enforcement
+│   │   ├── install_main.py   # Install handler (Phase 5: venv + settings merge)
 │   │   ├── update_main.py    # Update/sync handler
-│   │   └── health_main.py    # Health check utility
+│   │   ├── health_main.py    # Health check utility
+│   │   └── installer/        # Install submodules (venv, settings_merge, api_key_prompt, legacy_migration)
 │   ├── auth/
-│   │   └── auth.py           # Resolve API key (shell env > .env > error)
+│   │   └── auth.py           # Resolve API key (GEMINI_API_KEY > .env > error)
 │   ├── infra/
-│   │   ├── client.py         # HTTP client (urllib, retry, SSE, multipart)
+│   │   ├── client.py         # Shim re-exporting from core.transport (Phase 1 compat)
 │   │   ├── config.py         # Load config (prefer_preview_models, output_dir)
 │   │   ├── cost.py           # Track cost with file locking + atomic writes
 │   │   ├── errors.py         # API errors, custom exceptions
+│   │   ├── checksums.py      # Install-time integrity verification (Phase 4)
 │   │   ├── mime.py           # MIME type detection and validation
 │   │   ├── sanitize.py       # Safe print (no ANSI injection)
 │   │   ├── timeouts.py       # Timeout constants and helpers
 │   │   ├── filelock.py       # Cross-platform file locking (fcntl/msvcrt)
 │   │   └── atomic_write.py   # Atomic file writes (os.replace + retry)
+│   ├── transport/            # Dual-backend facade (Phase 1-8)
+│   │   ├── __init__.py       # Public facade (api_call, stream_generate_content, upload_file)
+│   │   ├── base.py           # Transport interface (abstract base)
+│   │   ├── coordinator.py    # TransportCoordinator (primary/fallback dispatch + capability gate)
+│   │   ├── policy.py         # Fallback eligibility rules (error classification)
+│   │   ├── normalize.py      # Unified GeminiResponse envelope (both backends)
+│   │   ├── _validation.py    # Input validation helpers
+│   │   ├── sdk/
+│   │   │   ├── __init__.py
+│   │   │   ├── client_factory.py  # google-genai SDK client instantiation
+│   │   │   ├── transport.py       # SdkTransport sync API wrapper
+│   │   │   └── async_transport.py # SdkAsyncTransport async API wrapper (Phase 6)
+│   │   └── raw_http/
+│   │       ├── __init__.py
+│   │       ├── client.py          # urllib HTTP client (no SDK dependency)
+│   │       └── transport.py       # RawHttpTransport sync API wrapper
 │   ├── routing/
 │   │   ├── router.py         # Model selection logic
 │   │   └── registry.py       # Load model registry (JSON) from registry/
@@ -58,28 +133,30 @@ Gemini API (v1 and v1beta endpoints)
 │   │   ├── file_state.py     # Files API tracking (48hr expiry)
 │   │   └── store_state.py    # File Search store state
 │   └── adapter/
-│       ├── helpers.py        # Shared: build_base_parser, emit_output, etc.
-│       └── contract.py       # Adapter interface (get_parser, run)
+│       ├── helpers.py        # Shared: build_base_parser, emit_output, check_dry_run
+│       └── contract.py       # Adapter interface (get_parser, run, IS_ASYNC flag)
 ├── adapters/
 │   ├── generation/
 │   │   ├── text.py           # Text generation + sessions
 │   │   ├── multimodal.py     # Files + text (inline base64)
 │   │   ├── structured.py     # JSON schema output
-│   │   └── streaming.py      # SSE streaming
+│   │   ├── streaming.py      # SSE streaming
+│   │   ├── imagen.py         # Imagen 3 text-to-image (Phase 7)
+│   │   └── live.py           # Live API realtime sessions (async, Phase 7)
 │   ├── data/
 │   │   ├── embeddings.py     # Vector embeddings
 │   │   ├── token_count.py    # Token counting
-│   │   ├── files.py          # Files API (upload/list/get/delete)
+│   │   ├── files.py          # Files API (upload/list/get/delete + download subcommand Phase 8)
 │   │   ├── cache.py          # Context caching (create/list/get/delete)
 │   │   ├── batch.py          # Batch jobs (create/list/get/cancel)
 │   │   └── file_search.py    # Hosted RAG (create/upload/query/list/delete)
 │   ├── tools/
 │   │   ├── function_calling.py  # Tool/function calling
 │   │   ├── code_exec.py         # Sandboxed code execution
-│   │   ├── search.py            # Google Search grounding
+│   │   ├── search.py            # Google Search grounding (+ --show-grounding flag Phase 8)
 │   │   └── maps.py              # Google Maps grounding
 │   ├── media/
-│   │   ├── image_gen.py      # Image generation (Nano Banana)
+│   │   ├── image_gen.py      # Image generation (Nano Banana + --aspect-ratio/--image-size Phase 8)
 │   │   ├── video_gen.py      # Video generation (Veo)
 │   │   └── music_gen.py      # Music generation (Lyria 3)
 │   └── experimental/
@@ -103,12 +180,10 @@ Gemini API (v1 and v1beta endpoints)
 │   └── update-sync.md        # Install mechanism
 ├── reference/
 │   ├── index.md              # Command reference index
-│   ├── text.md               # Per-command docs (18 files)
-│   ├── multimodal.md
-│   └── ... (one per command)
-├── tests/                    # 574 tests, 100% coverage
+│   └── *.md                  # Per-command docs (21 files, one per adapter)
+├── tests/                    # 574+ tests, 100% coverage
 ├── .coverage                 # Coverage data
-└── VERSION                   # Semantic version
+└── .env.example              # Local-dev template (repo root, contributors only)
 ```
 
 ## The Lean-Router Pattern
@@ -199,13 +274,59 @@ Three persistent state stores (all with atomic writes + file locking):
 
 Cost tracking is per-day, stored in `~/.config/gemini-skill/cost_today.json` (resets at UTC midnight).
 
+## Dual-Backend Transport
+
+The `core/transport/` package implements a **coordinator pattern** that routes requests to either the SDK backend (primary by default) or the raw HTTP backend (fallback).
+
+![Coordinator decision flow](diagrams/coordinator-decision-flow.svg)
+<sub>Source: [`docs/diagrams/coordinator-decision-flow.mmd`](diagrams/coordinator-decision-flow.mmd)</sub>
+
+The **backend priority matrix** shows how the two env flags resolve into primary/fallback assignment at coordinator build time:
+
+![Backend priority matrix](diagrams/backend-priority-matrix.svg)
+<sub>Source: [`docs/diagrams/backend-priority-matrix.mmd`](diagrams/backend-priority-matrix.mmd)</sub>
+
+### Configuration
+
+Two environment variables control backend selection:
+- `GEMINI_IS_SDK_PRIORITY` (default `true`) — SDK is primary
+- `GEMINI_IS_RAWHTTP_PRIORITY` (default `false`) — raw HTTP is fallback
+
+Resolution rules:
+- Both true → SDK wins (SDK primary, raw HTTP fallback)
+- Both false → `ConfigError` (must enable at least one)
+- One true → that backend is exclusive, no fallback
+
+### Capability Registry
+
+`SdkTransport` declares an explicit `_SUPPORTED_CAPABILITIES` frozenset (e.g., `{'text', 'multimodal', 'embeddings'}`). Capabilities like `maps`, `music_gen`, `computer_use`, `file_search` are NOT in the set because SDK v1.33.0 doesn't expose those surfaces. The coordinator routes them straight to raw HTTP without probing the SDK.
+
+### Fallback Policy
+
+When primary backend raises an exception, the coordinator consults `policy.is_fallback_eligible(exc)`:
+- **Eligible for fallback**: `BackendUnavailableError`, transport/network errors, 429 (rate limit), 5xx, `ImportError`
+- **NOT eligible** (re-raise immediately): `AuthError`, 4xx (except 429), `ValueError`/`TypeError`/`AssertionError`, `CostLimitError`
+
+### Async Path
+
+`client.aio.*` methods use `SdkAsyncTransport` and do NOT fall back to raw HTTP (raw HTTP is sync-only). Async adapters are detected by `IS_ASYNC = True` on the adapter module; `core/cli/dispatch.py` runs them via `asyncio.run(run_async(...))`.
+
+### Unified Response
+
+Both backends normalize responses to the same `GeminiResponse` dict shape via `core/transport/normalize.py`, so adapters are backend-agnostic. Neither adapters nor dispatch code know which backend ran.
+
 ## Authentication
+
+![Auth resolution precedence](diagrams/auth-resolution.svg)
+<sub>Source: [`docs/diagrams/auth-resolution.mmd`](diagrams/auth-resolution.mmd)</sub>
 
 API key resolution chain (first-match wins):
 
-1. Shell environment variable: `GOOGLE_API_KEY` or `GEMINI_API_KEY`
-2. `.env` file in the installed skill directory: `~/.claude/skills/gemini/.env`
-3. Error if not found
+1. Shell environment variable: `GEMINI_API_KEY` (set by Claude Code from `~/.claude/settings.json`)
+2. `.env` file at repo root: `GEMINI_API_KEY` (local-development only, via `env_dir=` fallback)
+3. Error if neither found
+
+The skill **does NOT honor `GOOGLE_API_KEY`** — `GEMINI_API_KEY` is canonical.
 
 The API key is **only sent via HTTP header** (`x-goog-api-key`), never in URL query strings.
 
@@ -218,6 +339,7 @@ The dispatcher enforces two tiers of safety:
 Commands that modify server state require `--execute`:
 
 - `files upload`, `files delete`
+- `files download`
 - `cache create`, `cache delete`
 - `batch create`, `batch cancel`
 - `file_search` (create, upload, delete)
@@ -226,16 +348,16 @@ Commands that modify server state require `--execute`:
 
 Without `--execute`, these print a dry-run message and exit. This prevents accidental resource creation.
 
-### Tier 2: Cost/Privacy-Sensitive Operations (Explicit Opt-In)
+### Tier 2: Cost/Privacy-Sensitive Operations (Dispatcher-Managed Opt-In)
 
-Commands that send data outside the user's control or incur cost require explicit opt-in:
+Commands that send data outside the user's control or incur cost are marked privacy-sensitive:
 
 - `search` — sends queries to Google Search
 - `maps` — sends location queries to Google Maps
 - `computer_use` — can capture full desktop screenshots
 - `deep_research` — long-running background task with server-side storage
 
-These are non-mutating but flagged in `SKILL.md` as requiring caution. The `--execute` flag serves double duty for privacy-sensitive ops.
+When the user explicitly invokes one of these commands, the dispatcher auto-applies the internal privacy opt-in flag before policy enforcement. `--execute` remains only for mutating operations.
 
 ## Error Handling
 
@@ -250,8 +372,9 @@ All errors are printed to stderr via `safe_print()` (no ANSI injection).
 ## Dependencies
 
 **Runtime:**
-- Python 3.9+ standard library only
-- No third-party packages
+- Python 3.9+ standard library
+- `google-genai==1.33.0` (installed into skill venv at `~/.claude/skills/gemini/.venv` by `setup/install.py`)
+- Raw HTTP backend works without google-genai (fallback always available)
 
 **Build/Development:**
 - pytest, coverage (for testing)
@@ -259,8 +382,16 @@ All errors are printed to stderr via `safe_print()` (no ANSI injection).
 - jsdoc2md, madge (optional: docs generation)
 
 **Deployment:**
-- Install script copies operational files only (no tests, no docs, no .git)
+- Install script (`setup/install.py`) copies operational files, creates venv, installs pinned SDK, verifies checksums
 - Install destination: `~/.claude/skills/gemini/` (personal) or `.claude/skills/gemini/` (project)
+- No test files, docs, or git history shipped
+
+## Install-Time Integrity
+
+Phase 4 adds SHA-256 checksums (`core/infra/checksums.py`):
+- **Generation**: Released build writes `.checksums.json` with hashes of all operational files
+- **Verification**: `setup/install.py` and `health_check.py` verify hashes at install/update/health
+- **Refusal**: If user modified files post-install, health check reports drift and refuses silent update
 
 ## File Locking and Atomic Writes
 
@@ -276,10 +407,11 @@ This ensures that if Claude Code invokes `gemini` twice in parallel, state files
 ## Key Design Principles
 
 1. **Fail closed:** Ambiguity or missing data → error. Never proceed silently.
-2. **Stdlib only:** No external dependencies at runtime.
+2. **Pinned SDK + stdlib fallback:** google-genai is pinned exactly in `setup/requirements.txt` for reproducible installs; raw HTTP backend uses stdlib only and remains the always-available fallback.
 3. **Policy boundary:** Dispatcher enforces rules; adapters implement features.
 4. **Dry-run by default:** Mutations require `--execute` flag.
 5. **Atomic state:** All reads/writes use file locking and atomic swaps.
-6. **Layered auth:** Shell env > .env > error (shell always wins).
+6. **Layered auth:** Shell env (from settings.json) > .env > error.
 7. **Lean routers:** Model selection is separate from dispatch.
-8. **Modular adapters:** Each command is one file; easy to extend.
+8. **Modular adapters:** Each command is one file; backend-agnostic via facade.
+9. **Transparent fallback:** Adapters never know which backend ran; coordinator handles primary/fallback invisibly.

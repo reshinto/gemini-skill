@@ -10,16 +10,26 @@ indefinitely (unlike Files API 48hr expiry).
 Dependencies: core/infra/client.py, core/adapter/helpers.py,
     core/state/store_state.py
 """
+
 from __future__ import annotations
 
+import argparse
 import time
 from pathlib import Path
-from typing import Any
+from typing import cast
 
-from core.adapter.helpers import build_base_parser, check_dry_run, emit_json, emit_output, extract_text
+from core.adapter.helpers import (
+    add_execute_flag,
+    build_base_parser,
+    check_dry_run,
+    emit_json,
+    emit_output,
+    extract_text,
+)
 from core.infra.sanitize import safe_print
 from core.infra.client import api_call
 from core.infra.config import load_config
+from core.transport.base import GeminiResponse
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -28,9 +38,11 @@ def get_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="action", help="File Search action")
 
     create_p = sub.add_parser("create", help="Create a File Search store")
+    add_execute_flag(create_p)
     create_p.add_argument("name", help="Display name for the store.")
 
     upload_p = sub.add_parser("upload", help="Upload a document to a store")
+    add_execute_flag(upload_p)
     upload_p.add_argument("store", help="Store resource name.")
     upload_p.add_argument("file_uri", help="Gemini file URI to import.")
 
@@ -41,6 +53,7 @@ def get_parser() -> argparse.ArgumentParser:
     sub.add_parser("list", help="List File Search stores")
 
     delete_p = sub.add_parser("delete", help="Delete a store")
+    add_execute_flag(delete_p)
     delete_p.add_argument("name", help="Store resource name to delete.")
 
     return parser
@@ -54,7 +67,7 @@ def run(
     prompt: str | None = None,
     model: str | None = None,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute File Search operations."""
     if action == "create":
@@ -79,7 +92,7 @@ def _create_store(name: str | None, execute: bool) -> None:
     if check_dry_run(execute, f"create File Search store '{name}'"):
         return
 
-    body: dict[str, Any] = {"displayName": name}
+    body: dict[str, object] = {"displayName": name}
     response = api_call("fileSearchStores", body=body)
     emit_json(response)
 
@@ -96,12 +109,12 @@ def _upload_to_store(
     if check_dry_run(execute, f"upload {file_uri} to store {store}"):
         return
 
-    body: dict[str, Any] = {"fileUri": file_uri}
+    body: dict[str, object] = {"fileUri": file_uri}
     response = api_call(f"{store}:uploadToFileSearchStore", body=body)
 
     # Long-running operation — poll for completion
     op_name = response.get("name")
-    if op_name:
+    if isinstance(op_name, str) and op_name:
         safe_print(f"Upload started: {op_name}")
         _poll_operation(op_name)
     else:
@@ -119,6 +132,7 @@ def _query_store(
         return
 
     from core.routing.router import Router
+
     config = load_config()
     router = Router(
         root_dir=Path(__file__).parent.parent.parent,
@@ -126,12 +140,12 @@ def _query_store(
     )
     resolved_model = model or router.select_model("file_search")
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "tools": [{"fileSearch": {"store": store}}],
     }
 
-    response = api_call(f"models/{resolved_model}:generateContent", body=body)
+    response = cast(GeminiResponse, api_call(f"models/{resolved_model}:generateContent", body=body))
     text = extract_text(response)
     emit_output(text, output_dir=config.output_dir)
 
@@ -139,7 +153,8 @@ def _query_store(
 def _list_stores() -> None:
     """List all File Search stores."""
     response = api_call("fileSearchStores", method="GET")
-    stores = response.get("fileSearchStores", [])
+    stores_value = response.get("fileSearchStores")
+    stores = stores_value if isinstance(stores_value, list) else []
     emit_json({"count": len(stores), "stores": stores})
 
 

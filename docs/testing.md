@@ -1,6 +1,10 @@
 # Testing
 
-**Last Updated:** 2026-04-13
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
+**Last Updated:** 2026-04-14
 
 Running tests, writing new tests, and maintaining 100% coverage.
 
@@ -158,6 +162,49 @@ Exclude them from a normal unit-test run (they're already gated, this is just ex
 pytest -m "not live"
 ```
 
+### Dual-backend matrix (Phase 8)
+
+Every live test is backend-agnostic by design — the same assertions must pass whether the coordinator routes via the SDK backend or raw HTTP. Run the suite once per backend by flipping the two priority flags:
+
+```bash
+# SDK primary (default)
+GEMINI_LIVE_TESTS=1 GEMINI_API_KEY=... \
+  GEMINI_IS_SDK_PRIORITY=true GEMINI_IS_RAWHTTP_PRIORITY=false \
+  pytest tests/integration -m live
+
+# Raw HTTP primary
+GEMINI_LIVE_TESTS=1 GEMINI_API_KEY=... \
+  GEMINI_IS_SDK_PRIORITY=false GEMINI_IS_RAWHTTP_PRIORITY=true \
+  pytest tests/integration -m live
+```
+
+The matrix runs automatically on `workflow_dispatch` in CI via the
+`live-integration` job. It's intentionally gated to manual runs so
+PRs from forks can never exfiltrate the `GEMINI_API_KEY` secret.
+
+Both runs share the `tests/integration/conftest.py` helpers:
+- `runner_python` / `runner_script` / `repo_root` fixtures for consistent subprocess paths.
+- `backend_env` fixture builds an env dict the CI cell's priority flags propagate into.
+- `run_gemini(args, env=..., timeout=...)` centralized subprocess helper.
+- `current_primary_backend(env)` resolves the configured primary per the Config rules.
+
+Running both doubles the cost — for local iteration just pick one backend.
+To skip a specific expensive test (like image generation) inside a matrix
+run, use pytest's `-k 'not nano_banana'` filter.
+
+### Writing tests with type safety
+
+Always use `Mock(spec=ConcreteClass)` instead of bare `MagicMock()`:
+
+```python
+# Good: spec enforces the mock matches the real interface
+mock_config = Mock(spec=Config)
+mock_config.api_key = "test_key"
+
+# Avoid: bare MagicMock has no interface guarantees
+mock_config = MagicMock()
+```
+
 ### What each test does
 
 Each file is **self-contained** — no shared conftest, no cross-file state — and runs exactly **one** subprocess call to `scripts/gemini_run.py` with a minimal prompt.
@@ -174,15 +221,15 @@ Each file is **self-contained** — no shared conftest, no cross-file state — 
 | `test_token_count_live.py` | Count tokens (free) |
 | `test_function_calling_live.py` | Declares one no-arg tool |
 | `test_code_exec_live.py` | `compute 2+2` |
-| `test_search_live.py` | Grounded query with `--i-understand-privacy` |
-| `test_maps_live.py` | Grounded query with `--i-understand-privacy` |
-| `test_computer_use_live.py` | Preview model, `--i-understand-privacy` |
+| `test_search_live.py` | Grounded query with dispatcher-managed privacy opt-in |
+| `test_maps_live.py` | Grounded query with dispatcher-managed privacy opt-in |
+| `test_computer_use_live.py` | Preview model with dispatcher-managed privacy opt-in |
 
 **Dry-run only (8 mutating adapters):**
 
 `test_files_live.py`, `test_cache_live.py`, `test_batch_live.py`, `test_file_search_live.py`, `test_image_gen_live.py`, `test_video_gen_live.py`, `test_music_gen_live.py`, `test_deep_research_live.py`
 
-These adapters are mutating, so they are blocked by the dispatcher unless `--execute` is passed. The smoke tests **do not** pass `--execute` — they assert the `[DRY RUN]` output instead. This verifies the CLI → dispatch → registry → policy path without burning quota on image/video/music generation, persistent cache/store creation, or long-running agentic flows. To actually exercise these adapters against the live API, see the rationale in each file's docstring and run them manually with `--execute`.
+These smoke tests target mutating commands or mutating subcommands, so they are blocked by the dispatcher unless `--execute` is passed. The tests **do not** pass `--execute` — they assert the `[DRY RUN]` output instead. This verifies the CLI → dispatch → registry → policy path without burning quota on image/video/music generation, persistent cache/store creation, downloads to the local filesystem, or long-running agentic flows. To actually exercise these adapters against the live API, see the rationale in each file's docstring and run them manually with `--execute`.
 
 ### Estimated cost per full run
 
@@ -190,7 +237,7 @@ Running all 19 live tests once costs roughly a **few cents** in total — the re
 
 ### Privacy note
 
-The search, maps, computer-use, and deep-research tests send prompts through privacy-sensitive capabilities (web search results, maps data, computer interaction, long-term research storage). They pass `--i-understand-privacy` explicitly. Don't run them on a machine where that consent is not appropriate.
+The search, maps, computer-use, and deep-research tests send prompts through privacy-sensitive capabilities (web search results, maps data, computer interaction, long-term research storage). Dispatch auto-applies the internal privacy opt-in flag for those commands. Don't run them on a machine where that consent is not appropriate.
 
 ---
 

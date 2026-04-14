@@ -5,11 +5,12 @@ Mutating operations (create, cancel) require --execute.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
-from typing import Any
+import argparse
 
-from core.adapter.helpers import build_base_parser, check_dry_run, emit_json
+from core.adapter.helpers import add_execute_flag, build_base_parser, check_dry_run, emit_json
 from core.infra.sanitize import safe_print
 from core.infra.client import api_call
 
@@ -20,6 +21,7 @@ def get_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="action", help="Batch action")
 
     create_p = sub.add_parser("create", help="Create a batch job")
+    add_execute_flag(create_p)
     create_p.add_argument("--src", required=True, help="Source file URI (JSONL).")
     create_p.add_argument("--dest", required=True, help="Destination file URI.")
 
@@ -29,6 +31,7 @@ def get_parser() -> argparse.ArgumentParser:
     get_p.add_argument("name", help="Batch job resource name.")
 
     cancel_p = sub.add_parser("cancel", help="Cancel a running batch job")
+    add_execute_flag(cancel_p)
     cancel_p.add_argument("name", help="Batch job resource name to cancel.")
 
     return parser
@@ -41,7 +44,7 @@ def run(
     dest: str | None = None,
     model: str | None = None,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute batch management operations."""
     if action == "create":
@@ -70,7 +73,7 @@ def _create(
     if check_dry_run(execute, f"create batch job from {src}"):
         return
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "inputConfig": {"gcsSource": {"inputUri": src}},
         "outputConfig": {"gcsDestination": {"outputUriPrefix": dest}},
     }
@@ -84,7 +87,8 @@ def _create(
 def _list_batches() -> None:
     """List all batch jobs."""
     response = api_call("batchJobs", method="GET")
-    jobs = response.get("batchJobs", [])
+    jobs_value = response.get("batchJobs")
+    jobs = jobs_value if isinstance(jobs_value, list) else []
     emit_json({"count": len(jobs), "jobs": jobs})
 
 

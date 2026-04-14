@@ -5,15 +5,18 @@ matching the schema. Uses responseSchema in generationConfig.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 from core.adapter.helpers import build_base_parser, emit_output, extract_text
 from core.infra.client import api_call
 from core.infra.config import load_config
+from core.transport.base import GeminiResponse
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -21,7 +24,8 @@ def get_parser() -> argparse.ArgumentParser:
     parser = build_base_parser("Generate structured JSON output")
     parser.add_argument("prompt", help="The text prompt.")
     parser.add_argument(
-        "--schema", required=True,
+        "--schema",
+        required=True,
         help="JSON schema string or path to schema file.",
     )
     return parser
@@ -31,7 +35,7 @@ def run(
     prompt: str,
     schema: str,
     model: str | None = None,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute structured generation with JSON schema constraint."""
     from core.routing.router import Router
@@ -50,7 +54,7 @@ def run(
     else:
         schema_obj = json.loads(schema)
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
@@ -58,6 +62,6 @@ def run(
         },
     }
 
-    response = api_call(f"models/{resolved_model}:generateContent", body=body)
+    response = cast(GeminiResponse, api_call(f"models/{resolved_model}:generateContent", body=body))
     text = extract_text(response)
     emit_output(text, output_dir=config.output_dir)

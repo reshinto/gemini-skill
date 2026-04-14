@@ -5,7 +5,7 @@ Manage File Search stores (Gemini's hosted RAG). Create stores, import files by 
 ## Usage
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" file_search <subcommand> [args] [--execute]
+python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" file_search <subcommand> [args]
 ```
 
 ## Subcommands
@@ -54,8 +54,18 @@ gemini_run.py file_search delete "fileSearchStores/<store-id>" --execute
 
 ## Default behavior
 
-Without `--execute`, the dispatcher prints `[DRY RUN] 'file_search' is a mutating operation. Pass --execute to actually run it.` and exits 0 — no API call is made. This applies to all `file_search` subcommands, not just `create`/`upload`/`delete`, because the capability itself is flagged `mutating` in [registry/capabilities.json](../registry/capabilities.json).
+Without `--execute`, mutating subcommands (`create`, `upload`, `delete`) print a dry-run message and exit 0 — no API call is made. Read-only subcommands (`query`, `list`) do not accept `--execute`.
 
 ## Use case
 
 File Search is Gemini's hosted RAG. Upload documents once, then run grounded queries against them without sending file content on every request.
+
+---
+
+## Notes
+
+Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
+
+---
+
+[← Back](index.md) · [Previous: embed](embed.md) · [Next: files](files.md)

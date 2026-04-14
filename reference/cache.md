@@ -5,12 +5,12 @@ Manage Gemini context caching — create, list, retrieve, and delete cached cont
 ## Usage
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" cache <subcommand> [args] [--execute]
+python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" cache <subcommand> [args]
 ```
 
 ## Subcommands
 
-- `create [--ttl SECONDS]` — Create a new cache. **Mutating, requires `--execute`.**
+- `create <content> [--ttl SECONDS]` — Create a new cache. **Mutating, requires `--execute`.**
 - `list` — List all cached blocks.
 - `get <cache_id>` — Retrieve cache metadata.
 - `delete <cache_id>` — Delete a cache. **Mutating, requires `--execute`.**
@@ -18,13 +18,13 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" cache <subcommand> [args] [-
 ## Flags
 
 - `--ttl SECONDS` — Time-to-live for the cache (e.g., 3600 for 1 hour). Default: 3600.
-- `--execute` — Confirm and execute the operation (mutating commands only).
+- `--execute` — Confirm and execute `create` or `delete`.
 
 ## Examples
 
 ```bash
 # Create a cache with content
-gemini_run.py cache create --ttl 7200 --execute
+gemini_run.py cache create "System prompt text" --ttl 7200 --execute
 
 # List caches
 gemini_run.py cache list
@@ -46,8 +46,16 @@ Use caching to reuse large context blocks (system prompts, documents, code) acro
 
 ## Default behavior
 
-Without `--execute`, mutating commands print a dry-run message. Use `--execute` to confirm.
+Without `--execute`, mutating subcommands (`create`, `delete`) print a dry-run message. Read-only subcommands (`list`, `get`) do not accept `--execute`.
 
 ## Output
 
 List and get return JSON metadata. Create returns the cache ID and expiry time.
+
+---
+
+Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: batch](batch.md) · [Next: code_exec](code_exec.md)

@@ -1,8 +1,7 @@
 """Google Maps grounding adapter.
 
 Sends a prompt with Google Maps grounding enabled. Privacy-sensitive
-and off by default — requires explicit opt-in. Outputs are untrusted
-external content.
+and dispatcher-managed. Outputs are untrusted external content.
 
 Mandatory output schema:
 1. Grounded answer text
@@ -12,14 +11,17 @@ Mandatory output schema:
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
-from typing import Any
+from typing import cast
 
 from core.adapter.helpers import build_base_parser, emit_output, extract_parts
 from core.infra.client import api_call
 from core.infra.config import load_config
+from core.transport.base import GeminiResponse
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -32,7 +34,7 @@ def get_parser() -> argparse.ArgumentParser:
 def run(
     prompt: str,
     model: str | None = None,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute maps-grounded generation."""
     from core.routing.router import Router
@@ -44,21 +46,22 @@ def run(
     )
     resolved_model = model or router.select_model("maps")
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "tools": [{"googleMaps": {}}],
     }
 
-    response = api_call(f"models/{resolved_model}:generateContent", body=body)
+    response = cast(GeminiResponse, api_call(f"models/{resolved_model}:generateContent", body=body))
 
     parts = extract_parts(response)
-    text_parts = [p["text"] for p in parts if "text" in p]
+    text_parts = [part["text"] for part in parts if "text" in part]
     answer = "\n".join(text_parts)
 
     # Build mandatory output schema
     output_lines = [answer]
 
-    grounding = response.get("candidates", [{}])[0].get("groundingMetadata")
+    candidates = response.get("candidates", [])
+    grounding = candidates[0].get("groundingMetadata") if candidates else None
     if grounding:
         chunks = grounding.get("groundingChunks", [])
         if chunks:

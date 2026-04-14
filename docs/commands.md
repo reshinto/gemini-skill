@@ -1,6 +1,10 @@
 # Commands
 
-**Last Updated:** 2026-04-13
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
+**Last Updated:** 2026-04-14
 
 A human-facing index of all gemini-skill commands, organized by capability family.
 
@@ -55,8 +59,8 @@ Ground responses in real-time web and map data.
 
 | Command | Purpose | Reference |
 |---------|---------|-----------|
-| `search` | Ground text in Google Search results (opt-in) | [search.md](../reference/search.md) |
-| `maps` | Ground text in Google Maps data (opt-in) | [maps.md](../reference/maps.md) |
+| `search` | Ground text in Google Search results (privacy-sensitive) | [search.md](../reference/search.md) |
+| `maps` | Ground text in Google Maps data (privacy-sensitive) | [maps.md](../reference/maps.md) |
 
 ## File Management
 
@@ -89,7 +93,8 @@ Generate images, videos, and music (preview, requires `--execute`).
 
 | Command | Purpose | Reference |
 |---------|---------|-----------|
-| `image_gen` | Generate images using Nano Banana | [image_gen.md](../reference/image_gen.md) |
+| `image_gen` | Generate images using Nano Banana (with aspect ratio & size control) | [image_gen.md](../reference/image_gen.md) |
+| `imagen` | Generate photoreal images using Imagen 3 (SDK-only) | [imagen.md](../reference/imagen.md) |
 | `video_gen` | Generate videos using Veo | [video_gen.md](../reference/video_gen.md) |
 | `music_gen` | Generate music using Lyria 3 (30s max) | [music_gen.md](../reference/music_gen.md) |
 
@@ -99,7 +104,8 @@ Specialized and preview-stage capabilities.
 
 | Command | Purpose | Reference |
 |---------|---------|-----------|
-| `computer_use` | Enable model to see and control your screen (preview, opt-in) | [computer_use.md](../reference/computer_use.md) |
+| `computer_use` | Enable model to see and control your screen (preview, privacy-sensitive) | [computer_use.md](../reference/computer_use.md) |
+| `live` | Realtime bidirectional session with Live API (async, SDK-only) | [live.md](../reference/live.md) |
 | `deep_research` | Conduct multi-step research via Interactions API | [deep_research.md](../reference/deep_research.md) |
 
 ## Utility
@@ -122,18 +128,18 @@ System commands (not adapters).
 - `embed`, `token_count`, `function_calling`, `code_exec`
 
 **Mutating (require `--execute`):**
-- `files upload`, `files delete`
+- `files upload`, `files download`, `files delete`
 - `cache create`, `cache delete`
 - `batch create`, `batch cancel`
 - `file_search` (create, upload, delete)
-- `image_gen`, `video_gen`, `music_gen`
+- `image_gen`, `imagen`, `video_gen`, `music_gen`
 - `deep_research`
 
-**Privacy-sensitive (opt-in, use `--execute`):**
+**Privacy-sensitive (dispatcher auto-applies internal opt-in):**
 - `search` — sends queries to Google Search
 - `maps` — sends location queries to Google Maps
 - `computer_use` — captures your screen
-- `deep_research` — long-running background task
+- `deep_research` — long-running background task with server-side storage; still requires `--execute` because it is mutating
 
 ### By latency
 
@@ -182,9 +188,11 @@ See [Google Gemini pricing](https://aistudio.google.com/pricing) for current rat
 
 **Specialty models:**
 - `image_gen` → `gemini-3.1-flash-image-preview` (Nano Banana 2)
+- `imagen` → `imagen-3.0-generate-002` (SDK-only)
 - `video_gen` → `veo-3.1-generate-preview`
 - `music_gen` → `lyria-3-clip-preview`
 - `computer_use` → `gemini-3-flash-preview` (default); `gemini-2.5-computer-use-preview-10-2025` also available
+- `live` → `gemini-live-2.5-flash-preview` (SDK-only, async)
 - `deep_research` → no fixed default; set `--model` explicitly
 - `search`, `maps` → use the text default (`gemini-2.5-flash`) with grounding tools enabled
 
@@ -230,25 +238,36 @@ See [Google Gemini pricing](https://aistudio.google.com/pricing) for current rat
 /gemini code_exec "Generate 100 random numbers and compute statistics"
 ```
 
-### Upload a file
+### Upload and manage files
 
 ```bash
 /gemini files upload dataset.csv --execute
 /gemini files list
+/gemini files download "file-id-123" ./local-copy.csv --execute
 ```
 
 ### Create a hosted RAG store
 
 ```bash
-/gemini file_search create --execute
-/gemini file_search upload "store-id" document.pdf --execute
-/gemini file_search query "store-id" "What are the key findings?"
+/gemini file_search create research-library --execute
+/gemini files upload document.pdf --execute
+/gemini file_search upload "fileSearchStores/store-id" "files/abc123" --execute
+/gemini file_search query "What are the key findings?" --store "fileSearchStores/store-id"
 ```
 
 ### Generate an image
 
 ```bash
 /gemini image_gen "A serene mountain landscape" --execute
+/gemini image_gen "Mountain sunset" --aspect-ratio 16:9 --execute
+/gemini image_gen "Abstract art" --image-size 4K --execute
+```
+
+### Generate a photoreal image (Imagen 3)
+
+```bash
+/gemini imagen "A serene mountain landscape" --execute
+/gemini imagen "Portrait of a fox" --num-images 4 --aspect-ratio 16:9 --execute
 ```
 
 ### Count tokens before sending

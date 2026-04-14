@@ -5,7 +5,7 @@ Submit and manage batch jobs — create, list, retrieve, and cancel. Process mul
 ## Usage
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" batch <subcommand> [args] [--execute]
+python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" batch <subcommand> [args]
 ```
 
 ## Subcommands
@@ -19,7 +19,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" batch <subcommand> [args] [-
 
 - `--src FILE` — Input JSONL file (batch requests).
 - `--dest FILE` — Output file path for results.
-- `--execute` — Confirm and execute the operation (mutating commands only).
+- `--execute` — Confirm and execute `create` or `cancel`.
 
 ## Examples
 
@@ -56,8 +56,16 @@ Results are written as JSONL with same custom_ids:
 
 ## Default behavior
 
-Without `--execute`, batch create and cancel print dry-run messages. Use `--execute` to confirm.
+Without `--execute`, mutating subcommands (`create`, `cancel`) print dry-run messages. Read-only subcommands (`list`, `get`) do not accept `--execute`.
 
 ## Note
 
 Batch jobs are long-running and asynchronous. Check status regularly with `get`.
+
+---
+
+Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: (none)](batch.md) · [Next: cache](cache.md)

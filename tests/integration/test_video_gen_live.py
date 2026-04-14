@@ -5,6 +5,7 @@ for 5-10 minutes. The smoke test verifies the DRY RUN path.
 
 Gate: requires GEMINI_LIVE_TESTS=1 and GEMINI_API_KEY.
 """
+
 from __future__ import annotations
 
 import os
@@ -33,7 +34,10 @@ pytestmark = [
 def test_video_gen_live() -> None:
     result = subprocess.run(
         [sys.executable, str(_RUNNER), "video_gen", "a waving flag"],
-        capture_output=True, text=True, timeout=30, cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=str(_REPO_ROOT),
     )
     assert result.returncode == 0, f"stderr={result.stderr}"
     assert "[DRY RUN]" in result.stdout

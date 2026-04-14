@@ -1,6 +1,6 @@
 # Security
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-14
 
 Threat model, authentication, data protection, and risk management.
 
@@ -131,9 +131,9 @@ Threat model, authentication, data protection, and risk management.
 **Risk:** Sending queries to third-party services (Google Search, Google Maps) reveals user intent.
 
 **Mitigations:**
-- **Explicit opt-in (no silent sending):**
+- **Explicit command invocation (no automatic search on unrelated commands):**
   ```bash
-  # SAFE: Explicitly use /gemini search
+  # SAFE: User explicitly invokes a privacy-sensitive command
   /gemini search "covid-19 latest updates"
   
   # NOT: Automatic search for every query
@@ -147,18 +147,21 @@ Threat model, authentication, data protection, and risk management.
 - Users read docs before using privacy-sensitive commands
 - Google respects privacy commitments (verify independently)
 
-#### 7. Dependency Vulnerability (None at Runtime)
+#### 7. Dependency Vulnerability
 
-**Risk:** Third-party package has a security vulnerability.
+**Risk:** Third-party package (google-genai) has a security vulnerability.
 
 **Mitigation:**
-- **Stdlib only:** No runtime dependencies
-  - No `requests`, no `pyyaml`, no `lxml`, etc.
-  - Eliminates entire class of supply-chain attacks
-  - Trades for reinventing wheels (urllib instead of requests, JSON instead of YAML)
+- **Pinned dependency:** `google-genai==1.33.0` is pinned exactly in `setup/requirements.txt`
+  - Prevents silent upgrades; manual bump required for each version change
+  - Installed into an isolated skill venv (`~/.claude/skills/gemini/.venv`), never system Python
+  - Fallback (raw HTTP) uses stdlib only and requires no SDK at all
+- **Manual update process:** SDK bumps require full test suite + live integration matrix before merge
+- **Supply chain integrity:** Installer generates + verifies SHA-256 checksums (`core/infra/checksums.py`)
 
 **Assumptions:**
 - Python standard library is trustworthy
+- google-genai PyPI package is trustworthy (verify via checksums and CVE monitoring)
 - Your Python installation is not compromised
 
 #### 8. Model Outputs (Hallucinations, Bias, Toxicity)
@@ -182,31 +185,33 @@ Threat model, authentication, data protection, and risk management.
 
 The skill uses an **ordered lookup chain**:
 
-1. **Shell environment variable:** `GOOGLE_API_KEY` or `GEMINI_API_KEY`
-2. **`.env` file:** `~/.claude/skills/gemini/.env`
+1. **`GEMINI_API_KEY` shell environment variable** (primary; set by Claude Code from `~/.claude/settings.json`)
+2. **`.env` file** at repo root (local-development only, via `env_dir=` fallback)
 3. **Error:** If neither found
 
+The skill **does NOT honor `GOOGLE_API_KEY`**. `GEMINI_API_KEY` is the one canonical name.
+
 ```python
-def resolve_key():
-    # First: shell env var (always wins)
-    key = os.environ.get("GOOGLE_API_KEY")
-    if key:
-        return key
-    
+def resolve_key(env_dir=None):
+    # Optional: load .env file (local-dev only). Does not override existing env.
+    if env_dir is not None:
+        _load_env_file(Path(env_dir))
+
     key = os.environ.get("GEMINI_API_KEY")
-    if key:
-        return key
-    
-    # Second: .env file
-    env_path = Path.home() / ".claude" / "skills" / "gemini" / ".env"
-    if env_path.exists():
-        for line in env_path.read_text().splitlines():
-            if line.startswith("GEMINI_API_KEY="):
-                return line.split("=", 1)[1].strip()
-    
-    # Error: no key found
-    raise AuthError("API key not found. Set GEMINI_API_KEY env var or .env file.")
+    if not key:
+        raise AuthError("No GEMINI_API_KEY found.")
+    return key
 ```
+
+### Settings.json vs Project Settings
+
+**Canonical location for installed skill:** `~/.claude/settings.json` (user-global, SAFE for secrets)
+- Claude Code injects the `env` block into the process at session start
+- Installer writes here via Phase 5 merge (see [docs/install.md](install.md))
+
+**Project-shared settings:** `<repo>/.claude/settings.json` (typically committed, NEVER put secrets here)
+
+**Project-local settings:** `<repo>/.claude/settings.local.json` (gitignored, OK for secrets)
 
 ### HTTP Authentication
 
@@ -362,23 +367,250 @@ See https://ai.google.dev/terms for API terms of service.
 
 ---
 
+## How the Skill Stores Secrets and Why It's Safe
+
+This section addresses the most common user question: "Is it safe to put my API key in settings.json?" The short answer: **yes, for the same reasons `~/.ssh/config` and `~/.aws/credentials` are safe**. Here's the detailed explanation.
+
+### What Is Stored
+
+**Only the API key.** Nothing else:
+- No OAuth tokens (the skill doesn't support OAuth)
+- No session cookies
+- No user data beyond what you explicitly pass to Gemini
+- No cached model outputs
+- No conversation history on disk (except in `~/.claude/gemini-skill/sessions/` for multi-turn sessions you explicitly create)
+
+### Where It's Stored
+
+**Three locations, in order of precedence:**
+
+1. **Primary: `~/.claude/settings.json`** — User-global, managed by Claude Code
+   - File mode: `0o600` (readable/writable by owner only)
+   - Set once at install time, survives VSCode restarts
+   - Lives in user home (`~`), not in any project or git repo
+   - Secure by default: Claude Code enforces file mode via atomic write
+
+2. **Fallback (dev only): `<repo>/.env`** — Repository-local, for development
+   - Never committed (listed in `.gitignore`)
+   - Only used if `~/.claude/settings.json` doesn't exist or has no API key
+   - Useful for local testing, CI/CD, Docker containers
+   - **Never** for shared/multi-user scenarios (it's in the repo clone)
+
+3. **Never stored elsewhere:**
+   - Not in `<project-root>/.claude/settings.json` (that would be committed)
+   - Not in source code
+   - Not in command-line arguments (`python3 gemini_run.py text --api-key ...` is not supported)
+   - Not in URLs (API key goes in HTTP headers, never query strings)
+
+### How Claude Code Injects the Key
+
+**At session start:**
+
+1. Claude Code reads `~/.claude/settings.json` from disk
+2. It parses the file and extracts the `env` block (which includes `GEMINI_API_KEY`)
+3. It exports those env vars into the subprocess environment
+4. When the skill runs (`python3 scripts/gemini_run.py ...`), it calls `os.environ.get("GEMINI_API_KEY")`
+5. The key is available in the process memory, used for API calls, and never written back to disk
+
+**File format (example):**
+```json
+{
+  "env": {
+    "GEMINI_API_KEY": "AIza..."
+  }
+}
+```
+
+### Wire Protocol: How the Key Reaches Gemini
+
+**Only via HTTP header, never in URLs:**
+
+```
+CORRECT (what the skill does):
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent HTTP/1.1
+Host: generativelanguage.googleapis.com
+x-goog-api-key: AIza...
+Content-Type: application/json
+
+{...request body...}
+
+WRONG (never happens):
+GET https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?api_key=AIza... HTTP/1.1
+```
+
+**Why this matters:** URL query strings are logged by proxies, load balancers, and browser history. Headers are less frequently logged. The skill exclusively uses header authentication (via google-genai SDK or raw HTTP headers), validated in `tests/transport/test_sdk_auth.py` and `tests/core/infra/test_client.py`.
+
+### Why This Is Safe
+
+#### 1. File Security Profile: Same as SSH Keys
+
+`~/.claude/settings.json` has identical security characteristics as:
+- `~/.ssh/config` — SSH configuration, may contain private hostnames
+- `~/.ssh/id_rsa` — SSH private key
+- `~/.aws/credentials` — AWS access keys
+
+All three:
+- Live in user home, not synced, not version-controlled
+- Are file-mode restricted (`0o600` or `0o400`)
+- Are plaintext (no encryption)
+- Rely on OS file permissions for access control
+
+If `~/.aws/credentials` is safe enough for AWS credentials, settings.json is safe enough for a Gemini API key.
+
+#### 2. Atomic Writes Prevent Partial-Secret Leakage
+
+The installer uses `core/infra/atomic_write.py`:
+```python
+with tempfile.NamedTemporaryFile(...) as temp:
+    temp.write(new_settings)
+    os.replace(temp_path, target_path)  # ← Single syscall, atomic
+```
+
+**Why this matters:** If the process crashes mid-write (power failure, OOM, timeout), the old file remains intact. The new file never exists in a partial state. This prevents:
+- Corrupted settings.json that omits the API key
+- Partial secrets on disk
+- Unclear state on recovery
+
+#### 3. Per-Key Interactive Conflict Resolution
+
+If you already have an API key in settings.json and re-run the installer, it prompts:
+```
+Key 'GEMINI_API_KEY' already exists as <REDACTED — see settings.json>.
+Replace with new value? [y/n/skip]:
+```
+
+**Why this matters:** The installer never silently overwrites your existing key. You always choose to replace it (or skip). The prompt shows the *value's redaction*, not the actual secret.
+
+#### 4. Secret Values Never Printed
+
+During settings merge, the installer only prints:
+```
+✓ API key saved (32 bytes)
+```
+
+Not:
+```
+✓ API key saved: AIza_abc123_def456...
+```
+
+The byte length is public; the actual value is not. This applies to:
+- Merge prompts (redacted as `<REDACTED>`)
+- Installation output (only byte count)
+- Log files (secrets stripped via `sanitize.py`)
+
+#### 5. Exception Tracebacks Are Scrubbed
+
+`core/infra/sanitize.py` regex scrubs the `AIza` prefix (which identifies Google API keys) from exception messages:
+
+```python
+REDACTION_PATTERN = re.compile(r'\bAIza[A-Za-z0-9_-]+')
+# Catches: AIza_abc123def456 → <REDACTED>
+```
+
+This happens *before* printing or logging. Combined with the global exception hook (`atexit` handler), even a crash in third-party code can't leak the key.
+
+#### 6. API Key Never Lands on Disk Outside Three Locations
+
+The skill has **zero temp files, zero caches, zero side channels** that include secrets:
+- Not in `~/.bash_history` (env vars are not logged by default)
+- Not in `/tmp` or system temp dirs
+- Not in Claude Code's session history
+- Not in debugger breakpoint files
+- Not in response caches or databases
+
+### Threat Model
+
+#### In Scope (Defended Against)
+
+- **Accidental git commit:** The installer uses interactive conflict resolution; you won't silently overwrite a key. Additionally, `.env` is in `.gitignore`.
+- **Over-the-shoulder terminal read:** The installer redacts values in prompts. Session env vars are in process memory, not displayed on screen.
+- **Log scraping by third-party tools:** The skill doesn't log secrets. System logs don't include env vars by default.
+- **Traceback leakage:** Exception messages are scrubbed by `sanitize.py`. Global exception hook catches unhandled exceptions at process exit.
+- **URL query-string leakage:** The skill never puts the API key in URLs. Header-only authentication, enforced by tests.
+
+#### Out of Scope (Not Our Problem)
+
+- **Local malware already running as your user:** If an attacker has code execution as your user, they can read any file your user can read (including `~/.claude/settings.json`). No storage mechanism (plaintext, encrypted, Keychain, GPG) prevents this — the attacker just waits for you to use the key and intercepts it in process memory.
+- **Compromised SDK supply chain:** The skill pins `google-genai==1.33.0` (exact version, not range). SHA-256 checksum verification ensures the installed version matches what was tested. If Google's PyPI is compromised, that's outside the skill's threat model (mitigated at the OS/platform level).
+- **Weaknesses in Claude Code itself:** If Claude Code reads your home directory and leaks settings.json, that's Claude Code's security issue, not the skill's.
+
+### Alternatives Considered and Rejected
+
+#### macOS Keychain / Windows Credential Manager
+
+**Why not?**
+- Platform-specific (Keychain on macOS, Credential Manager on Windows, no standard on Linux)
+- Adds `keyring` dependency (larger attack surface, harder to audit)
+- Requires user interaction (system auth dialogs) on every invocation
+- Doesn't survive headless CI/CD (GitHub Actions, etc.)
+- Overkill for a single API key
+
+**Decision:** File-based storage with atomic writes is simpler, more portable, and equally secure.
+
+#### GPG-Encrypted Config
+
+**Why not?**
+- Requires the user to maintain a GPG key (extra learning curve)
+- Requires passphrase decryption on every invocation (UX burden)
+- Slow (GPG startup time adds ~500ms per command)
+- Doesn't reduce attack surface (attacker still sees decrypted key in process memory)
+
+**Decision:** Plaintext file with file-mode restriction is simpler and equally secure against non-local attacks.
+
+#### Environment Variable Only
+
+**Why not?**
+- Forces users to set `export GEMINI_API_KEY=...` in their shell startup file
+- Doesn't survive fresh VSCode launches (VSCode spawns a new shell session that may not load startup files)
+- Requires documentation on `.bashrc` vs `.bash_profile` vs `.zshrc` (confusing)
+- Scattered across multiple shell config files (hard to manage)
+
+**Decision:** `~/.claude/settings.json` is centralized, persistent, and integrated with Claude Code's existing config system.
+
+### Rotating Your API Key
+
+If you suspect your key is compromised, rotate it:
+
+1. Go to [Google AI Studio](https://aistudio.google.com) and generate a new API key
+2. Edit `~/.claude/settings.json` and replace the old key with the new one:
+   ```json
+   {
+     "env": {
+       "GEMINI_API_KEY": "AIza_new_key_here"
+     }
+   }
+   ```
+3. Fully restart VSCode: **Cmd+Q** (macOS) or **Alt+F4** (Windows) then reopen
+4. The new key is now active; the old key is no longer used
+
+**Why a full restart?** Claude Code caches environment variables at session start. A restart ensures the new key is loaded into the session context.
+
+### Data Flow Diagram
+
+See `docs/diagrams/secrets-flow.svg` for a visual representation of how the API key flows from `settings.json` to the Gemini API, with threat boundaries annotated.
+
+![API key data flow](diagrams/secrets-flow.svg)
+
+---
+
 ## Summary
 
 | Threat | Mitigation | Assumption |
 |--------|-----------|-----------|
-| API key leakage | Header auth, env precedence, no logging | Shell env secure |
+| API key leakage | Header auth, settings.json precedence, no logging | Shell env secure |
 | Prompt injection | Opaque string args, no shell interp | Claude Code trustworthy |
 | Token overflow | 50KB guard, media to file | Temp dir secure |
 | Concurrent access | File locking + atomic writes | fcntl/msvcrt work on your FS |
 | Unencrypted storage | No crypto (stdlib only), file perms | OS enforces permissions |
-| Privacy leak (search/maps) | Explicit opt-in, documentation | Users read docs |
-| Dependency vuln | Stdlib only, no deps | Python stdlib trustworthy |
+| Privacy leak (search/maps) | Command-level opt-in, documentation | Users read docs |
+| Dependency vuln | Pinned google-genai + checksums + isolated venv | Python + PyPI trustworthy |
 | Model outputs | No filtering, user review | Users understand LLM limits |
+| Secret leakage | Scrubbing, atomic writes, header auth | OS file perms enforced |
 
 ---
 
 ## Next steps
 
-- **Installation:** [Install guide](install.md) (includes `.env` setup)
+- **Installation:** [Install guide](install.md) (includes settings.json setup)
 - **Privacy:** [Commands guide](commands.md) (search/maps/computer_use marked)
 - **Architecture:** [System design](architecture.md) (auth, state management)

@@ -1,0 +1,17 @@
+# Runtime dependencies for gemini-skill. Pinned exactly — do not loosen.
+#
+# This file is read by the installer (core/cli/installer/venv.py) when it
+# creates the skill-local virtual environment at ~/.claude/skills/gemini/.venv.
+# It is also installed into the contributor's repo-root .venv during pre-impl
+# step 6 so the dev environment matches the runtime environment exactly.
+#
+# To upgrade google-genai:
+#   1. Bump the version pin below.
+#   2. Run setup/install.py to refresh the runtime venv.
+#   3. Re-record normalize fixtures via scripts/record_normalize_fixtures.py.
+#   4. Run the live test suite (GEMINI_LIVE_TESTS=1 pytest tests/integration/)
+#      under both backend priority configurations.
+#   5. Update docs/adr/0001-google-genai-version-pinning.md with the new pin.
+#
+# Reference: https://github.com/googleapis/python-genai
+google-genai==1.33.0

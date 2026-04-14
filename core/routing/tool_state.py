@@ -10,21 +10,25 @@ to maintain state across multi-turn API calls.
 
 Dependency: none (leaf module).
 """
+
 from __future__ import annotations
 
 import copy
-from typing import Any
+
+from core.transport.base import Content, Part
 
 # Fields that indicate a part carries tool state
-_TOOL_STATE_KEYS = frozenset({
-    "functionCall",
-    "functionResponse",
-    "executableCode",
-    "codeExecutionResult",
-})
+_TOOL_STATE_KEYS = frozenset(
+    {
+        "functionCall",
+        "functionResponse",
+        "executableCode",
+        "codeExecutionResult",
+    }
+)
 
 
-def has_tool_state(part: dict[str, Any]) -> bool:
+def has_tool_state(part: Part) -> bool:
     """Check if a content part carries tool state.
 
     A part has tool state if it contains any of the known tool-related
@@ -39,7 +43,7 @@ def has_tool_state(part: dict[str, Any]) -> bool:
     return bool(_TOOL_STATE_KEYS & part.keys())
 
 
-def extract_tool_state(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def extract_tool_state(parts: list[Part]) -> list[Part]:
     """Extract tool-state parts from a list of content parts.
 
     Preserves the entire part exactly as returned by the API,
@@ -56,9 +60,9 @@ def extract_tool_state(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def inject_tool_state(
-    contents: list[dict[str, Any]],
-    preserved_parts: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
+    contents: list[Content],
+    preserved_parts: list[Part],
+) -> list[Content]:
     """Merge preserved tool state parts into the request contents.
 
     Appends the preserved parts to the last model turn. If no model
@@ -77,7 +81,7 @@ def inject_tool_state(
     result = copy.deepcopy(contents)
 
     # Find or create the last model turn
-    model_turn = None
+    model_turn: Content | None = None
     for entry in reversed(result):
         if entry.get("role") == "model":
             model_turn = entry

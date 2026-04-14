@@ -3,6 +3,7 @@
 Verifies loading models and capabilities from JSON, lookup functions,
 listing, filtering, pricing access, and error handling.
 """
+
 from __future__ import annotations
 
 import json
@@ -62,6 +63,7 @@ class TestLoadModels:
 
     def test_loads_models_from_json(self, tmp_path):
         from core.routing.registry import Registry
+
         _write_models(tmp_path, {"test-model": _sample_model()})
         reg = Registry(root_dir=tmp_path)
         models = reg.list_models()
@@ -69,11 +71,13 @@ class TestLoadModels:
 
     def test_returns_empty_when_file_missing(self, tmp_path):
         from core.routing.registry import Registry
+
         reg = Registry(root_dir=tmp_path)
         assert reg.list_models() == []
 
     def test_returns_empty_on_invalid_json(self, tmp_path):
         from core.routing.registry import Registry
+
         registry_dir = tmp_path / "registry"
         registry_dir.mkdir()
         (registry_dir / "models.json").write_text("bad json {{{")
@@ -82,6 +86,7 @@ class TestLoadModels:
 
     def test_multiple_models(self, tmp_path):
         from core.routing.registry import Registry
+
         models = {
             "model-a": _sample_model(),
             "model-b": _sample_model(),
@@ -96,6 +101,7 @@ class TestGetModel:
 
     def test_get_existing_model(self, tmp_path):
         from core.routing.registry import Registry
+
         _write_models(tmp_path, {"test-model": _sample_model()})
         reg = Registry(root_dir=tmp_path)
         model = reg.get_model("test-model")
@@ -105,6 +111,7 @@ class TestGetModel:
     def test_get_missing_model_raises(self, tmp_path):
         from core.routing.registry import Registry
         from core.infra.errors import ModelNotFoundError
+
         _write_models(tmp_path, {"test-model": _sample_model()})
         reg = Registry(root_dir=tmp_path)
         with pytest.raises(ModelNotFoundError, match="nonexistent"):
@@ -112,6 +119,7 @@ class TestGetModel:
 
     def test_get_model_includes_id(self, tmp_path):
         from core.routing.registry import Registry
+
         _write_models(tmp_path, {"test-model": _sample_model()})
         reg = Registry(root_dir=tmp_path)
         model = reg.get_model("test-model")
@@ -123,6 +131,7 @@ class TestGetModelPricing:
 
     def test_returns_pricing(self, tmp_path):
         from core.routing.registry import Registry
+
         _write_models(tmp_path, {"test-model": _sample_model()})
         reg = Registry(root_dir=tmp_path)
         pricing = reg.get_model_pricing("test-model")
@@ -133,6 +142,7 @@ class TestGetModelPricing:
     def test_raises_for_missing_model(self, tmp_path):
         from core.routing.registry import Registry
         from core.infra.errors import ModelNotFoundError
+
         _write_models(tmp_path, {})
         reg = Registry(root_dir=tmp_path)
         with pytest.raises(ModelNotFoundError):
@@ -144,6 +154,7 @@ class TestLoadCapabilities:
 
     def test_loads_capabilities_from_json(self, tmp_path):
         from core.routing.registry import Registry
+
         _write_capabilities(tmp_path, {"text": _sample_capability()})
         reg = Registry(root_dir=tmp_path)
         caps = reg.list_capabilities()
@@ -151,11 +162,13 @@ class TestLoadCapabilities:
 
     def test_returns_empty_when_file_missing(self, tmp_path):
         from core.routing.registry import Registry
+
         reg = Registry(root_dir=tmp_path)
         assert reg.list_capabilities() == []
 
     def test_returns_empty_on_invalid_json(self, tmp_path):
         from core.routing.registry import Registry
+
         registry_dir = tmp_path / "registry"
         registry_dir.mkdir()
         (registry_dir / "capabilities.json").write_text("bad {")
@@ -168,6 +181,7 @@ class TestGetCapability:
 
     def test_get_existing_capability(self, tmp_path):
         from core.routing.registry import Registry
+
         _write_capabilities(tmp_path, {"text": _sample_capability()})
         reg = Registry(root_dir=tmp_path)
         cap = reg.get_capability("text")
@@ -177,6 +191,7 @@ class TestGetCapability:
     def test_get_missing_capability_raises(self, tmp_path):
         from core.routing.registry import Registry
         from core.infra.errors import CapabilityUnavailableError
+
         _write_capabilities(tmp_path, {"text": _sample_capability()})
         reg = Registry(root_dir=tmp_path)
         with pytest.raises(CapabilityUnavailableError, match="nonexistent"):
@@ -188,6 +203,7 @@ class TestFilterModels:
 
     def test_filter_by_capability(self, tmp_path):
         from core.routing.registry import Registry
+
         m1 = _sample_model()
         m1["capabilities"] = ["text", "streaming"]
         m2 = _sample_model()
@@ -200,6 +216,7 @@ class TestFilterModels:
 
     def test_filter_by_status(self, tmp_path):
         from core.routing.registry import Registry
+
         m1 = _sample_model()
         m1["status"] = "stable"
         m2 = _sample_model()
@@ -212,12 +229,14 @@ class TestFilterModels:
 
     def test_filter_capability_no_matches(self, tmp_path):
         from core.routing.registry import Registry
+
         _write_models(tmp_path, {"m1": _sample_model()})
         reg = Registry(root_dir=tmp_path)
         assert reg.models_for_capability("nonexistent") == []
 
     def test_filter_status_no_matches(self, tmp_path):
         from core.routing.registry import Registry
+
         _write_models(tmp_path, {"m1": _sample_model()})
         reg = Registry(root_dir=tmp_path)
         assert reg.models_by_status("deprecated") == []
@@ -228,6 +247,7 @@ class TestCapabilityProperties:
 
     def test_is_mutating(self, tmp_path):
         from core.routing.registry import Registry
+
         cap = _sample_capability()
         cap["mutating"] = True
         _write_capabilities(tmp_path, {"files": cap})
@@ -236,14 +256,26 @@ class TestCapabilityProperties:
 
     def test_is_privacy_sensitive(self, tmp_path):
         from core.routing.registry import Registry
+
         cap = _sample_capability()
         cap["privacy_sensitive"] = True
         _write_capabilities(tmp_path, {"search": cap})
         reg = Registry(root_dir=tmp_path)
         assert reg.get_capability("search")["privacy_sensitive"] is True
 
+    def test_mutating_actions_exposed(self, tmp_path):
+        from core.routing.registry import Registry
+
+        cap = _sample_capability()
+        cap["mutating"] = True
+        cap["mutating_actions"] = ["create", "delete"]
+        _write_capabilities(tmp_path, {"cache": cap})
+        reg = Registry(root_dir=tmp_path)
+        assert reg.get_capability("cache")["mutating_actions"] == ["create", "delete"]
+
     def test_is_preview(self, tmp_path):
         from core.routing.registry import Registry
+
         cap = _sample_capability()
         cap["preview"] = True
         _write_capabilities(tmp_path, {"image_gen": cap})
@@ -256,6 +288,7 @@ class TestEdgeCases:
 
     def test_null_default_model(self, tmp_path):
         from core.routing.registry import Registry
+
         cap = _sample_capability()
         cap["default_model"] = None
         _write_capabilities(tmp_path, {"streaming": cap})
@@ -264,6 +297,7 @@ class TestEdgeCases:
 
     def test_get_model_returns_deep_copy(self, tmp_path):
         from core.routing.registry import Registry
+
         _write_models(tmp_path, {"test-model": _sample_model()})
         reg = Registry(root_dir=tmp_path)
         model = reg.get_model("test-model")
@@ -274,6 +308,7 @@ class TestEdgeCases:
 
     def test_get_capability_returns_deep_copy(self, tmp_path):
         from core.routing.registry import Registry
+
         _write_capabilities(tmp_path, {"text": _sample_capability()})
         reg = Registry(root_dir=tmp_path)
         cap = reg.get_capability("text")
@@ -284,6 +319,7 @@ class TestEdgeCases:
     def test_model_missing_pricing_raises(self, tmp_path):
         from core.routing.registry import Registry
         from core.infra.errors import ModelNotFoundError
+
         model = _sample_model()
         del model["pricing"]
         _write_models(tmp_path, {"no-pricing": model})
@@ -294,6 +330,7 @@ class TestEdgeCases:
     def test_model_agnostic_capabilities_return_empty_models(self):
         """files, batch, token_count are model-agnostic (no model lists them)."""
         from core.routing.registry import Registry
+
         root = Path(__file__).parent.parent.parent.parent
         reg = Registry(root_dir=root)
         # These capabilities exist but are handled by their adapters directly
@@ -309,6 +346,7 @@ class TestRegistryWithRealFiles:
 
     def test_loads_real_models_json(self):
         from core.routing.registry import Registry
+
         root = Path(__file__).parent.parent.parent.parent
         reg = Registry(root_dir=root)
         models = reg.list_models()
@@ -317,6 +355,7 @@ class TestRegistryWithRealFiles:
 
     def test_loads_real_capabilities_json(self):
         from core.routing.registry import Registry
+
         root = Path(__file__).parent.parent.parent.parent
         reg = Registry(root_dir=root)
         caps = reg.list_capabilities()
@@ -325,6 +364,7 @@ class TestRegistryWithRealFiles:
 
     def test_real_model_has_pricing(self):
         from core.routing.registry import Registry
+
         root = Path(__file__).parent.parent.parent.parent
         reg = Registry(root_dir=root)
         pricing = reg.get_model_pricing("gemini-2.5-flash")
@@ -332,6 +372,7 @@ class TestRegistryWithRealFiles:
 
     def test_real_capability_has_adapter(self):
         from core.routing.registry import Registry
+
         root = Path(__file__).parent.parent.parent.parent
         reg = Registry(root_dir=root)
         cap = reg.get_capability("text")

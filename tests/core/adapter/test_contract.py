@@ -3,32 +3,33 @@
 Verifies that the AdapterProtocol defines the expected interface
 and that conforming/non-conforming classes are detected correctly.
 """
+
 from __future__ import annotations
 
 import argparse
-
-import pytest
 
 
 class TestAdapterProtocol:
     """AdapterProtocol must define get_parser() and run() methods."""
 
-    def test_protocol_has_get_parser(self):
+    def test_protocol_has_get_parser(self) -> None:
         from core.adapter.contract import AdapterProtocol
+
         assert hasattr(AdapterProtocol, "get_parser")
 
-    def test_protocol_has_run(self):
+    def test_protocol_has_run(self) -> None:
         from core.adapter.contract import AdapterProtocol
+
         assert hasattr(AdapterProtocol, "run")
 
-    def test_conforming_class_is_accepted(self):
+    def test_conforming_class_is_accepted(self) -> None:
         from core.adapter.contract import AdapterProtocol
 
         class GoodAdapter:
             def get_parser(self) -> argparse.ArgumentParser:
                 return argparse.ArgumentParser()
 
-            def run(self, **kwargs) -> None:
+            def run(self, **kwargs: object) -> None:
                 pass
 
         # Should be recognized as implementing the protocol
@@ -36,19 +37,19 @@ class TestAdapterProtocol:
         assert hasattr(adapter, "get_parser")
         assert hasattr(adapter, "run")
 
-    def test_protocol_is_runtime_checkable(self):
+    def test_protocol_is_runtime_checkable(self) -> None:
         from core.adapter.contract import AdapterProtocol
 
         class GoodAdapter:
             def get_parser(self) -> argparse.ArgumentParser:
                 return argparse.ArgumentParser()
 
-            def run(self, **kwargs) -> None:
+            def run(self, **kwargs: object) -> None:
                 pass
 
         assert isinstance(GoodAdapter(), AdapterProtocol)
 
-    def test_non_conforming_class_fails_check(self):
+    def test_non_conforming_class_fails_check(self) -> None:
         from core.adapter.contract import AdapterProtocol
 
         class BadAdapter:
@@ -56,12 +57,13 @@ class TestAdapterProtocol:
 
         assert not isinstance(BadAdapter(), AdapterProtocol)
 
-    def test_partial_conformance_fails(self):
+    def test_partial_conformance_fails(self) -> None:
         from core.adapter.contract import AdapterProtocol
 
         class PartialAdapter:
             def get_parser(self) -> argparse.ArgumentParser:
                 return argparse.ArgumentParser()
+
             # Missing run()
 
         assert not isinstance(PartialAdapter(), AdapterProtocol)

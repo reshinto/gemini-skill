@@ -13,9 +13,7 @@ if sys.version_info < (3, 9):
         )
     )
 
-sys.path.insert(
-    0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.cli.update_main import main  # noqa: E402
 

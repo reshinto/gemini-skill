@@ -1,6 +1,10 @@
 # Usage
 
-**Last Updated:** 2026-04-13
+[← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
+
+---
+
+**Last Updated:** 2026-04-14
 
 Getting started with gemini-skill and common workflows.
 
@@ -115,19 +119,19 @@ Returns the token count (useful for budgeting).
 
 ### Ground in current information
 
-Both `search` and `maps` are privacy-sensitive — the dispatcher blocks them unless you pass `--i-understand-privacy` explicitly.
+`search` and `maps` are privacy-sensitive. The dispatcher auto-applies the internal privacy opt-in flag when you intentionally invoke those commands.
 
 Get latest news:
 ```bash
-/gemini search "Latest developments in quantum computing" --i-understand-privacy
+/gemini search "Latest developments in quantum computing"
 ```
 
 Find nearby restaurants:
 ```bash
-/gemini maps "Best coffee shops near downtown" --i-understand-privacy
+/gemini maps "Best coffee shops near downtown"
 ```
 
-**Privacy note:** These send your query to Google Search / Google Maps. Use only for non-sensitive queries. Without `--i-understand-privacy` the command prints `[BLOCKED]` and exits.
+**Privacy note:** These send your query to Google Search / Google Maps. Use only for non-sensitive queries and only when the user explicitly asked for grounded results.
 
 ### Upload and reuse a file
 
@@ -181,19 +185,20 @@ Save to a specific directory:
 
 Create a store:
 ```bash
-/gemini file_search create --execute
+/gemini file_search create research-library --execute
 # Returns: store-id-abc123
 ```
 
 Upload documents:
 ```bash
-/gemini file_search upload store-id-abc123 article1.pdf --execute
-/gemini file_search upload store-id-abc123 article2.pdf --execute
+/gemini files upload article1.pdf --execute
+# Returns: files/abc123
+/gemini file_search upload fileSearchStores/store-id-abc123 files/abc123 --execute
 ```
 
 Query the store:
 ```bash
-/gemini file_search query store-id-abc123 "What are the key findings?"
+/gemini file_search query "What are the key findings?" --store fileSearchStores/store-id-abc123
 ```
 
 List stores:
@@ -229,13 +234,44 @@ Results are written to `results.jsonl` when complete.
 Cache a large document to reuse:
 
 ```bash
-/gemini cache create --ttl 7200 --execute
+/gemini cache create "System prompt text" --ttl 7200 --execute
 # Returns: cache-abc123
 ```
 
 The cache stores large system instructions or documents for 2 hours (7200 seconds).
 
 Use in subsequent requests by checking cache docs (implementation may vary by adapter).
+
+---
+
+## Choosing a Backend
+
+The skill internally uses a dual-backend transport layer:
+
+- **Default (SDK):** Uses `google-genai==1.33.0` SDK for primary backend
+- **Fallback (Raw HTTP):** Uses `urllib` if SDK is unavailable or disabled
+
+**Most users never need to touch this.** The dispatcher automatically picks the right backend based on availability and configuration.
+
+### Advanced Configuration
+
+For advanced users, override backend priority via `~/.claude/settings.json` environment block:
+
+```json
+{
+  "env": {
+    "GEMINI_IS_SDK_PRIORITY": "true",
+    "GEMINI_IS_RAWHTTP_PRIORITY": "false"
+  }
+}
+```
+
+- `GEMINI_IS_SDK_PRIORITY=true` — Prefer SDK (default if available)
+- `GEMINI_IS_RAWHTTP_PRIORITY=true` — Force raw HTTP (useful for testing or if SDK has issues)
+
+Both backends produce identical output. Four capabilities (`maps`, `music_gen`, `computer_use`, `file_search`) automatically route via raw HTTP at runtime because the pinned SDK version does not expose those surfaces.
+
+See [install.md](install.md) for environment setup details.
 
 ---
 
@@ -363,8 +399,7 @@ Mutating operations default to dry-run:
 
 ```bash
 /gemini files upload data.csv
-# Output: [DRY RUN] upload file: data.csv
-#         [To execute, add --execute flag]
+# Output: [DRY RUN] 'files' is a mutating operation. Pass --execute to actually run it.
 ```
 
 Use `--execute` to actually run:
@@ -374,6 +409,7 @@ Use `--execute` to actually run:
 ```
 
 This prevents accidental uploads, deletions, and generations.
+Read-only commands and read-only subcommands do not accept `--execute`.
 
 ---
 

@@ -1,7 +1,8 @@
 """Shared adapter lifecycle helpers.
 
 Provides common functionality used by all adapters:
-    - build_base_parser(): ArgumentParser with shared flags (--model, --execute, --session)
+    - build_base_parser(): ArgumentParser with shared flags (--model, --session)
+    - add_execute_flag(): Opt-in mutating-operation flag
     - check_dry_run(): Enforce dry-run policy for mutating operations
     - emit_output(): Print text or save large responses to file
     - emit_json(): Output structured JSON for media adapters
@@ -11,16 +12,18 @@ overflow by saving large responses to a file and returning only the path.
 
 Dependencies: core/infra/sanitize.py (safe_print)
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import os
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
 
 from core.infra.sanitize import safe_print
+from core.transport.base import GeminiResponse, Part
 
 # Responses exceeding this size are saved to file instead of stdout
 _LARGE_RESPONSE_THRESHOLD = 50_000  # characters
@@ -31,7 +34,6 @@ def build_base_parser(description: str) -> argparse.ArgumentParser:
 
     Common flags:
         --model: Override the default model selection.
-        --execute: Required for mutating operations (dry-run default).
         --session: Start or continue a named conversation session.
         --continue: Continue the most recent session.
 
@@ -42,16 +44,11 @@ def build_base_parser(description: str) -> argparse.ArgumentParser:
         An ArgumentParser with common flags added.
     """
     parser = argparse.ArgumentParser(description=description)
+    parser.set_defaults(execute=False)
     parser.add_argument(
         "--model",
         default=None,
         help="Override the default model for this command.",
-    )
-    parser.add_argument(
-        "--execute",
-        action="store_true",
-        default=False,
-        help="Execute the operation (required for mutating commands).",
     )
     parser.add_argument(
         "--session",
@@ -66,6 +63,16 @@ def build_base_parser(description: str) -> argparse.ArgumentParser:
         help="Continue the most recent conversation session.",
     )
     return parser
+
+
+def add_execute_flag(parser: argparse.ArgumentParser) -> None:
+    """Add the ``--execute`` confirmation flag to a mutating parser."""
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        default=False,
+        help="Execute the operation (mutating operations only).",
+    )
 
 
 def check_dry_run(execute: bool, operation: str) -> bool:
@@ -107,9 +114,7 @@ def emit_output(
     directory = Path(output_dir) if output_dir else Path(tempfile.gettempdir())
     directory.mkdir(parents=True, exist_ok=True)
 
-    fd, path = tempfile.mkstemp(
-        prefix="gemini-skill-", suffix=".txt", dir=str(directory)
-    )
+    fd, path = tempfile.mkstemp(prefix="gemini-skill-", suffix=".txt", dir=str(directory))
     try:
         os.write(fd, text.encode("utf-8"))
     finally:
@@ -122,7 +127,7 @@ def emit_output(
     )
 
 
-def emit_json(data: dict[str, Any]) -> None:
+def emit_json(data: Mapping[str, object] | object) -> None:
     """Output structured JSON data to stdout.
 
     Used by media adapters (image_gen, video_gen, music_gen) to return
@@ -134,7 +139,7 @@ def emit_json(data: dict[str, Any]) -> None:
     safe_print(json.dumps(data, indent=2))
 
 
-def extract_text(response: dict[str, Any]) -> str:
+def extract_text(response: GeminiResponse) -> str:
     """Extract text from a Gemini generateContent response.
 
     Handles safety blocks and missing candidates gracefully by raising
@@ -164,7 +169,7 @@ def extract_text(response: dict[str, Any]) -> str:
     return ""
 
 
-def extract_parts(response: dict[str, Any]) -> list[dict[str, Any]]:
+def extract_parts(response: GeminiResponse) -> list[Part]:
     """Extract content parts from a Gemini response.
 
     Returns the full parts list (text, inlineData, functionCall, etc.)
@@ -183,9 +188,7 @@ def extract_parts(response: dict[str, Any]) -> list[dict[str, Any]]:
     if not candidates:
         feedback = response.get("promptFeedback", {})
         reason = feedback.get("blockReason", "unknown")
-        raise ValueError(
-            f"Gemini API returned no candidates (blockReason={reason})."
-        )
+        raise ValueError(f"Gemini API returned no candidates (blockReason={reason}).")
     return candidates[0].get("content", {}).get("parts", [])
 
 
@@ -204,9 +207,7 @@ def create_media_output_file(suffix: str, output_dir: str | None = None) -> str:
     """
     directory = Path(output_dir) if output_dir else Path(tempfile.gettempdir())
     directory.mkdir(parents=True, exist_ok=True)
-    fd, path = tempfile.mkstemp(
-        prefix="gemini-skill-", suffix=suffix, dir=str(directory)
-    )
+    fd, path = tempfile.mkstemp(prefix="gemini-skill-", suffix=suffix, dir=str(directory))
     os.close(fd)
     return str(Path(path).resolve())
 

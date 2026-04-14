@@ -1,10 +1,17 @@
 """API key resolution and .env file parsing.
 
 Resolves the Gemini API key from environment variables and an optional
-.env file in the skill's install directory. Precedence order:
-    1. GOOGLE_API_KEY (shell env)
-    2. GEMINI_API_KEY (shell env)
-    3. Values loaded from .env file (shell env always wins)
+.env file in the local-development repo root. Precedence order:
+    1. GEMINI_API_KEY (shell env, set by Claude Code from
+       ~/.claude/settings.json or by the contributor's shell)
+    2. Values loaded from .env file at the repo root (local-dev only;
+       shell env always wins)
+
+The skill deliberately does NOT honor GOOGLE_API_KEY. GEMINI_API_KEY is
+the one canonical name to avoid confusion about which key is in use.
+End users set GEMINI_API_KEY in ~/.claude/settings.json under the env
+block; contributors running tests from a repo clone set it in a
+gitignored .env file at the repo root.
 
 The .env parser follows deliberately simple rules:
     - Split on first '=' only (values may contain '=')
@@ -15,11 +22,14 @@ The .env parser follows deliberately simple rules:
 
 Dependencies: core/infra/errors.py (AuthError), core/infra/sanitize.py
 """
+
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from urllib.error import HTTPError
+import socket
+import ssl
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from core.infra.errors import AuthError
@@ -83,11 +93,16 @@ def _load_env_file(env_dir: Path) -> None:
 def resolve_key(env_dir: str | Path | None = None) -> str:
     """Resolve the Gemini API key from environment and optional .env file.
 
-    Precedence: GOOGLE_API_KEY > GEMINI_API_KEY > .env file values.
-    Shell environment variables always override .env file values.
+    Precedence: GEMINI_API_KEY (process env) > GEMINI_API_KEY (in <env_dir>/.env).
+    Shell environment variables always override .env file values. The skill
+    does NOT honor GOOGLE_API_KEY.
 
     Args:
-        env_dir: Optional directory containing a .env file to load.
+        env_dir: Optional directory containing a .env file to load. The
+            installed skill does NOT pass this argument — it relies on
+            Claude Code injecting GEMINI_API_KEY from ~/.claude/settings.json
+            into the process env. Local-dev mode (running from a repo clone)
+            passes the repo root so the gitignored .env file is read.
 
     Returns:
         The resolved API key string.
@@ -99,13 +114,15 @@ def resolve_key(env_dir: str | Path | None = None) -> str:
     if env_dir is not None:
         _load_env_file(Path(env_dir))
 
-    # Check environment in precedence order
-    key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    key = os.environ.get("GEMINI_API_KEY")
 
     if not key:
         raise AuthError(
-            "No API key found. Set GEMINI_API_KEY in your shell environment "
-            "or in ~/.claude/skills/gemini/.env"
+            "No GEMINI_API_KEY found.\n"
+            "Installed skill: edit ~/.claude/settings.json and add "
+            "GEMINI_API_KEY to the env block.\n"
+            "Local dev: copy .env.example to .env at the repo root and fill "
+            "in GEMINI_API_KEY."
         )
 
     return key
@@ -136,11 +153,14 @@ def validate_key(key: str) -> bool:
         with urlopen(request, timeout=10) as response:
             response.read()
             return True
-    except HTTPError as e:
-        if e.code == 401:
-            raise AuthError("API key is invalid (401 Unauthorized)") from e
-        raise AuthError(f"API key validation failed: HTTP {e.code}") from e
-    except Exception as e:
+    except HTTPError as http_error:
+        if http_error.code == 401:
+            raise AuthError("API key is invalid (401 Unauthorized)") from http_error
+        raise AuthError(f"API key validation failed: HTTP {http_error.code}") from http_error
+    except (URLError, socket.timeout, ssl.SSLError, OSError) as network_error:
+        # Narrow to realistic network failures. A bare ``Exception`` here
+        # would swallow programmer bugs (AttributeError, TypeError) and
+        # silently re-wrap them as AuthError, which makes debugging hard.
         raise AuthError(
-            f"API key validation failed: {sanitize(str(e))}"
-        ) from e
+            f"API key validation failed: {sanitize(str(network_error))}"
+        ) from network_error

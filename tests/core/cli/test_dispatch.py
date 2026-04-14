@@ -1,4 +1,5 @@
 """Tests for core/cli/dispatch.py — CLI dispatcher + policy enforcement."""
+
 from __future__ import annotations
 
 from unittest.mock import patch, MagicMock
@@ -9,12 +10,14 @@ import pytest
 class TestDispatchMain:
     def test_empty_argv_shows_help(self, capsys):
         from core.cli.dispatch import main
+
         main([])
         output = capsys.readouterr().out
         assert "Usage" in output or "commands" in output.lower()
 
     def test_unknown_command_fails_closed(self, capsys):
         from core.cli.dispatch import main
+
         with pytest.raises(SystemExit) as exc_info:
             main(["nonexistent"])
         assert exc_info.value.code == 1
@@ -22,6 +25,7 @@ class TestDispatchMain:
 
     def test_text_command_routes_to_text_adapter(self):
         from core.cli.dispatch import main
+
         with patch("adapters.generation.text.run") as mock_run:
             main(["text", "hello"])
         mock_run.assert_called_once()
@@ -30,12 +34,14 @@ class TestDispatchMain:
 
     def test_embed_command_routes_to_embeddings(self):
         from core.cli.dispatch import main
+
         with patch("adapters.data.embeddings.run") as mock_run:
             main(["embed", "hello text"])
         mock_run.assert_called_once()
 
     def test_image_gen_command_routes(self):
         from core.cli.dispatch import main
+
         with patch("adapters.media.image_gen.run") as mock_run:
             main(["image_gen", "a cat", "--execute"])
         mock_run.assert_called_once()
@@ -43,6 +49,7 @@ class TestDispatchMain:
 
     def test_help_command_shows_commands(self, capsys):
         from core.cli.dispatch import main
+
         main(["help"])
         output = capsys.readouterr().out
         assert "text" in output
@@ -50,6 +57,7 @@ class TestDispatchMain:
 
     def test_models_command_lists_registry(self, capsys):
         from core.cli.dispatch import main
+
         main(["models"])
         output = capsys.readouterr().out
         assert "gemini-2.5-flash" in output
@@ -60,6 +68,7 @@ class TestDispatchPolicyEnforcement:
 
     def test_mutating_command_blocked_without_execute(self, capsys):
         from core.cli.dispatch import main
+
         with patch("adapters.media.image_gen.run") as mock_run:
             with pytest.raises(SystemExit) as exc_info:
                 main(["image_gen", "a cat"])
@@ -71,38 +80,113 @@ class TestDispatchPolicyEnforcement:
 
     def test_mutating_command_allowed_with_execute(self):
         from core.cli.dispatch import main
+
         with patch("adapters.media.image_gen.run") as mock_run:
             main(["image_gen", "a cat", "--execute"])
         mock_run.assert_called_once()
 
-    def test_privacy_sensitive_blocked_without_opt_in(self, capsys):
+    @pytest.mark.parametrize(
+        ("command", "adapter_path", "argv"),
+        [
+            ("search", "adapters.tools.search.run", ["search", "weather today"]),
+            ("maps", "adapters.tools.maps.run", ["maps", "coffee shops near me"]),
+            (
+                "computer_use",
+                "adapters.experimental.computer_use.run",
+                ["computer_use", "describe screen"],
+            ),
+        ],
+    )
+    def test_privacy_sensitive_main_auto_injects_opt_in(self, command, adapter_path, argv):
         from core.cli.dispatch import main
-        with patch("adapters.tools.search.run") as mock_run:
-            with pytest.raises(SystemExit) as exc_info:
-                main(["search", "weather today"])
-        assert exc_info.value.code == 1
-        output = capsys.readouterr().out
-        assert "[BLOCKED]" in output
-        assert "privacy-sensitive" in output
-        mock_run.assert_not_called()
+
+        with patch(adapter_path) as mock_run:
+            main(argv)
+        mock_run.assert_called_once()
 
     def test_privacy_sensitive_allowed_with_opt_in(self):
         from core.cli.dispatch import main
+
         with patch("adapters.tools.search.run") as mock_run:
             main(["search", "weather today", "--i-understand-privacy"])
         mock_run.assert_called_once()
 
-    def test_mutating_privacy_sensitive_needs_both_flags(self, capsys):
+    def test_raw_policy_still_blocks_without_privacy_opt_in(self, capsys):
+        from core.cli.dispatch import _enforce_policy
+
+        with pytest.raises(SystemExit) as exc_info:
+            _enforce_policy("search", ["weather today"])
+        assert exc_info.value.code == 1
+        output = capsys.readouterr().out
+        assert "[BLOCKED]" in output
+        assert "privacy-sensitive" in output
+
+    def test_mutating_privacy_sensitive_without_execute_dry_runs(self, capsys):
         from core.cli.dispatch import main
+
         with patch("adapters.experimental.deep_research.run") as mock_run:
-            # Missing both flags — privacy block fires first
-            with pytest.raises(SystemExit):
+            with pytest.raises(SystemExit) as exc_info:
                 main(["deep_research", "research topic"])
-        assert "[BLOCKED]" in capsys.readouterr().out
+        assert exc_info.value.code == 0
+        assert "[DRY RUN]" in capsys.readouterr().out
         mock_run.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("argv", "adapter_path"),
+        [
+            (["files", "list"], "adapters.data.files.run"),
+            (["cache", "list"], "adapters.data.cache.run"),
+            (["batch", "list"], "adapters.data.batch.run"),
+            (
+                ["file_search", "query", "find doc", "--store", "stores/x"],
+                "adapters.data.file_search.run",
+            ),
+            (["file_search", "list"], "adapters.data.file_search.run"),
+        ],
+    )
+    def test_read_only_operations_run_without_execute(self, argv, adapter_path):
+        from core.cli.dispatch import main
+
+        with patch(adapter_path) as mock_run:
+            main(argv)
+        mock_run.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "argv",
+        [
+            ["files", "list", "--execute"],
+            ["cache", "list", "--execute"],
+            ["batch", "list", "--execute"],
+            ["file_search", "query", "find doc", "--store", "stores/x", "--execute"],
+        ],
+    )
+    def test_read_only_operations_reject_execute(self, argv):
+        from core.cli.dispatch import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(argv)
+        assert exc_info.value.code == 2
+
+    @pytest.mark.parametrize(
+        "argv",
+        [
+            ["files", "delete", "files/x"],
+            ["cache", "delete", "cachedContents/x"],
+            ["batch", "cancel", "batchJobs/x"],
+            ["file_search", "delete", "fileSearchStores/x"],
+        ],
+    )
+    def test_mutating_subcommands_still_dry_run_without_execute(self, argv, capsys):
+        from core.cli.dispatch import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(argv)
+        assert exc_info.value.code == 0
+        assert "[DRY RUN]" in capsys.readouterr().out
 
     def test_non_policy_command_runs_freely(self):
         from core.cli.dispatch import main
+
         with patch("adapters.generation.text.run") as mock_run:
             main(["text", "hello"])
         mock_run.assert_called_once()
@@ -136,9 +220,13 @@ class TestDispatchPolicyUnknownCapability:
         from core.infra.errors import CapabilityUnavailableError
 
         # Mock Registry.get_capability to raise CapabilityUnavailableError
-        with patch("core.routing.registry.Registry.get_capability",
-                   side_effect=CapabilityUnavailableError("not found")), \
-             patch("adapters.generation.text.run") as mock_run:
+        with (
+            patch(
+                "core.routing.registry.Registry.get_capability",
+                side_effect=CapabilityUnavailableError("not found"),
+            ),
+            patch("adapters.generation.text.run") as mock_run,
+        ):
             dispatch.main(["text", "hello"])
         mock_run.assert_called_once()
 
@@ -146,27 +234,215 @@ class TestDispatchPolicyUnknownCapability:
 class TestDispatchAllAdapters:
     """Verify every capability has a dispatch entry."""
 
-    @pytest.mark.parametrize("command,adapter_path", [
-        ("text", "adapters.generation.text"),
-        ("multimodal", "adapters.generation.multimodal"),
-        ("structured", "adapters.generation.structured"),
-        ("streaming", "adapters.generation.streaming"),
-        ("embed", "adapters.data.embeddings"),
-        ("token_count", "adapters.data.token_count"),
-        ("function_calling", "adapters.tools.function_calling"),
-        ("code_exec", "adapters.tools.code_exec"),
-        ("files", "adapters.data.files"),
-        ("cache", "adapters.data.cache"),
-        ("batch", "adapters.data.batch"),
-        ("search", "adapters.tools.search"),
-        ("maps", "adapters.tools.maps"),
-        ("file_search", "adapters.data.file_search"),
-        ("image_gen", "adapters.media.image_gen"),
-        ("video_gen", "adapters.media.video_gen"),
-        ("music_gen", "adapters.media.music_gen"),
-        ("computer_use", "adapters.experimental.computer_use"),
-        ("deep_research", "adapters.experimental.deep_research"),
-    ])
+    @pytest.mark.parametrize(
+        "command,adapter_path",
+        [
+            ("text", "adapters.generation.text"),
+            ("multimodal", "adapters.generation.multimodal"),
+            ("structured", "adapters.generation.structured"),
+            ("streaming", "adapters.generation.streaming"),
+            ("embed", "adapters.data.embeddings"),
+            ("token_count", "adapters.data.token_count"),
+            ("function_calling", "adapters.tools.function_calling"),
+            ("code_exec", "adapters.tools.code_exec"),
+            ("files", "adapters.data.files"),
+            ("cache", "adapters.data.cache"),
+            ("batch", "adapters.data.batch"),
+            ("search", "adapters.tools.search"),
+            ("maps", "adapters.tools.maps"),
+            ("file_search", "adapters.data.file_search"),
+            ("image_gen", "adapters.media.image_gen"),
+            ("video_gen", "adapters.media.video_gen"),
+            ("music_gen", "adapters.media.music_gen"),
+            ("computer_use", "adapters.experimental.computer_use"),
+            ("deep_research", "adapters.experimental.deep_research"),
+        ],
+    )
     def test_command_registered(self, command, adapter_path):
         from core.cli.dispatch import ALLOWED_COMMANDS
+
         assert command in ALLOWED_COMMANDS
+
+
+class TestDispatchAsyncAdapter:
+    """Phase 6: adapters that declare ``IS_ASYNC = True`` must be run via
+    ``asyncio.run(adapter.run_async(**kwargs))`` instead of the sync
+    ``adapter.run(**kwargs)`` path. The existing 19 sync adapters are
+    unaffected — dispatch only switches paths when the adapter module
+    carries the opt-in marker.
+    """
+
+    def test_is_async_adapter_uses_run_async_via_asyncio_run(self) -> None:
+        """An adapter module with ``IS_ASYNC = True`` + an ``async def run_async``
+        must be dispatched through ``asyncio.run`` rather than the sync
+        ``run`` path."""
+        from core.cli.dispatch import main
+
+        async_calls: list[dict[str, object]] = []
+
+        async def _fake_run_async(**kwargs: object) -> None:
+            async_calls.append(kwargs)
+
+        sync_run = MagicMock(side_effect=AssertionError("sync run used"))
+
+        fake_adapter = MagicMock()
+        fake_adapter.IS_ASYNC = True
+        fake_adapter.run = sync_run
+        fake_adapter.run_async = _fake_run_async
+        from types import SimpleNamespace
+
+        parser = MagicMock()
+        parser.parse_args.return_value = SimpleNamespace(prompt="hello", model=None)
+        fake_adapter.get_parser.return_value = parser
+
+        from core.cli.dispatch import ALLOWED_COMMANDS
+
+        ALLOWED_COMMANDS["live"] = "adapters.generation.live"
+        try:
+            with patch("importlib.import_module", return_value=fake_adapter):
+                main(["live", "hello"])
+        finally:
+            ALLOWED_COMMANDS.pop("live", None)
+
+        assert len(async_calls) == 1
+        assert async_calls[0]["prompt"] == "hello"
+        fake_adapter.run.assert_not_called()
+
+    def test_sync_adapter_uses_sync_run(self):
+        """Adapters without ``IS_ASYNC`` (or with ``IS_ASYNC = False``)
+        still take the sync path — regression guard for the 19 existing
+        sync adapters."""
+        from core.cli.dispatch import main
+
+        with patch("adapters.generation.text.run") as mock_run:
+            # adapters.generation.text has no IS_ASYNC attribute — sync path
+            main(["text", "hello"])
+        mock_run.assert_called_once()
+
+
+class TestDispatchHelpBranch:
+    """Coverage for the ``--help`` short-circuit in ``main`` (branch 98→103)."""
+
+    def test_help_flag_skips_policy_enforcement(self) -> None:
+        """Passing --help invokes argparse's help rendering and does NOT
+        call _enforce_policy, so the user can discover mutating commands
+        before flipping the opt-in flags."""
+        from core.cli.dispatch import main
+
+        with patch("core.cli.dispatch._enforce_policy") as mock_enforce:
+            with pytest.raises(SystemExit):
+                main(["text", "--help"])
+        mock_enforce.assert_not_called()
+
+    def test_dash_h_flag_skips_policy_enforcement(self) -> None:
+        """The short form ``-h`` also short-circuits _enforce_policy."""
+        from core.cli.dispatch import main
+
+        with patch("core.cli.dispatch._enforce_policy") as mock_enforce:
+            with pytest.raises(SystemExit):
+                main(["text", "-h"])
+        mock_enforce.assert_not_called()
+
+
+class TestIsMutatingInvocation:
+    """Coverage for ``_is_mutating_invocation`` branches (lines 183-198)."""
+
+    def test_non_dict_capability_returns_false(self) -> None:
+        """An invalid capability object (not a dict) short-circuits false."""
+        from core.cli.dispatch import _is_mutating_invocation
+
+        assert _is_mutating_invocation("not-a-dict", []) is False
+
+    def test_capability_without_mutating_keys_returns_false(self) -> None:
+        """A dict capability with neither ``mutating`` nor
+        ``mutating_actions`` defaults to false."""
+        from core.cli.dispatch import _is_mutating_invocation
+
+        assert _is_mutating_invocation({}, []) is False
+
+    def test_plain_mutating_flag_true(self) -> None:
+        """``mutating: True`` on the capability makes every invocation mutating."""
+        from core.cli.dispatch import _is_mutating_invocation
+
+        assert _is_mutating_invocation({"mutating": True}, []) is True
+
+    def test_mutating_actions_matches_action_token(self) -> None:
+        """When ``mutating_actions`` is a list, a matching action token is mutating."""
+        from core.cli.dispatch import _is_mutating_invocation
+
+        capability = {"mutating_actions": ["delete"]}
+        assert _is_mutating_invocation(capability, ["delete", "foo"]) is True
+
+    def test_mutating_actions_non_matching_action(self) -> None:
+        """An action not in the mutating_actions list is NOT mutating."""
+        from core.cli.dispatch import _is_mutating_invocation
+
+        capability = {"mutating_actions": ["delete"]}
+        assert _is_mutating_invocation(capability, ["list"]) is False
+
+
+class TestExtractActionToken:
+    """Coverage for ``_extract_action_token`` branches."""
+
+    def test_flag_with_value_is_skipped(self) -> None:
+        """Flags in _FLAGS_WITH_VALUES consume 2 argv slots."""
+        from core.cli.dispatch import _FLAGS_WITH_VALUES, _extract_action_token
+
+        sample_flag = next(iter(_FLAGS_WITH_VALUES))
+        token = _extract_action_token([sample_flag, "value", "action"])
+        assert token == "action"
+
+    def test_boolean_flag_is_skipped(self) -> None:
+        """Flags in _BOOLEAN_FLAGS consume 1 argv slot."""
+        from core.cli.dispatch import _BOOLEAN_FLAGS, _extract_action_token
+
+        sample_flag = next(iter(_BOOLEAN_FLAGS))
+        token = _extract_action_token([sample_flag, "action"])
+        assert token == "action"
+
+    def test_unknown_dash_flag_is_skipped(self) -> None:
+        """Any token starting with ``-`` that isn't in the known sets is skipped."""
+        from core.cli.dispatch import _extract_action_token
+
+        assert _extract_action_token(["--unknown-flag", "action"]) == "action"
+
+    def test_no_action_returns_none(self) -> None:
+        """When every token is a flag, returns None."""
+        from core.cli.dispatch import _extract_action_token
+
+        assert _extract_action_token(["--unknown", "--another"]) is None
+
+    def test_first_positional_token_returned(self) -> None:
+        """The first non-flag token is returned as the action."""
+        from core.cli.dispatch import _extract_action_token
+
+        assert _extract_action_token(["list", "--verbose"]) == "list"
+
+
+class TestValidateAdapterProtocol:
+    """Coverage for _validate_adapter_protocol failure branch."""
+
+    def test_adapter_missing_both_run_and_run_async_errors(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """An adapter with get_parser but no run/run_async exits with 1."""
+        from types import SimpleNamespace
+
+        from core.cli.dispatch import _validate_adapter_protocol
+
+        broken = SimpleNamespace(get_parser=lambda: None)
+        with pytest.raises(SystemExit) as exit_info:
+            _validate_adapter_protocol("broken", broken)  # type: ignore[arg-type]
+        assert exit_info.value.code == 1
+        assert "AdapterProtocol" in capsys.readouterr().out
+
+    def test_adapter_missing_get_parser_errors(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """An adapter without get_parser exits with 1."""
+        from types import SimpleNamespace
+
+        from core.cli.dispatch import _validate_adapter_protocol
+
+        broken = SimpleNamespace(run=lambda **kwargs: None)
+        with pytest.raises(SystemExit) as exit_info:
+            _validate_adapter_protocol("broken", broken)  # type: ignore[arg-type]
+        assert exit_info.value.code == 1

@@ -56,3 +56,11 @@ Tools are defined as OpenAPI 3.0 schemas:
 ## Note
 
 The model may call your functions multiple times. Tool state (including `id` and `tool_type`) must be preserved across multi-turn interactions.
+
+---
+
+Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
+
+---
+
+[← Back](index.md) · [Previous: files](files.md) · [Next: image_gen](image_gen.md)

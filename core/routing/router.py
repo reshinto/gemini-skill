@@ -12,19 +12,35 @@ General text/chat/code tasks use a complexity-based decision tree:
 
 Dependencies: core/routing/registry.py, core/infra/errors.py
 """
+
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from core.infra.errors import CapabilityUnavailableError, ModelNotFoundError
+from core.infra.errors import CapabilityUnavailableError
 from core.routing.registry import Registry
+
+if TYPE_CHECKING:
+    from core.routing.registry import ModelPricing
 
 # Task types that route to a dedicated model via capability default_model.
 # These ignore complexity and preview settings.
-_SPECIALTY_TASKS = frozenset({
-    "embed", "image_gen", "video_gen", "music_gen",
-    "computer_use", "file_search", "maps",
-})
+_SPECIALTY_TASKS = frozenset(
+    {
+        "embed",
+        "image_gen",
+        "video_gen",
+        "music_gen",
+        "computer_use",
+        "file_search",
+        "maps",
+        # Phase 7 additions — both route to dedicated models via the
+        # capability registry's default_model field.
+        "imagen",
+        "live",
+    }
+)
 
 # Complexity → model mapping for general tasks (text, multimodal, etc.)
 _STABLE_MODELS = {
@@ -106,7 +122,7 @@ class Router:
         model_map = _PREVIEW_MODELS if self._prefer_preview else _STABLE_MODELS
         return model_map.get(complexity, _FALLBACK_MODEL)
 
-    def get_pricing(self, model_id: str) -> dict[str, float]:
+    def get_pricing(self, model_id: str) -> "ModelPricing":
         """Get pricing info for a model.
 
         Raises:
@@ -115,7 +131,7 @@ class Router:
         return self._registry.get_model_pricing(model_id)
 
     def is_mutating(self, capability: str) -> bool:
-        """Check if a capability requires --execute flag.
+        """Check if a capability has mutating operations.
 
         Raises:
             CapabilityUnavailableError: If the capability is not registered.
@@ -124,7 +140,7 @@ class Router:
         return bool(cap.get("mutating", False))
 
     def is_privacy_sensitive(self, capability: str) -> bool:
-        """Check if a capability requires explicit opt-in.
+        """Check if a capability is privacy-sensitive.
 
         Raises:
             CapabilityUnavailableError: If the capability is not registered.

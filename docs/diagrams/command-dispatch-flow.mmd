@@ -1,0 +1,42 @@
+sequenceDiagram
+    actor User
+    participant ClaudeCode as Claude Code<br/>(Session Context)
+    participant SKILLMD as SKILL.md<br/>(Terse Launcher)
+    participant gemini_run as scripts/gemini_run.py<br/>(Entry Point)
+    participant Dispatch as dispatch.py<br/>(Command Router)
+    participant Adapter as adapters/<br/>(Command-Specific)
+    participant Facade as core/transport<br/>(3-Function Facade)
+    participant Coordinator as TransportCoordinator<br/>(Backend Chooser)
+    participant SDK as SdkTransport<br/>(SDK Backend)
+    participant RawHTTP as RawHttpTransport<br/>(HTTP Backend)
+    participant Normalize as normalize.py<br/>(Anti-Corruption)
+    participant Gemini as Gemini API<br/>(Google)
+    participant Stdout as stdout<br/>(Output)
+
+    User->>ClaudeCode: Invokes gemini skill
+    ClaudeCode->>SKILLMD: Reads SKILL.md
+    Note over ClaudeCode,SKILLMD: Token budget:<br/>SKILL.md kept terse<br/>Reference files on-demand
+    ClaudeCode->>gemini_run: Executes python3 gemini_run.py text "prompt"
+    gemini_run->>Dispatch: parse args, route to command
+    Dispatch->>Adapter: Call adapter for 'text' command
+    Adapter->>Facade: api_call(request, timeout, retries)
+    Facade->>Coordinator: Get coordinator (lazy singleton)
+    Coordinator->>Coordinator: Check capability gate
+    alt SDK Available & Priority
+        Coordinator->>SDK: Try primary: api_call()
+        SDK->>Gemini: POST /v1beta/models/gemini-2.5-flash:generateContent
+        Gemini->>SDK: Response (REST envelope)
+        SDK->>Normalize: normalize_response()
+        Normalize->>SDK: Canonical dict shape
+        SDK->>Coordinator: Return normalized response
+    else SDK Unavailable or Fails
+        Coordinator->>RawHTTP: Try fallback: api_call()
+        RawHTTP->>Gemini: POST /v1beta/models/gemini-2.5-flash:generateContent
+        Gemini->>RawHTTP: Response (REST envelope)
+        RawHTTP->>Coordinator: Return response (already REST shape)
+    end
+    Coordinator->>Facade: Return response
+    Facade->>Adapter: Return response
+    Adapter->>Adapter: Format response (markdown, JSON, etc.)
+    Adapter->>Stdout: Print result
+    Stdout->>User: Display output

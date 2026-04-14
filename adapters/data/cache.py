@@ -5,12 +5,13 @@ latency on repeated requests. Mutating operations require --execute.
 
 Dependencies: core/infra/client.py, core/adapter/helpers.py
 """
+
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
-from typing import Any
 
-from core.adapter.helpers import build_base_parser, check_dry_run, emit_json
+from core.adapter.helpers import add_execute_flag, build_base_parser, check_dry_run, emit_json
 from core.infra.sanitize import safe_print
 from core.infra.client import api_call
 from core.infra.config import load_config
@@ -22,6 +23,7 @@ def get_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="action", help="Cache action")
 
     create_p = sub.add_parser("create", help="Create a cache")
+    add_execute_flag(create_p)
     create_p.add_argument("content", help="Content to cache (text or file URI).")
     create_p.add_argument("--ttl", default="3600s", help="Time-to-live (e.g., '3600s').")
 
@@ -31,6 +33,7 @@ def get_parser() -> argparse.ArgumentParser:
     get_p.add_argument("name", help="Cache resource name.")
 
     delete_p = sub.add_parser("delete", help="Delete a cache")
+    add_execute_flag(delete_p)
     delete_p.add_argument("name", help="Cache resource name to delete.")
 
     return parser
@@ -43,7 +46,7 @@ def run(
     ttl: str = "3600s",
     model: str | None = None,
     execute: bool = False,
-    **kwargs: Any,
+    **kwargs: object,
 ) -> None:
     """Execute cache management operations."""
     if action == "create":
@@ -73,6 +76,7 @@ def _create(
         return
 
     from core.routing.router import Router
+
     config = load_config()
     router = Router(
         root_dir=Path(__file__).parent.parent.parent,
@@ -80,7 +84,7 @@ def _create(
     )
     resolved_model = model or router.select_model("cache")
 
-    body: dict[str, Any] = {
+    body: dict[str, object] = {
         "model": f"models/{resolved_model}",
         "contents": [{"role": "user", "parts": [{"text": content}]}],
         "ttl": ttl,
@@ -93,7 +97,8 @@ def _create(
 def _list_caches() -> None:
     """List all context caches."""
     response = api_call("cachedContents", method="GET")
-    caches = response.get("cachedContents", [])
+    caches_value = response.get("cachedContents")
+    caches = caches_value if isinstance(caches_value, list) else []
     emit_json({"count": len(caches), "caches": caches})
 
 
