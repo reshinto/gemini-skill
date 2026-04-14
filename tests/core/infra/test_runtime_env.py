@@ -9,6 +9,15 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _clear_canonical_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from core.infra.runtime_env import CANONICAL_ENV_KEYS
+
+    env_key: str
+    for env_key in CANONICAL_ENV_KEYS:
+        monkeypatch.delenv(env_key, raising=False)
+
+
 def _write_settings(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")
