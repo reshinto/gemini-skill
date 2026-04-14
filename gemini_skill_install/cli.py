@@ -5,20 +5,33 @@ from __future__ import annotations
 import shutil
 import sys
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from importlib import resources
 from pathlib import Path
-
-try:
-    from importlib.resources.abc import Traversable
-except ModuleNotFoundError:
-    from importlib.abc import Traversable
+from typing import Protocol
 
 from core.cli import install_main
 from core.cli.installer.payload import iter_install_payload_paths
 
 _PACKAGE_NAME = "gemini_skill_install"
 _PAYLOAD_DIRNAME = "payload"
+
+
+class Traversable(Protocol):
+    """Subset of the importlib Traversable interface used by this module."""
+
+    @property
+    def name(self) -> str:
+        """Return the resource name."""
+
+    def iterdir(self) -> Iterator["Traversable"]:
+        """Yield child resources."""
+
+    def is_dir(self) -> bool:
+        """Return True when this resource is a directory-like node."""
+
+    def read_bytes(self) -> bytes:
+        """Read the resource contents as bytes."""
 
 
 def _copy_traversable_tree(source_root: Traversable, destination_root: Path) -> None:
