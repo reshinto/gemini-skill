@@ -126,9 +126,7 @@ class TestInstallLauncher:
         assert args[2:] == ["--yes"]
         assert env["GEMINI_SKILL_INSTALL_REEXEC"] == "python3.13"
 
-    def test_rejects_when_no_compatible_python_found(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_rejects_when_no_compatible_python_found(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The launcher should surface a clear error when PATH lacks a stable CPython."""
         monkeypatch.setattr(sys, "version_info", (3, 14, 0, "alpha", 1))
         monkeypatch.setattr(
