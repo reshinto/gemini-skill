@@ -318,3 +318,133 @@ class TestDispatchAsyncAdapter:
             # adapters.generation.text has no IS_ASYNC attribute — sync path
             main(["text", "hello"])
         mock_run.assert_called_once()
+
+
+class TestDispatchHelpBranch:
+    """Coverage for the ``--help`` short-circuit in ``main`` (branch 98→103)."""
+
+    def test_help_flag_skips_policy_enforcement(self) -> None:
+        """Passing --help invokes argparse's help rendering and does NOT
+        call _enforce_policy, so the user can discover mutating commands
+        before flipping the opt-in flags."""
+        from core.cli.dispatch import main
+
+        with patch("core.cli.dispatch._enforce_policy") as mock_enforce:
+            with pytest.raises(SystemExit):
+                main(["text", "--help"])
+        mock_enforce.assert_not_called()
+
+    def test_dash_h_flag_skips_policy_enforcement(self) -> None:
+        """The short form ``-h`` also short-circuits _enforce_policy."""
+        from core.cli.dispatch import main
+
+        with patch("core.cli.dispatch._enforce_policy") as mock_enforce:
+            with pytest.raises(SystemExit):
+                main(["text", "-h"])
+        mock_enforce.assert_not_called()
+
+
+class TestIsMutatingInvocation:
+    """Coverage for ``_is_mutating_invocation`` branches (lines 183-198)."""
+
+    def test_non_dict_capability_returns_false(self) -> None:
+        """An invalid capability object (not a dict) short-circuits false."""
+        from core.cli.dispatch import _is_mutating_invocation
+
+        assert _is_mutating_invocation("not-a-dict", []) is False
+
+    def test_capability_without_mutating_keys_returns_false(self) -> None:
+        """A dict capability with neither ``mutating`` nor
+        ``mutating_actions`` defaults to false."""
+        from core.cli.dispatch import _is_mutating_invocation
+
+        assert _is_mutating_invocation({}, []) is False
+
+    def test_plain_mutating_flag_true(self) -> None:
+        """``mutating: True`` on the capability makes every invocation mutating."""
+        from core.cli.dispatch import _is_mutating_invocation
+
+        assert _is_mutating_invocation({"mutating": True}, []) is True
+
+    def test_mutating_actions_matches_action_token(self) -> None:
+        """When ``mutating_actions`` is a list, a matching action token is mutating."""
+        from core.cli.dispatch import _is_mutating_invocation
+
+        capability = {"mutating_actions": ["delete"]}
+        assert _is_mutating_invocation(capability, ["delete", "foo"]) is True
+
+    def test_mutating_actions_non_matching_action(self) -> None:
+        """An action not in the mutating_actions list is NOT mutating."""
+        from core.cli.dispatch import _is_mutating_invocation
+
+        capability = {"mutating_actions": ["delete"]}
+        assert _is_mutating_invocation(capability, ["list"]) is False
+
+
+class TestExtractActionToken:
+    """Coverage for ``_extract_action_token`` branches."""
+
+    def test_flag_with_value_is_skipped(self) -> None:
+        """Flags in _FLAGS_WITH_VALUES consume 2 argv slots."""
+        from core.cli.dispatch import _FLAGS_WITH_VALUES, _extract_action_token
+
+        sample_flag = next(iter(_FLAGS_WITH_VALUES))
+        token = _extract_action_token([sample_flag, "value", "action"])
+        assert token == "action"
+
+    def test_boolean_flag_is_skipped(self) -> None:
+        """Flags in _BOOLEAN_FLAGS consume 1 argv slot."""
+        from core.cli.dispatch import _BOOLEAN_FLAGS, _extract_action_token
+
+        sample_flag = next(iter(_BOOLEAN_FLAGS))
+        token = _extract_action_token([sample_flag, "action"])
+        assert token == "action"
+
+    def test_unknown_dash_flag_is_skipped(self) -> None:
+        """Any token starting with ``-`` that isn't in the known sets is skipped."""
+        from core.cli.dispatch import _extract_action_token
+
+        assert _extract_action_token(["--unknown-flag", "action"]) == "action"
+
+    def test_no_action_returns_none(self) -> None:
+        """When every token is a flag, returns None."""
+        from core.cli.dispatch import _extract_action_token
+
+        assert _extract_action_token(["--unknown", "--another"]) is None
+
+    def test_first_positional_token_returned(self) -> None:
+        """The first non-flag token is returned as the action."""
+        from core.cli.dispatch import _extract_action_token
+
+        assert _extract_action_token(["list", "--verbose"]) == "list"
+
+
+class TestValidateAdapterProtocol:
+    """Coverage for _validate_adapter_protocol failure branch."""
+
+    def test_adapter_missing_both_run_and_run_async_errors(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """An adapter with get_parser but no run/run_async exits with 1."""
+        from types import SimpleNamespace
+
+        from core.cli.dispatch import _validate_adapter_protocol
+
+        broken = SimpleNamespace(get_parser=lambda: None)
+        with pytest.raises(SystemExit) as exit_info:
+            _validate_adapter_protocol("broken", broken)  # type: ignore[arg-type]
+        assert exit_info.value.code == 1
+        assert "AdapterProtocol" in capsys.readouterr().out
+
+    def test_adapter_missing_get_parser_errors(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """An adapter without get_parser exits with 1."""
+        from types import SimpleNamespace
+
+        from core.cli.dispatch import _validate_adapter_protocol
+
+        broken = SimpleNamespace(run=lambda **kwargs: None)
+        with pytest.raises(SystemExit) as exit_info:
+            _validate_adapter_protocol("broken", broken)  # type: ignore[arg-type]
+        assert exit_info.value.code == 1

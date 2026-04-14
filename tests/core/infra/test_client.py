@@ -897,3 +897,96 @@ class TestDownloadFileBytes:
             result = download_file_bytes("files/abc")
         assert isinstance(result, bytes)
         assert result == b"raw"
+
+
+class TestNonDictResponseHandling:
+    """Coverage for the non-dict payload fallthrough branches.
+
+    When the Gemini API returns a JSON body that is not an object
+    (e.g. a list, number, string, or null), the raw HTTP client's
+    ``isinstance(payload, dict)`` gate falls through to an empty-dict
+    sentinel so adapters receive a consistent shape.
+    """
+
+    def test_api_call_returns_empty_dict_on_non_dict_payload(self) -> None:
+        """If the response body decodes to a JSON array, ``api_call`` returns {}."""
+        from core.transport.raw_http.client import api_call
+
+        mock_response = MagicMock()
+        # Return a JSON array — valid JSON but not a dict
+        mock_response.read.return_value = b'["not", "a", "dict"]'
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("core.transport.raw_http.client.urlopen", return_value=mock_response),
+            patch("core.transport.raw_http.client.resolve_key", return_value="k"),
+        ):
+            result = api_call("models", method="GET")
+        assert result == {}
+
+    def test_upload_file_returns_empty_dict_on_non_dict_payload(
+        self, tmp_path: Path
+    ) -> None:
+        """If the Files API returns non-dict JSON, ``upload_file`` returns {}."""
+        from core.transport.raw_http.client import upload_file
+
+        sample = tmp_path / "empty.txt"
+        sample.write_text("content")
+
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'"just-a-string"'
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("core.transport.raw_http.client.urlopen", return_value=mock_response),
+            patch("core.transport.raw_http.client.resolve_key", return_value="k"),
+        ):
+            result = upload_file(sample, mime_type="text/plain")
+        assert result == {}
+
+    def test_api_call_safety_raise_when_retry_loop_exits_empty(self) -> None:
+        """Monkeypatching _MAX_RETRIES to -1 makes the retry range empty,
+        exercising the defensive ``raise APIError("Request retry loop exited
+        unexpectedly.")`` safety net at the bottom of api_call.
+
+        This branch is normally unreachable because every iteration either
+        returns or raises — but a future bug that introduced a missing raise
+        path would hit this sentinel instead of returning None, so it exists
+        for defence in depth. Covering it documents the contract.
+        """
+        import core.transport.raw_http.client as client_module
+        from core.transport.raw_http.client import APIError, api_call
+
+        with (
+            patch.object(client_module, "_MAX_RETRIES", -1),
+            patch("core.transport.raw_http.client.resolve_key", return_value="k"),
+        ):
+            with pytest.raises(APIError, match="retry loop exited"):
+                api_call("models", method="GET")
+
+    def test_stream_skips_non_dict_chunks(self) -> None:
+        """Streaming chunks that decode to JSON arrays (not dicts) are skipped.
+
+        Triggers branch 150→141 in raw_http/client.py where isinstance(chunk, dict)
+        is False and the yield is skipped, looping back for the next line.
+        """
+        from core.transport.raw_http.client import stream_generate_content
+
+        # First chunk is a JSON array (skipped), second is a proper dict
+        sse_data = b'data: ["array-not-dict"]\n\ndata: {"ok": true}\n\n'
+        mock_response = MagicMock()
+        mock_response.read.return_value = sse_data
+        mock_response.__iter__ = lambda self: iter(sse_data.splitlines(keepends=True))
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("core.transport.raw_http.client.urlopen", return_value=mock_response),
+            patch("core.transport.raw_http.client.resolve_key", return_value="k"),
+        ):
+            chunks = list(stream_generate_content("gemini-2.5-flash", {}))
+
+        # Only the dict chunk is yielded; the array chunk is silently dropped
+        assert chunks == [{"ok": True}]

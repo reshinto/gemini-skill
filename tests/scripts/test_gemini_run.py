@@ -22,6 +22,7 @@ runner.
 from __future__ import annotations
 
 import importlib
+import sys
 from pathlib import Path
 from unittest import mock
 
@@ -146,3 +147,32 @@ class TestMainEntryPoint:
         mock_check.assert_called_once()
         mock_reexec.assert_called_once()
         mock_dispatch.assert_called_once_with(["text", "hello"])
+
+
+class TestRunAsMain:
+    """Exercises the ``if __name__ == '__main__'`` guard at the file bottom."""
+
+    def test_run_path_triggers_main_entry(self) -> None:
+        """Running the file via runpy with __main__ invokes main(argv[1:])."""
+        import runpy
+        from pathlib import Path
+
+        script_path = (
+            Path(__file__).resolve().parents[2] / "scripts" / "gemini_run.py"
+        )
+        fake_dispatch = mock.MagicMock(return_value=None)
+        fake_dispatch_module = mock.MagicMock()
+        fake_dispatch_module.main = fake_dispatch
+        with (
+            mock.patch.dict(
+                sys.modules, {"core.cli.dispatch": fake_dispatch_module}
+            ),
+            mock.patch.object(sys, "argv", ["gemini_run.py", "text", "hi"]),
+            # Skip the real venv re-exec check so we don't os.execv the test runner.
+            mock.patch(
+                "pathlib.Path.exists", return_value=False
+            ),
+        ):
+            runpy.run_path(str(script_path), run_name="__main__")
+
+        fake_dispatch.assert_called_once_with(["text", "hi"])

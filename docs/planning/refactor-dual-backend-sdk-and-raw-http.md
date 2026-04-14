@@ -3585,7 +3585,7 @@ Goal: Turn `docs/` + `README.md` + `SKILL.md` into a coherent reference that exp
      - `docs/diagrams/token-optimization-flow.mmd` — explains why SKILL.md stays small: "model reads SKILL.md at session start → model decides to invoke gemini → model reads only the specific reference/<command>.md on demand". Embedded in the "why SKILL.md is terse" section.
    - All new diagrams MUST render via `scripts/render_diagrams.sh` with `-b white` so they are dark-mode-legible.
 
-10. **Navigation / breadcrumb header on every docs page** — current pain point: once a reader clicks from `README.md` into `docs/install.md`, there is no obvious way back. Every file under `docs/` and `reference/` MUST start with a breadcrumb line as its first content (immediately after the H1 title):
+10. **Navigation / breadcrumb header on every `docs/` page** — current pain point: once a reader clicks from `README.md` into `docs/install.md`, there is no obvious way back. Every file under `docs/` MUST start with a breadcrumb line as its first content (immediately after the H1 title):
 
     ```markdown
     # Installation
@@ -3599,10 +3599,9 @@ Goal: Turn `docs/` + `README.md` + `SKILL.md` into a coherent reference that exp
 
     Rules:
     - `docs/*.md` → breadcrumb links back to `../README.md` + `README.md` (the new docs index) + `../reference/index.md`
-    - `reference/*.md` → breadcrumb links back to `../README.md` + `../docs/README.md` + `index.md` (the reference index)
+    - **`reference/*.md` files do NOT get breadcrumbs** (per user direction — they are detail reference pages that are jumped to directly, and a breadcrumb clutters the top of every command doc). The existing `reference/index.md` remains the navigation hub for the reference tree.
     - `docs/diagrams/*.mmd` — not rendered as markdown, skip
     - Every breadcrumb line ends with a horizontal rule (`---`) for visual separation
-    - Also add a "Next / Previous" footer to every `reference/*.md` linking adjacent commands in alphabetical order so a reader can walk the whole reference without jumping back to the index
     - `docs/README.md` (the new docs index) lists every `docs/*.md` with a one-line summary AND every `reference/*.md` with a one-line summary — single page the reader can always return to
     - `README.md` itself gets a prominent "Documentation" section with links to both `docs/README.md` and `reference/index.md` so the navigation tree is fully rooted at README
 

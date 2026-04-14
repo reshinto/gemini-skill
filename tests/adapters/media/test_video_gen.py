@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -142,3 +143,105 @@ class TestExtractVideoUri:
 
         # Trigger the except branch with bad data types
         assert _extract_video_uri({"response": {"generatedVideos": "not-a-list"}}) is None
+
+    def test_returns_none_when_response_not_dict(self) -> None:
+        """Branch: ``status.get('response')`` is not a dict."""
+        from adapters.media.video_gen import _extract_video_uri
+
+        assert _extract_video_uri({"response": "string-not-dict"}) is None
+        assert _extract_video_uri({"response": 42}) is None
+
+    def test_returns_none_when_first_video_not_dict(self) -> None:
+        """Branch: the first generatedVideos entry is not a dict."""
+        from adapters.media.video_gen import _extract_video_uri
+
+        status: dict[str, object] = {
+            "response": {"generatedVideos": ["not-a-dict"]},
+        }
+        assert _extract_video_uri(status) is None
+
+    def test_returns_none_when_video_subdict_missing(self) -> None:
+        """Branch: entry lacks a ``video`` dict key."""
+        from adapters.media.video_gen import _extract_video_uri
+
+        status: dict[str, object] = {
+            "response": {"generatedVideos": [{"other": "value"}]},
+        }
+        assert _extract_video_uri(status) is None
+
+    def test_returns_none_when_video_subdict_not_dict(self) -> None:
+        """Branch: ``video`` value is a non-dict type."""
+        from adapters.media.video_gen import _extract_video_uri
+
+        status: dict[str, object] = {
+            "response": {"generatedVideos": [{"video": "string-not-dict"}]},
+        }
+        assert _extract_video_uri(status) is None
+
+    def test_returns_none_when_uri_not_string(self) -> None:
+        """Branch: ``uri`` present but not a string."""
+        from adapters.media.video_gen import _extract_video_uri
+
+        status: dict[str, object] = {
+            "response": {"generatedVideos": [{"video": {"uri": 42}}]},
+        }
+        assert _extract_video_uri(status) is None
+
+
+class TestVideoGenRunErrorPaths:
+    """Coverage for error branches in ``run`` (lines 87-89)."""
+
+    def test_missing_operation_name_early_exit(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """When predictLongRunning does NOT return an operation name,
+        run() prints the error, emits the raw op JSON, and returns early."""
+        from unittest.mock import MagicMock, patch
+
+        from adapters.media.video_gen import run
+
+        with (
+            patch("adapters.media.video_gen.api_call", return_value={}),
+            patch("core.routing.router.Router") as mock_router_cls,
+            patch("adapters.media.video_gen.load_config") as mock_cfg,
+        ):
+            mock_router_cls.return_value.select_model.return_value = "veo-3"
+            mock_cfg.return_value = MagicMock(
+                prefer_preview_models=False, output_dir=None
+            )
+            run(prompt="sunset", execute=True, output_dir=str(tmp_path))
+
+        captured = capsys.readouterr().out
+        assert "did not return an operation name" in captured
+
+    def test_missing_video_uri_after_poll(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """When polling completes but the response lacks a usable URI,
+        run() emits the error and returns without writing any file."""
+        from unittest.mock import MagicMock, patch
+
+        from adapters.media.video_gen import run
+
+        done_status: dict[str, object] = {"done": True, "response": {}}
+
+        def fake_api_call(endpoint: str, **kwargs: object) -> dict[str, object]:
+            if "predictLongRunning" in endpoint:
+                return {"name": "operations/xyz"}
+            return done_status
+
+        with (
+            patch("adapters.media.video_gen.api_call", side_effect=fake_api_call),
+            patch("core.routing.router.Router") as mock_router_cls,
+            patch("adapters.media.video_gen.load_config") as mock_cfg,
+            patch("adapters.media.video_gen.time.time", side_effect=[0, 1, 2]),
+            patch("adapters.media.video_gen.time.sleep"),
+        ):
+            mock_router_cls.return_value.select_model.return_value = "veo-3"
+            mock_cfg.return_value = MagicMock(
+                prefer_preview_models=False, output_dir=None
+            )
+            run(prompt="sunset", execute=True, output_dir=str(tmp_path))
+
+        captured = capsys.readouterr().out
+        assert "No video URI" in captured
