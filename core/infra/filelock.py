@@ -18,6 +18,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from types import TracebackType
 
 
 class LockTimeout(Exception):
@@ -47,7 +48,12 @@ class FileLock:
         self._acquire()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self._release()
 
     def _acquire(self) -> None:

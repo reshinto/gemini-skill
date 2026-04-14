@@ -18,6 +18,7 @@ from __future__ import annotations
 import signal
 import sys
 import threading
+from types import TracebackType
 from types import FrameType
 from typing import cast
 
@@ -64,7 +65,12 @@ class TimeoutGuard:
             self._watchdog.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         if self._use_signal:
             signal.alarm(0)
             if self._old_handler is not None:

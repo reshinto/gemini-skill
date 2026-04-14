@@ -49,6 +49,41 @@ jobs:
         run: |
           ! grep -r "^import cgi\|^from cgi" core adapters
 
+      - name: Verify no typing.Any usage (ban-Any invariant)
+        run: |
+          ! grep -rnE 'from typing import.*\bAny\b|typing\.Any|: Any\b|-> Any\b' \
+              core/ adapters/ scripts/ setup/ --include="*.py"
+
+      - name: Verify no single-character local variable names (naming hygiene)
+        run: |
+          set -e
+          ! grep -rnE '\bfor [a-hj-z]\b in\b' core/ adapters/ scripts/ setup/ --include="*.py"
+          ! grep -rnE '\blambda [a-hj-z]:' core/ adapters/ scripts/ setup/ --include="*.py"
+          ! grep -rnE 'except [A-Za-z._(, ]+\bas [a-hj-z]\s*:' core/ adapters/ scripts/ setup/ --include="*.py"
+          ! grep -rnE '^\s+[a-hj-z] =[^=]' core/ adapters/ scripts/ setup/ --include="*.py"
+
+      - name: Strict typing on new refactor surface
+        run: |
+          mypy --strict \
+            core/transport/ \
+            core/auth/auth.py \
+            core/infra/config.py \
+            core/infra/errors.py \
+            core/infra/checksums.py \
+            core/infra/filelock.py \
+            core/infra/timeouts.py \
+            core/cli/install_main.py \
+            core/cli/update_main.py \
+            core/cli/health_main.py \
+            core/cli/dispatch.py \
+            core/cli/installer/ \
+            adapters/generation/imagen.py \
+            adapters/generation/live.py \
+            adapters/media/image_gen.py \
+            adapters/tools/search.py \
+            adapters/data/files.py \
+            scripts/gemini_run.py
+
   # Phase 8: dual-backend live integration matrix. Gated on
   # workflow_dispatch (manual trigger only) so PRs from forks never
   # expose the secret GEMINI_API_KEY. Runs the full integration

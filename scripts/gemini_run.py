@@ -22,13 +22,14 @@ matters because Claude Code can shell out to ``python``,
 """
 import os
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 _MIN_PYTHON = (3, 9)
 _INSTALL_DIR = Path.home() / ".claude" / "skills" / "gemini"
 
 
-def _check_python_version():
+def _check_python_version() -> None:
     """Exit with a clear message if the host Python is too old."""
     if sys.version_info < _MIN_PYTHON:
         sys.exit(
@@ -54,7 +55,7 @@ def _skill_venv_python() -> Path:
     return _INSTALL_DIR / ".venv" / "bin" / "python"
 
 
-def _maybe_reexec_under_venv():
+def _maybe_reexec_under_venv() -> None:
     """Re-exec the current process under the skill venv python if needed.
 
     Three branches:
@@ -88,7 +89,7 @@ def _maybe_reexec_under_venv():
     os.execv(str(venv_python), [str(venv_python)] + sys.argv)
 
 
-def main(argv):
+def main(argv: Sequence[str]) -> None:
     """End-to-end launcher entry point — dispatch to core.cli.dispatch."""
     _check_python_version()
     _maybe_reexec_under_venv()
@@ -100,7 +101,7 @@ def main(argv):
 
     from core.cli.dispatch import main as dispatch_main  # noqa: E402
 
-    return dispatch_main(argv)
+    dispatch_main(list(argv))
 
 
 if __name__ == "__main__":
