@@ -89,9 +89,7 @@ class TestPlanReviewModelResolution:
                 thinking_mode="on",
             )
 
-    def test_missing_thinking_off_fallback_raises(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_thinking_off_fallback_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from adapters.generation import plan_review
         from core.infra.errors import CapabilityUnavailableError
         from core.routing.registry import Registry
@@ -162,9 +160,7 @@ class TestThinkingConfig:
         from adapters.generation.plan_review import _build_thinking_config
         from core.infra.errors import CapabilityUnavailableError
 
-        with pytest.raises(
-            CapabilityUnavailableError, match="does not support full thinking-off"
-        ):
+        with pytest.raises(CapabilityUnavailableError, match="does not support full thinking-off"):
             _build_thinking_config(
                 resolved_model_id="gemini-3.1-pro-preview",
                 thinking_mode="off",
@@ -199,9 +195,7 @@ class TestSessionContext:
     def test_force_session_creates_new_session(self, tmp_path: Path) -> None:
         from adapters.generation import plan_review
 
-        with patch.object(
-            plan_review, "_plan_review_sessions_dir", return_value=tmp_path
-        ):
+        with patch.object(plan_review, "_plan_review_sessions_dir", return_value=tmp_path):
             session_context = plan_review._build_session_context(
                 session_id=None,
                 continue_session=False,
@@ -223,9 +217,7 @@ class TestSessionContext:
             {"role": "user", "parts": [{"text": "Initial plan"}]},
         )
 
-        with patch.object(
-            plan_review, "_plan_review_sessions_dir", return_value=tmp_path
-        ):
+        with patch.object(plan_review, "_plan_review_sessions_dir", return_value=tmp_path):
             session_context = plan_review._build_session_context(
                 session_id="review-session",
                 continue_session=False,
@@ -243,9 +235,7 @@ class TestSessionContext:
         session_state.create("older")
         session_state.create("newer")
 
-        with patch.object(
-            plan_review, "_plan_review_sessions_dir", return_value=tmp_path
-        ):
+        with patch.object(plan_review, "_plan_review_sessions_dir", return_value=tmp_path):
             session_context = plan_review._build_session_context(
                 session_id=None,
                 continue_session=True,
@@ -338,23 +328,17 @@ class TestReviewOnce:
 
         if _PLAN_REVIEW_SYSTEM_PROMPT:
             assert (
-                request_body["systemInstruction"]["parts"][0]["text"]
-                == _PLAN_REVIEW_SYSTEM_PROMPT
+                request_body["systemInstruction"]["parts"][0]["text"] == _PLAN_REVIEW_SYSTEM_PROMPT
             )
         else:
             assert "systemInstruction" not in request_body
-        assert (
-            request_body["generationConfig"]["thinkingConfig"]["thinkingLevel"]
-            == "HIGH"
-        )
+        assert request_body["generationConfig"]["thinkingConfig"]["thinkingLevel"] == "HIGH"
         assert normalized_text.startswith("VERDICT: REVISE")
 
     def test_review_once_persists_session_messages(self, tmp_path: Path) -> None:
         from adapters.generation import plan_review
 
-        with patch.object(
-            plan_review, "_plan_review_sessions_dir", return_value=tmp_path
-        ):
+        with patch.object(plan_review, "_plan_review_sessions_dir", return_value=tmp_path):
             session_context = plan_review._build_session_context(
                 session_id="review-session",
                 continue_session=False,
@@ -380,10 +364,7 @@ class TestReviewOnce:
 
         assert session_context.session_state is not None
         assert session_context.session_id is not None
-        assert (
-            len(session_context.session_state.get_history(session_context.session_id))
-            == 2
-        )
+        assert len(session_context.session_state.get_history(session_context.session_id)) == 2
         assert len(session_context.contents) == 2
 
 
@@ -492,9 +473,7 @@ class TestRun:
             with pytest.raises(SystemExit, match="requires a proposal argument"):
                 run(proposal=None)
 
-    def test_run_with_proposal_emits_review_text(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_run_with_proposal_emits_review_text(self, capsys: pytest.CaptureFixture[str]) -> None:
         from adapters.generation.plan_review import run
 
         with (
