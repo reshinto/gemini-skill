@@ -2,38 +2,42 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+    paths:
+      - "VERSION"
 
 permissions:
   contents: write
 
 jobs:
-  release:
-    name: Create release with checksums
+  tag-and-release:
+    name: Create tag and GitHub release from VERSION
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: "3.13"
 
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
-
-      - name: Verify VERSION matches tag
+      - name: Configure git author
         run: |
-          FILE_VERSION=$(cat VERSION | tr -d '[:space:]')
-          TAG_VERSION="${{ steps.version.outputs.version }}"
-          if [ "$FILE_VERSION" != "$TAG_VERSION" ]; then
-            echo "ERROR: VERSION file ($FILE_VERSION) does not match tag ($TAG_VERSION)"
-            exit 1
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Read version from VERSION
+        id: version
+        run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag from VERSION
+        run: |
+          bash scripts/tag_release.sh --yes --skip-existing
 
       - name: Build release tarball (operational files only)
         run: |
@@ -66,9 +70,11 @@ jobs:
           name: python-package-distributions
           path: dist/
 
-      - name: Create GitHub release
+      - name: Create or update GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
           files: |
             release/gemini-skill-${{ steps.version.outputs.version }}.tar.gz
             release/checksums.txt
@@ -78,15 +84,8 @@ jobs:
 
   publish-pypi:
     name: Publish bootstrap installer to PyPI
-    needs: release
+    needs: tag-and-release
     runs-on: ubuntu-latest
-    environment:
-      # One-time setup required outside this repo:
-      # 1. Create a GitHub environment named "pypi".
-      # 2. Register .github/workflows/release.yml as a Trusted Publisher
-      #    for the PyPI project "gemini-skill-install".
-      name: pypi
-      url: https://pypi.org/project/gemini-skill-install/
     permissions:
       id-token: write
 
