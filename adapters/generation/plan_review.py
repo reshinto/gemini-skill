@@ -55,9 +55,7 @@ class ResolvedPlanReviewModel:
 
 def get_parser() -> argparse.ArgumentParser:
     """Return the argument parser for the plan-review adapter."""
-    parser: argparse.ArgumentParser = build_base_parser(
-        "Review an implementation plan with Gemini"
-    )
+    parser: argparse.ArgumentParser = build_base_parser("Review an implementation plan with Gemini")
     parser.add_argument(
         "proposal",
         nargs="?",
@@ -152,9 +150,7 @@ def _review_with_failover(
     last_error: Exception | None = None
     candidate_model: str
 
-    for candidate_model in _plan_review_candidate_models(
-        requested_model=requested_model
-    ):
+    for candidate_model in _plan_review_candidate_models(requested_model=requested_model):
         try:
             resolved_model: ResolvedPlanReviewModel = _resolve_plan_review_model(
                 registry=registry,
@@ -189,9 +185,7 @@ def _resolve_plan_review_model(
     requested_model_id: str = requested_model or _DEFAULT_PLAN_REVIEW_MODEL
     _validate_text_capable_model(registry=registry, model_id=requested_model_id)
 
-    if thinking_mode == _THINKING_OFF and not _supports_true_thinking_off(
-        requested_model_id
-    ):
+    if thinking_mode == _THINKING_OFF and not _supports_true_thinking_off(requested_model_id):
         fallback_model_id: str = _resolve_thinking_off_fallback_model(registry=registry)
         return ResolvedPlanReviewModel(
             requested_model=requested_model_id,
@@ -244,9 +238,7 @@ def _supports_true_thinking_off(model_id: str) -> bool:
     return False
 
 
-def _build_thinking_config(
-    *, resolved_model_id: str, thinking_mode: str
-) -> dict[str, object]:
+def _build_thinking_config(*, resolved_model_id: str, thinking_mode: str) -> dict[str, object]:
     """Build the request ``thinkingConfig`` block for the selected model."""
     if resolved_model_id.startswith("gemini-3"):
         if thinking_mode == _THINKING_OFF:
@@ -377,9 +369,7 @@ def _review_once(
     }
 
     if _PLAN_REVIEW_SYSTEM_PROMPT:
-        request_body["systemInstruction"] = {
-            "parts": [{"text": _PLAN_REVIEW_SYSTEM_PROMPT}]
-        }
+        request_body["systemInstruction"] = {"parts": [{"text": _PLAN_REVIEW_SYSTEM_PROMPT}]}
 
     response = cast(
         GeminiResponse,
@@ -390,17 +380,10 @@ def _review_once(
     )
 
     normalized_text: str = _normalize_review_text(extract_text(response))
-    if (
-        session_context.session_state is not None
-        and session_context.session_id is not None
-    ):
+    if session_context.session_state is not None and session_context.session_id is not None:
         response_content: Content = response["candidates"][0]["content"]
-        session_context.session_state.append_message(
-            session_context.session_id, user_message
-        )
-        session_context.session_state.append_message(
-            session_context.session_id, response_content
-        )
+        session_context.session_state.append_message(session_context.session_id, user_message)
+        session_context.session_state.append_message(session_context.session_id, response_content)
         session_context.contents.append(user_message)
         session_context.contents.append(response_content)
 
