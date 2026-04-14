@@ -52,3 +52,9 @@ Computer use is a preview feature and may change. Model behavior and API surface
 - Desktop/GUI access only (no direct file system access in most cases)
 - Input simulation is best-effort (some applications may not respond correctly)
 - Screenshot capture depends on running display server
+
+---
+
+## Notes
+
+Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.

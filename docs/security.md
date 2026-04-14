@@ -1,6 +1,6 @@
 # Security
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-14
 
 Threat model, authentication, data protection, and risk management.
 
@@ -147,18 +147,21 @@ Threat model, authentication, data protection, and risk management.
 - Users read docs before using privacy-sensitive commands
 - Google respects privacy commitments (verify independently)
 
-#### 7. Dependency Vulnerability (None at Runtime)
+#### 7. Dependency Vulnerability
 
-**Risk:** Third-party package has a security vulnerability.
+**Risk:** Third-party package (google-genai) has a security vulnerability.
 
 **Mitigation:**
-- **Stdlib only:** No runtime dependencies
-  - No `requests`, no `pyyaml`, no `lxml`, etc.
-  - Eliminates entire class of supply-chain attacks
-  - Trades for reinventing wheels (urllib instead of requests, JSON instead of YAML)
+- **Pinned dependency:** `google-genai==1.33.0` is pinned exactly in `setup/requirements.txt`
+  - Prevents silent upgrades; manual bump required for each version change
+  - Installed into an isolated skill venv (`~/.claude/skills/gemini/.venv`), never system Python
+  - Fallback (raw HTTP) uses stdlib only and requires no SDK at all
+- **Manual update process:** SDK bumps require full test suite + live integration matrix before merge
+- **Supply chain integrity:** Installer generates + verifies SHA-256 checksums (`core/infra/checksums.py`)
 
 **Assumptions:**
 - Python standard library is trustworthy
+- google-genai PyPI package is trustworthy (verify via checksums and CVE monitoring)
 - Your Python installation is not compromised
 
 #### 8. Model Outputs (Hallucinations, Bias, Toxicity)
@@ -182,14 +185,11 @@ Threat model, authentication, data protection, and risk management.
 
 The skill uses an **ordered lookup chain**:
 
-1. **`GEMINI_API_KEY` shell environment variable** (set by Claude Code from
-   `~/.claude/settings.json` or by your shell)
-2. **`.env` file** at the repo root (local-development only — see
-   [docs/install.md](install.md) for setup)
+1. **`GEMINI_API_KEY` shell environment variable** (primary; set by Claude Code from `~/.claude/settings.json`)
+2. **`.env` file** at repo root (local-development only, via `env_dir=` fallback)
 3. **Error:** If neither found
 
-The skill **does NOT honor `GOOGLE_API_KEY`**. `GEMINI_API_KEY` is the one
-canonical name to avoid confusion about which key the skill is using.
+The skill **does NOT honor `GOOGLE_API_KEY`**. `GEMINI_API_KEY` is the one canonical name.
 
 ```python
 def resolve_key(env_dir=None):
@@ -202,6 +202,16 @@ def resolve_key(env_dir=None):
         raise AuthError("No GEMINI_API_KEY found.")
     return key
 ```
+
+### Settings.json vs Project Settings
+
+**Canonical location for installed skill:** `~/.claude/settings.json` (user-global, SAFE for secrets)
+- Claude Code injects the `env` block into the process at session start
+- Installer writes here via Phase 5 merge (see [docs/install.md](install.md))
+
+**Project-shared settings:** `<repo>/.claude/settings.json` (typically committed, NEVER put secrets here)
+
+**Project-local settings:** `<repo>/.claude/settings.local.json` (gitignored, OK for secrets)
 
 ### HTTP Authentication
 
@@ -361,13 +371,13 @@ See https://ai.google.dev/terms for API terms of service.
 
 | Threat | Mitigation | Assumption |
 |--------|-----------|-----------|
-| API key leakage | Header auth, env precedence, no logging | Shell env secure |
+| API key leakage | Header auth, settings.json precedence, no logging | Shell env secure |
 | Prompt injection | Opaque string args, no shell interp | Claude Code trustworthy |
 | Token overflow | 50KB guard, media to file | Temp dir secure |
 | Concurrent access | File locking + atomic writes | fcntl/msvcrt work on your FS |
 | Unencrypted storage | No crypto (stdlib only), file perms | OS enforces permissions |
 | Privacy leak (search/maps) | Command-level opt-in, documentation | Users read docs |
-| Dependency vuln | Stdlib only, no deps | Python stdlib trustworthy |
+| Dependency vuln | Pinned google-genai + checksums + isolated venv | Python + PyPI trustworthy |
 | Model outputs | No filtering, user review | Users understand LLM limits |
 
 ---

@@ -65,3 +65,7 @@ Deep research takes 30–120 seconds depending on query complexity.
 ## Note
 
 Deep Research is designed for thorough, multi-step investigation. Simpler queries may be faster with regular `text` command.
+
+---
+
+Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.

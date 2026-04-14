@@ -1,0 +1,41 @@
+%% TransportCoordinator decision flow.
+%% Covers capability-gate shortcut, primary execution, policy-based
+%% fallback eligibility, and combined-error reporting when both
+%% backends fail.
+flowchart TD
+    START([coordinator.execute_api_call])
+    SUPP{"primary.supports<br/>capability?"}
+    HAS_FB1{fallback configured?}
+    ERR1[/"raise BackendUnavailableError"/]
+    CALL_FB[call fallback]
+    CALL_P[call primary]
+    OK{primary success?}
+    ELIGIBLE{"is_fallback_eligible<br/>policy.py"}
+    PROP[/raise primary_exc/]
+    HAS_FB2{fallback configured?}
+    ERR2[/"raise APIError<br/>primary failed, no fallback"/]
+    CALL_FB2[call fallback]
+    FB_OK{fallback success?}
+    RET_FB1([return fallback result])
+    RET_FB2([return fallback result])
+    COMBINED[/"raise APIError<br/>both backends failed"/]
+    RET_P([return primary result])
+
+    START --> SUPP
+    SUPP -->|no| HAS_FB1
+    HAS_FB1 -->|no| ERR1
+    HAS_FB1 -->|yes| CALL_FB --> RET_FB1
+    SUPP -->|yes| CALL_P --> OK
+    OK -->|yes| RET_P
+    OK -->|no| ELIGIBLE
+    ELIGIBLE -->|no| PROP
+    ELIGIBLE -->|yes| HAS_FB2
+    HAS_FB2 -->|no| ERR2
+    HAS_FB2 -->|yes| CALL_FB2 --> FB_OK
+    FB_OK -->|yes| RET_FB2
+    FB_OK -->|no| COMBINED
+
+    classDef err fill:#ffebee,stroke:#c62828
+    classDef ok fill:#e8f5e9,stroke:#2e7d32
+    class ERR1,ERR2,COMBINED,PROP err
+    class RET_P,RET_FB1,RET_FB2 ok

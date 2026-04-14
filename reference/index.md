@@ -2,6 +2,10 @@
 
 Run any command via: `python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" <command> [args]`
 
+## Dual-Backend Transport
+
+All commands benefit from a unified dual-backend transport layer. The skill automatically routes through either the **SDK backend** (primary) or **raw HTTP backend** (fallback). Both produce identical output; the choice is transparent to users. See [architecture.md](../docs/architecture.md) for details.
+
 ## Command Map
 
 | Command | Purpose | Mutating | Preview | Reference |
@@ -20,10 +24,12 @@ Run any command via: `python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" <comma
 | `cache` | Context caching (create/list/get/delete) | some | no | [cache.md](cache.md) |
 | `batch` | Batch processing (create/list/get/cancel) | some | no | [batch.md](batch.md) |
 | `file_search` | File Search / hosted RAG | some | yes | [file_search.md](file_search.md) |
-| `image_gen` | Image generation (Nano Banana) | YES | yes | [image_gen.md](image_gen.md) |
+| `image_gen` | Image generation (Nano Banana, aspect ratio & size control) | YES | yes | [image_gen.md](image_gen.md) |
+| `imagen` | Image generation (Imagen 3, photoreal, SDK-only) | YES | yes | [imagen.md](imagen.md) |
 | `video_gen` | Video generation (Veo) | YES | yes | [video_gen.md](video_gen.md) |
 | `music_gen` | Music generation (Lyria 3) | YES | yes | [music_gen.md](music_gen.md) |
 | `computer_use` | Computer use (preview, privacy-sensitive) | no | yes | [computer_use.md](computer_use.md) |
+| `live` | Live API realtime sessions (async, SDK-only) | no | yes | [live.md](live.md) |
 | `deep_research` | Deep Research (Interactions API) | YES | yes | [deep_research.md](deep_research.md) |
 | `help` | Show command list | — | — | — |
 | `models` | List available models | — | — | — |

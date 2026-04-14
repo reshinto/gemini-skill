@@ -1,0 +1,31 @@
+%% Dual-backend transport architecture for gemini-skill.
+%% Shows how adapters remain backend-agnostic: all calls flow through
+%% the core.transport facade, which consults the TransportCoordinator,
+%% which picks between SdkTransport (primary) and RawHttpTransport
+%% (fallback). Normalization ensures identical GeminiResponse dict
+%% shape regardless of which backend answered.
+flowchart TD
+    SKILL["SKILL.md<br/>(Claude Code launcher)"]
+    RUN["scripts/gemini_run.py<br/>(re-execs under .venv)"]
+    DISP["core/cli/dispatch.py<br/>(whitelist + policy + IS_ASYNC)"]
+    ADAPT["adapters/<br/>(21 backend-agnostic modules)"]
+    FACADE["core/transport/__init__.py<br/>(facade: api_call / stream / upload)"]
+    COORD["core/transport/coordinator.py<br/>(TransportCoordinator: primary / fallback)"]
+    SDK["SdkTransport<br/>(google-genai)"]
+    RAW["RawHttpTransport<br/>(urllib)"]
+    NORM["core/transport/normalize.py<br/>(→ GeminiResponse TypedDict)"]
+    GEMINI[("Gemini API<br/>v1 / v1beta")]
+
+    SKILL --> RUN --> DISP --> ADAPT --> FACADE --> COORD
+    COORD -->|primary| SDK
+    COORD -->|fallback| RAW
+    SDK --> NORM
+    RAW --> NORM
+    SDK -.->|HTTPS| GEMINI
+    RAW -.->|HTTPS| GEMINI
+    NORM -.->|dict| ADAPT
+
+    classDef new fill:#e1f5ff,stroke:#0277bd,stroke-width:2px
+    classDef existing fill:#f5f5f5,stroke:#616161
+    class FACADE,COORD,SDK,RAW,NORM new
+    class SKILL,RUN,DISP,ADAPT,GEMINI existing

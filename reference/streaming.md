@@ -41,3 +41,7 @@ Output is printed as it arrives from the server. If the connection drops or no d
 ## Note
 
 Streaming is useful for long responses or interactive workflows. For one-shot requests, use the standard `text` command.
+
+---
+
+Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.

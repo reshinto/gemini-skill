@@ -1,0 +1,31 @@
+%% GEMINI_API_KEY resolution precedence.
+%% Installed-skill mode reads from ~/.claude/settings.json via Claude
+%% Code → process env. Local-dev mode falls back to repo-root .env.
+%% GOOGLE_API_KEY is NOT honored — a single canonical name.
+flowchart TD
+    START([resolve_key])
+    ENV{"os.environ has<br/>GEMINI_API_KEY?"}
+    RETURN_ENV([return key from process env])
+    LOCAL{"env_dir passed in?<br/>(local-dev mode)"}
+    ENVFILE{"repo .env has<br/>GEMINI_API_KEY?"}
+    RETURN_FILE([return key from .env])
+    ERROR[/"raise AuthError<br/>no key found"/]
+
+    START --> ENV
+    ENV -->|yes| RETURN_ENV
+    ENV -->|no| LOCAL
+    LOCAL -->|no| ERROR
+    LOCAL -->|yes| ENVFILE
+    ENVFILE -->|yes| RETURN_FILE
+    ENVFILE -->|no| ERROR
+
+    SOURCE1["Installed skill:<br/>~/.claude/settings.json env block<br/>→ Claude Code injects into process env"] -.-> RETURN_ENV
+    SOURCE2["Local dev:<br/>&lt;repo&gt;/.env file<br/>(gitignored)"] -.-> RETURN_FILE
+    NOTE["GOOGLE_API_KEY is NOT honored"] -.-> ENV
+
+    classDef ok fill:#e8f5e9,stroke:#2e7d32
+    classDef err fill:#ffebee,stroke:#c62828
+    classDef note fill:#fffde7,stroke:#f9a825
+    class RETURN_ENV,RETURN_FILE ok
+    class ERROR err
+    class SOURCE1,SOURCE2,NOTE note

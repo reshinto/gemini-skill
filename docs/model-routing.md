@@ -10,8 +10,10 @@ How gemini-skill selects models based on task type, complexity, and user prefere
 Is the task a specialty task?
 ├─ YES: embed → gemini-embedding-2-preview
 ├─ YES: image_gen → gemini-3.1-flash-image-preview (Nano Banana 2)
+├─ YES: imagen → imagen-3.0-generate-002 (SDK-only)
 ├─ YES: video_gen → veo-3.1-generate-preview
 ├─ YES: music_gen → lyria-3-clip-preview
+├─ YES: live → gemini-live-2.5-flash-preview (SDK-only, async)
 ├─ YES: computer_use → gemini-3-flash-preview (default)
 │                      or gemini-2.5-computer-use-preview-10-2025
 ├─ YES: file_search → gemini-2.5-flash-lite
@@ -44,8 +46,10 @@ These tasks always route to a dedicated model, **regardless of complexity or pre
 |------|---------------|---------|
 | `embed` | `gemini-embedding-2-preview` | Vector embeddings |
 | `image_gen` | `gemini-3.1-flash-image-preview` | Image generation (Nano Banana 2) |
+| `imagen` | `imagen-3.0-generate-002` | Photoreal image generation (SDK-only) |
 | `video_gen` | `veo-3.1-generate-preview` | Video generation |
 | `music_gen` | `lyria-3-clip-preview` | Music generation |
+| `live` | `gemini-live-2.5-flash-preview` | Realtime async sessions (SDK-only) |
 | `computer_use` | `gemini-3-flash-preview` | Desktop automation (dedicated `gemini-2.5-computer-use-preview-10-2025` also registered) |
 | `file_search` | `gemini-2.5-flash-lite` | RAG / semantic search |
 | `maps` | `gemini-2.5-flash` | Location grounding (tool enabled on a general-purpose model) |

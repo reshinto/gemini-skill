@@ -240,6 +240,37 @@ Use in subsequent requests by checking cache docs (implementation may vary by ad
 
 ---
 
+## Choosing a Backend
+
+The skill internally uses a dual-backend transport layer:
+
+- **Default (SDK):** Uses `google-genai==1.33.0` SDK for primary backend
+- **Fallback (Raw HTTP):** Uses `urllib` if SDK is unavailable or disabled
+
+**Most users never need to touch this.** The dispatcher automatically picks the right backend based on availability and configuration.
+
+### Advanced Configuration
+
+For advanced users, override backend priority via `~/.claude/settings.json` environment block:
+
+```json
+{
+  "env": {
+    "GEMINI_IS_SDK_PRIORITY": "true",
+    "GEMINI_IS_RAWHTTP_PRIORITY": "false"
+  }
+}
+```
+
+- `GEMINI_IS_SDK_PRIORITY=true` — Prefer SDK (default if available)
+- `GEMINI_IS_RAWHTTP_PRIORITY=true` — Force raw HTTP (useful for testing or if SDK has issues)
+
+Both backends produce identical output. Four capabilities (`maps`, `music_gen`, `computer_use`, `file_search`) automatically route via raw HTTP at runtime because the pinned SDK version does not expose those surfaces.
+
+See [install.md](install.md) for environment setup details.
+
+---
+
 ## Sessions
 
 Multi-turn conversations are stored in local session files.

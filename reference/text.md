@@ -41,3 +41,7 @@ gemini_run.py text --continue "Focus on the race condition"
 ## Large responses
 
 Responses exceeding 50KB are saved to a file; only the path and size are printed to stdout.
+
+---
+
+Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.

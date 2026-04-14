@@ -59,3 +59,9 @@ Without `--execute`, mutating subcommands (`create`, `upload`, `delete`) print a
 ## Use case
 
 File Search is Gemini's hosted RAG. Upload documents once, then run grounded queries against them without sending file content on every request.
+
+---
+
+## Notes
+
+Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.

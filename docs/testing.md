@@ -1,6 +1,6 @@
 # Testing
 
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-04-14
 
 Running tests, writing new tests, and maintaining 100% coverage.
 
@@ -187,6 +187,19 @@ Both runs share the `tests/integration/conftest.py` helpers:
 Running both doubles the cost — for local iteration just pick one backend.
 To skip a specific expensive test (like image generation) inside a matrix
 run, use pytest's `-k 'not nano_banana'` filter.
+
+### Writing tests with type safety
+
+Always use `Mock(spec=ConcreteClass)` instead of bare `MagicMock()`:
+
+```python
+# Good: spec enforces the mock matches the real interface
+mock_config = Mock(spec=Config)
+mock_config.api_key = "test_key"
+
+# Avoid: bare MagicMock has no interface guarantees
+mock_config = MagicMock()
+```
 
 ### What each test does
 

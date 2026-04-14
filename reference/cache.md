@@ -51,3 +51,7 @@ Without `--execute`, mutating subcommands (`create`, `delete`) print a dry-run m
 ## Output
 
 List and get return JSON metadata. Create returns the cache ID and expiry time.
+
+---
+
+Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.

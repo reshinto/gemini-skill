@@ -46,6 +46,17 @@ Search adds per-request cost on top of the base model call. Check pricing.
 
 `gemini-2.5-flash`.
 
+## Flags (additional)
+
+- `--show-grounding` — Emit JSON with grounding metadata instead of human-readable "Sources:" footer. Useful for downstream processing.
+
 ## Output
 
 Response includes search results and the model's synthesis. Search sources may be cited in the output.
+
+Without `--show-grounding`, output includes a human-readable "Sources from Google Search:" footer.
+With `--show-grounding`, output is JSON with structured grounding metadata.
+
+---
+
+Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.

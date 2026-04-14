@@ -276,6 +276,7 @@ Ground responses in Google Maps location data.
 - Location queries may reveal intent
 - Mandatory output schema enforced
 - Adds cost per request
+- Currently routed via the raw HTTP backend at runtime (SDK 1.33.0 does not expose this surface)
 
 **Use cases:**
 - Business finder (restaurants, stores)
@@ -357,6 +358,7 @@ Host documents in a File Search store for semantic retrieval without sending fil
 - Store is permanent (no expiry like Files API)
 - Uploads may take 30–60 seconds
 - Query latency varies by store size
+- Currently routed via the raw HTTP backend at runtime (SDK 1.33.0 does not expose this surface)
 
 **Use cases:**
 - Knowledge base / FAQ system
@@ -380,6 +382,8 @@ Generate images using the Nano Banana model.
 - Text-to-image generation
 - Fast turnaround (5–10s)
 - PNG output saved to file
+- Aspect ratio control (`--aspect-ratio`: 1:1, 3:2, 2:3, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9)
+- Image size options (`--image-size`: 1K, 2K, 4K)
 
 **Limitations:**
 - Requires `--execute` flag (mutating)
@@ -394,6 +398,32 @@ Generate images using the Nano Banana model.
 - Educational diagrams
 
 See [image_gen.md](../reference/image_gen.md).
+
+### Imagen (Imagen 3)
+
+**Status:** Preview (SDK-only)
+
+Generate photoreal images using Google's dedicated Imagen 3 model.
+
+**Capabilities:**
+- Photoreal text-to-image generation
+- Multiple aspect ratios (1:1, 3:4, 4:3, 9:16, 16:9, and others)
+- Batch generation (up to 4 images per request)
+- Higher quality than Nano Banana
+
+**Limitations:**
+- SDK-only (no raw HTTP fallback)
+- Requires `--execute` flag (mutating)
+- Higher cost than Nano Banana
+- Slower generation (10–30s typical)
+
+**Use cases:**
+- High-quality marketing and product imagery
+- Professional visual content
+- Photoreal illustrations
+- Detailed background generation
+
+See [imagen.md](../reference/imagen.md).
 
 ### Video generation
 
@@ -440,6 +470,7 @@ Generate music using the Lyria 3 model.
 - SynthID watermark embedded (may be audible)
 - High cost per generation
 - Non-commercial by default (check license)
+- Currently routed via the raw HTTP backend at runtime (SDK 1.33.0 does not expose this surface)
 
 **Use cases:**
 - Background music for videos
@@ -471,6 +502,7 @@ Enable the model to capture screenshots, analyze UI, and simulate keyboard/mouse
 - Input simulation is best-effort
 - High latency (multiple round-trips)
 - Not suitable for sensitive environments
+- Currently routed via the raw HTTP backend at runtime (SDK 1.33.0 does not expose this surface)
 
 **Use cases:**
 - Automate desktop tasks
@@ -530,8 +562,10 @@ See [deep_research.md](../reference/deep_research.md).
 | Batch | Stable | Yes | Low | 5min–hours | ✓ |
 | File Search | Stable | Yes | Low–Med | 30s–5min | ✓ |
 | Image gen | Preview | Yes | High | 5–10s | ◐ |
+| Imagen | Preview | Yes | High | 10–30s | ◐ |
 | Video gen | Preview | Yes | High | 1–2min | ◐ |
 | Music gen | Preview | Yes | High | 5–15s | ◐ |
+| Live API | Preview | No | Med | <1s per chunk | ◐ |
 | Computer use | Preview | No | High | 10–60s | ◐ |
 | Deep Research | Preview | Yes | High | 30s–5min | ◐ |
 

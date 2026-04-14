@@ -59,3 +59,9 @@ Maps grounding adds per-request cost. Check pricing.
 ## Default model
 
 `gemini-2.5-flash`.
+
+---
+
+## Notes
+
+Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.

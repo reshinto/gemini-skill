@@ -1,0 +1,31 @@
+%% End-to-end install pipeline run by setup/install.py.
+%% Covers: copy → checksums → venv → pip → SDK verify → API key prompt
+%% → settings.json merge → legacy .env migration.
+flowchart TD
+    START([python3 setup/install.py])
+    COPY[Copy operational files to<br/>~/.claude/skills/gemini/]
+    CHK[Verify .checksums.json<br/>SHA-256 integrity]
+    VENV[Create ~/.claude/skills/gemini/.venv]
+    PIP["pip install -r setup/requirements.txt<br/>(google-genai==1.33.0 pinned)"]
+    VERIFY[Import google.genai<br/>confirm SDK usable]
+    KEY_PROMPT{API key setup}
+    KEY_EXIST[Existing key found<br/>→ keep / update prompt]
+    KEY_NEW[No key<br/>→ getpass prompt]
+    MERGE[Merge env block into<br/>~/.claude/settings.json]
+    LEGACY{"legacy<br/>.env exists?"}
+    MIGRATE[Migrate legacy .env<br/>into settings.json]
+    SUMMARY[Print summary:<br/>venv path + SDK version + settings path]
+    DONE([Install complete])
+
+    START --> COPY --> CHK --> VENV --> PIP --> VERIFY --> KEY_PROMPT
+    KEY_PROMPT -->|exists| KEY_EXIST
+    KEY_PROMPT -->|absent| KEY_NEW
+    KEY_EXIST --> MERGE
+    KEY_NEW --> MERGE
+    MERGE --> LEGACY
+    LEGACY -->|yes| MIGRATE --> SUMMARY
+    LEGACY -->|no| SUMMARY
+    SUMMARY --> DONE
+
+    classDef new fill:#e1f5ff,stroke:#0277bd,stroke-width:2px
+    class VENV,PIP,VERIFY,KEY_PROMPT,KEY_EXIST,KEY_NEW,MERGE,LEGACY,MIGRATE,CHK new
