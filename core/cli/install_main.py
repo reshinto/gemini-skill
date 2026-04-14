@@ -19,6 +19,7 @@ from pathlib import Path
 
 from core.cli.installer.api_key_prompt import prompt_gemini_api_key
 from core.cli.installer.legacy_migration import migrate_legacy_env_to_settings
+from core.cli.installer.payload import copy_install_payload
 from core.cli.installer.settings_merge import (
     InstallAborted,
     SettingsFileCorrupted,
@@ -46,14 +47,6 @@ _DEFAULT_ENV_KEYS: dict[str, str] = {
     "GEMINI_LIVE_TESTS": "0",
 }
 
-# Operational files/dirs to copy from the source repo
-_OPERATIONAL_FILES = ["SKILL.md", "VERSION"]
-_OPERATIONAL_DIRS = ["core", "adapters", "reference", "registry", "scripts"]
-# setup/requirements.txt is the pinned-dependency manifest the venv
-# installer (Phase 5) reads to install google-genai. Must ship with the
-# install so re-running install or update can re-resolve the same pin.
-_SETUP_FILES = ["setup/update.py", "setup/requirements.txt"]
-
 # The SHA-256 install-integrity manifest the installer writes into the
 # install directory after copying files. ``health_main`` reads this file
 # to detect drift (files hand-edited or tampered with after install),
@@ -80,7 +73,9 @@ def _is_interactive_stdin() -> bool:
     return sys.stdin.isatty()
 
 
-def main(argv: list[str]) -> None:
+def main(
+    argv: list[str], *, source_dir: Path | None = None, install_dir: Path | None = None
+) -> None:
     """Install the gemini-skill end-to-end.
 
     Order of operations:
@@ -101,11 +96,13 @@ def main(argv: list[str]) -> None:
     yes_flag = "--yes" in argv or "-y" in argv
     interactive = _is_interactive_stdin()
 
-    source_dir = _get_source_dir()
-    install_dir = _get_install_dir()
+    resolved_source_dir = source_dir if source_dir is not None else _get_source_dir()
+    resolved_install_dir = (
+        install_dir if install_dir is not None else _get_install_dir()
+    )
 
-    if install_dir.exists():
-        safe_print(f"Skill already installed at {install_dir}")
+    if resolved_install_dir.exists():
+        safe_print(f"Skill already installed at {resolved_install_dir}")
         choice = _prompt("[O]verwrite / [S]kip? ").strip().lower()
         if choice not in ("o", "overwrite"):
             safe_print("Skipped.")
@@ -117,9 +114,9 @@ def main(argv: list[str]) -> None:
         # pip is itself a no-op when the version is already installed.
         # Delete every other entry under install_dir manually instead
         # of ``rmtree(install_dir)``.
-        _clean_install_dir_preserve_venv(install_dir)
+        _clean_install_dir_preserve_venv(resolved_install_dir)
 
-    _clean_install(source_dir, install_dir)
+    _clean_install(resolved_source_dir, resolved_install_dir)
     # Phase 5: the skill-local .env file is deprecated. Env vars now
     # live in ~/.claude/settings.json (merged by the helpers below).
     # Legacy .env files at the install dir are picked up by the
@@ -133,7 +130,7 @@ def main(argv: list[str]) -> None:
     # manifest "drift" by definition on the first health-check.
     # Failures here are warned but do not abort the install.
     try:
-        _write_install_manifest(install_dir)
+        _write_install_manifest(resolved_install_dir)
     except OSError as manifest_error:
         safe_print(
             f"[WARN] Install manifest write failed: {manifest_error}. "
@@ -145,15 +142,15 @@ def main(argv: list[str]) -> None:
     # Failures here do NOT abort the install — the file copy succeeded
     # and the user can still use the raw HTTP backend, which is the
     # legacy single-backend path that's been working since v0.1.
-    sdk_version = _setup_venv(install_dir)
+    sdk_version = _setup_venv(resolved_install_dir)
 
     # Phase 5 follow-up: write the skill's env vars into
     # ~/.claude/settings.json. This block runs even when venv setup
     # failed above, because settings.json determines backend
     # selection for the raw HTTP path too.
-    _setup_user_settings(install_dir, yes=yes_flag, interactive=interactive)
+    _setup_user_settings(resolved_install_dir, yes=yes_flag, interactive=interactive)
 
-    safe_print(f"Installed to {install_dir}")
+    safe_print(f"Installed to {resolved_install_dir}")
     if sdk_version is not None:
         safe_print(f"SDK installed: google-genai {sdk_version}")
 
@@ -336,31 +333,7 @@ def _clean_install_dir_preserve_venv(install_dir: Path) -> None:
 
 def _clean_install(source_dir: Path, install_dir: Path) -> None:
     """Copy operational files to the install directory."""
-    install_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(str(install_dir), 0o700)
-    except OSError:
-        pass
-
-    for fname in _OPERATIONAL_FILES:
-        src = source_dir / fname
-        if src.exists():
-            shutil.copy2(src, install_dir / fname)
-
-    for dname in _OPERATIONAL_DIRS:
-        src = source_dir / dname
-        if src.exists():
-            dest = install_dir / dname
-            if dest.exists():
-                shutil.rmtree(dest)
-            shutil.copytree(src, dest, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-
-    for rel_path in _SETUP_FILES:
-        src = source_dir / rel_path
-        if src.exists():
-            dest = install_dir / rel_path
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dest)
+    copy_install_payload(source_dir, install_dir)
 
 
 def _iter_manifest_files(install_dir: Path) -> list[Path]:
@@ -430,7 +403,9 @@ def _write_install_manifest(install_dir: Path) -> None:
     files = _iter_manifest_files(install_dir)
     manifest = generate_checksums(install_dir, files)
     write_checksums_file(manifest, manifest_path)
-    safe_print(f"Install manifest written: {len(manifest)} files in {_CHECKSUMS_FILENAME}")
+    safe_print(
+        f"Install manifest written: {len(manifest)} files in {_CHECKSUMS_FILENAME}"
+    )
 
 
 def verify_install_integrity(install_dir: Path) -> list[str]:

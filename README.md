@@ -4,17 +4,27 @@ A Claude Code skill for broad Gemini REST API access — text generation, multim
 
 ## Quick Start
 
-1. **Clone the repository**
+1. **Install the bootstrap installer**
+   ```bash
+   uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
+   ```
+   Or with `pipx`:
+   ```bash
+   pipx run --spec git+https://github.com/reshinto/gemini-skill.git gemini-skill-install
+   ```
+   Once the package is published to PyPI, these simplify to:
+   ```bash
+   uvx gemini-skill-install
+   pipx install gemini-skill-install
+   ```
+
+2. **Fallback: install from a clone**
    ```bash
    git clone https://github.com/reshinto/gemini-skill.git
    cd gemini-skill
-   ```
-
-2. **Install the skill** (creates venv, pip-installs `google-genai==1.33.0`, merges settings)
-   ```bash
    python3 setup/install.py
    ```
-   The installer:
+   Both install paths:
    - Copies operational files to `~/.claude/skills/gemini/`
    - Creates `~/.claude/skills/gemini/.venv` with pinned `google-genai`
    - Verifies install integrity via SHA-256 checksums

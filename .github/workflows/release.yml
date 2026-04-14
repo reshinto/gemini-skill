@@ -17,6 +17,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
@@ -35,11 +40,17 @@ jobs:
           mkdir -p release/gemini-skill
           cp -r SKILL.md VERSION core adapters reference registry scripts release/gemini-skill/
           mkdir -p release/gemini-skill/setup
-          cp setup/update.py release/gemini-skill/setup/
+          cp setup/install.py setup/update.py setup/requirements.txt release/gemini-skill/setup/
           cp .env.example release/gemini-skill/
           cd release
           tar -czf gemini-skill-${{ steps.version.outputs.version }}.tar.gz gemini-skill
           cd ..
+
+      - name: Build bootstrap installer distributions
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+          python -m build
 
       - name: Generate SHA-256 checksums
         run: |
@@ -47,6 +58,7 @@ jobs:
           find gemini-skill -type f -exec sha256sum {} \; > checksums.txt
           sha256sum gemini-skill-${{ steps.version.outputs.version }}.tar.gz >> checksums.txt
           cd ..
+          sha256sum dist/* >> release/checksums.txt
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
@@ -54,5 +66,6 @@ jobs:
           files: |
             release/gemini-skill-${{ steps.version.outputs.version }}.tar.gz
             release/checksums.txt
+            dist/*
           generate_release_notes: true
           fail_on_unmatched_files: true

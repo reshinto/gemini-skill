@@ -35,7 +35,7 @@ jobs:
 
       - name: Syntax check all Python files
         run: |
-          python -m compileall -q core adapters scripts setup
+          python -m compileall -q core adapters scripts setup gemini_skill_install setup.py
 
       - name: Run tests with coverage
         run: |
@@ -52,15 +52,15 @@ jobs:
       - name: Verify no typing.Any usage (ban-Any invariant)
         run: |
           ! grep -rnE 'from typing import.*\bAny\b|typing\.Any|: Any\b|-> Any\b' \
-              core/ adapters/ scripts/ setup/ --include="*.py"
+              core/ adapters/ scripts/ setup/ gemini_skill_install/ --include="*.py"
 
       - name: Verify no single-character local variable names (naming hygiene)
         run: |
           set -e
-          ! grep -rnE '\bfor [a-hj-z]\b in\b' core/ adapters/ scripts/ setup/ --include="*.py"
-          ! grep -rnE '\blambda [a-hj-z]:' core/ adapters/ scripts/ setup/ --include="*.py"
-          ! grep -rnE 'except [A-Za-z._(, ]+\bas [a-hj-z]\s*:' core/ adapters/ scripts/ setup/ --include="*.py"
-          ! grep -rnE '^\s+[a-hj-z] =[^=]' core/ adapters/ scripts/ setup/ --include="*.py"
+          ! grep -rnE '\bfor [a-hj-z]\b in\b' core/ adapters/ scripts/ setup/ gemini_skill_install/ --include="*.py"
+          ! grep -rnE '\blambda [a-hj-z]:' core/ adapters/ scripts/ setup/ gemini_skill_install/ --include="*.py"
+          ! grep -rnE 'except [A-Za-z._(, ]+\bas [a-hj-z]\s*:' core/ adapters/ scripts/ setup/ gemini_skill_install/ --include="*.py"
+          ! grep -rnE '^\s+[a-hj-z] =[^=]' core/ adapters/ scripts/ setup/ gemini_skill_install/ --include="*.py"
 
       - name: Strict typing on new refactor surface
         run: |
@@ -77,12 +77,18 @@ jobs:
             core/cli/health_main.py \
             core/cli/dispatch.py \
             core/cli/installer/ \
+            gemini_skill_install/ \
             adapters/generation/imagen.py \
             adapters/generation/live.py \
             adapters/media/image_gen.py \
             adapters/tools/search.py \
             adapters/data/files.py \
             scripts/gemini_run.py
+
+      - name: Build bootstrap installer distributions
+        if: ${{ matrix.python-version == '3.13' }}
+        run: |
+          python -m build
 
   # Phase 8: dual-backend live integration matrix. Gated on
   # workflow_dispatch (manual trigger only) so PRs from forks never

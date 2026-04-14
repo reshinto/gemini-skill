@@ -17,7 +17,26 @@
 ![Install pipeline](diagrams/install-flow.svg)
 <sub>Source: [`diagrams/install-flow.mmd`](diagrams/install-flow.mmd) — regenerate with `bash scripts/render_diagrams.sh`</sub>
 
-### Method 1: Install script (easiest, recommended)
+### Method 1: Bootstrap installer via `uvx` or `pipx` (recommended)
+
+```bash
+uvx --from git+https://github.com/reshinto/gemini-skill gemini-skill-install
+```
+
+Or:
+
+```bash
+pipx run --spec git+https://github.com/reshinto/gemini-skill.git gemini-skill-install
+```
+
+Once the package is published to PyPI, these simplify to:
+
+```bash
+uvx gemini-skill-install
+pipx install gemini-skill-install
+```
+
+### Method 2: Install script from a clone
 
 ```bash
 git clone https://github.com/reshinto/gemini-skill.git
@@ -25,7 +44,7 @@ cd gemini-skill
 python3 setup/install.py
 ```
 
-The script will:
+Both installer paths will:
 1. Check Python version
 2. Copy operational files to `~/.claude/skills/gemini/`
 3. Verify install integrity (SHA-256 checksums)
@@ -34,7 +53,7 @@ The script will:
 6. Merge env keys into `~/.claude/settings.json` with conflict resolution
 7. Print setup confirmation and SDK version
 
-### Method 2: Manual copy (not recommended — skips venv + checksums)
+### Method 3: Manual copy (not recommended — skips venv + checksums)
 
 ```bash
 # Copy the skill directory
@@ -53,12 +72,12 @@ python3 -m venv ~/.claude/skills/gemini/.venv
 # Add GEMINI_API_KEY to ~/.claude/settings.json (see API Key Setup below)
 ```
 
-### Method 3: Download as tarball
+### Method 4: Download as tarball
 
 ```bash
-# Download (when available)
-tar -xzf gemini-skill-latest.tar.gz
-cd gemini-skill-latest
+# Download a release artifact, then install from the extracted source tree
+tar -xzf gemini-skill-0.1.0.tar.gz
+cd gemini-skill
 python3 setup/install.py
 ```
 
