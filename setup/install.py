@@ -5,7 +5,6 @@
 old Pythons get a readable error instead of a SyntaxError.
 """
 import os
-import platform
 import subprocess
 import sys
 
@@ -14,7 +13,7 @@ _MIN_STABLE_MINOR = 9
 _MAX_SEARCH_MINOR = 15
 _REEXEC_ENV = "GEMINI_SKILL_INSTALL_REEXEC"
 _PROBE_CODE = (
-    "import platform, sys; "
+    "import sys; "
     "print('%s|%s|%s|%s|%s|%s|%s' % ("
     "sys.version_info[0], "
     "sys.version_info[1], "
@@ -23,9 +22,25 @@ _PROBE_CODE = (
     "(sys.version_info[3] if len(sys.version_info) > 3 else ''), "
     "getattr(sys, 'abiflags', '') or '', "
     "int('free-thread' in sys.version.lower()), "
-    "platform.python_implementation()"
+    "getattr(getattr(sys, 'implementation', None), 'name', '') or ''"
     "))"
 )
+
+_IMPLEMENTATION_NAMES = {
+    "cpython": "CPython",
+    "pypy": "PyPy",
+    "ironpython": "IronPython",
+    "jython": "Jython",
+}
+
+
+def _python_implementation_name():
+    """Return the current interpreter implementation without parsing sys.version."""
+    implementation = getattr(sys, "implementation", None)
+    name = getattr(implementation, "name", "") or ""
+    if not name:
+        return "Unknown"
+    return _IMPLEMENTATION_NAMES.get(name.lower(), name)
 
 
 def _current_python_info():
@@ -38,7 +53,7 @@ def _current_python_info():
         or (sys.version_info[3] if len(sys.version_info) > 3 else "final"),
         "abiflags": getattr(sys, "abiflags", "") or "",
         "free_threaded": int("free-thread" in sys.version.lower()),
-        "implementation": platform.python_implementation(),
+        "implementation": _python_implementation_name(),
     }
 
 
@@ -82,7 +97,7 @@ def _probe_python(command):
             "releaselevel": parts[3],
             "abiflags": parts[4],
             "free_threaded": int(parts[5]),
-            "implementation": parts[6],
+            "implementation": _IMPLEMENTATION_NAMES.get(parts[6].lower(), parts[6]),
         }
     except ValueError:
         return None
