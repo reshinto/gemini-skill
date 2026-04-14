@@ -1,3 +1,5 @@
+[![CI](https://github.com/reshinto/gemini-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/reshinto/gemini-skill/actions/workflows/ci.yml)
+
 # gemini-skill
 
 `gemini-skill` is a Gemini API front end that works in two modes:
