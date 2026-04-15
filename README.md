@@ -1,4 +1,6 @@
 [![CI](https://github.com/reshinto/gemini-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/reshinto/gemini-skill/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/gemini-skill-install)](https://pypi.org/project/gemini-skill-install/)
+[![Downloads](https://static.pepy.tech/badge/gemini-skill-install/month)](https://pepy.tech/project/gemini-skill-install)
 
 # gemini-skill
 
