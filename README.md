@@ -4,122 +4,80 @@
 
 # gemini-skill
 
-`gemini-skill` is a Gemini API front end that works in two modes:
+A Gemini API front end that runs as a Claude Code skill or as a direct CLI. Two entry points, one command surface:
 
-- as a Claude Code skill via `/gemini ...`
-- as a direct CLI via `python3 scripts/gemini_run.py ...`
+- **Claude Code skill:** `/gemini <command> [args]`
+- **direct CLI:** `python3 scripts/gemini_run.py <command> [args]` or the `gemini-skill-install` launcher
 
-It exposes the same command surface in both modes: text, multimodal analysis, structured output, embeddings, Files API, image/video/music generation, file search, deep research, and iterative plan review.
+Same command surface in both: text, multimodal analysis, structured output, embeddings, Files API, image/video/music generation, file search, deep research, and iterative plan review.
 
-## Quick Start
+## Install
 
-### Install for Claude Code
-
-Recommended:
+**Claude Code skill (recommended):**
 
 ```bash
 uvx gemini-skill-install
 ```
 
-Fallback:
+Fallback: `uvx --python 3.13 gemini-skill-install`. See [docs/install.md](docs/install.md).
+
+**Direct CLI (no Claude Code required):**
 
 ```bash
-uvx --python 3.13 gemini-skill-install
+pipx install gemini-skill-install
+# or from a clone:
+git clone https://github.com/reshinto/gemini-skill.git && cd gemini-skill
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r setup/requirements.txt
 ```
 
-Or from a clone:
+See [docs/cli.md](docs/cli.md) for full CLI setup.
 
-```bash
-git clone https://github.com/reshinto/gemini-skill.git
-cd gemini-skill
-python3 setup/install.py
-```
+## Configure
 
-The installer copies the runtime payload into `~/.claude/skills/gemini/`, creates or reuses `~/.claude/skills/gemini/.venv`, installs the pinned `google-genai` SDK, and writes the canonical env block into `~/.claude/settings.json`.
+Set `GEMINI_API_KEY` (the only supported key; `GOOGLE_API_KEY` is ignored). The launcher merges keys from all sources below; later entries override earlier ones, so **`./.env` wins** and `existing process env` is the fallback:
 
-### Configure credentials
-Create a Gemini API key in Google AI Studio:
-
-- Google AI Studio: https://aistudio.google.com/
-- API key guide: https://ai.google.dev/gemini-api/docs/api-key
-
-The Gemini API is not an unlimited flat-rate service. Google offers a free tier for getting started and a paid pay-as-you-go tier for higher-volume or production use. If you enable the paid tier, prompts and responses can incur usage-based charges depending on the model and features you use.
-
-The launcher resolves canonical Gemini env keys from the current working directory first, then Claude settings files, then existing process env:
-
-1. `./.env`
-2. `./.claude/settings.local.json`
+1. existing process env (lowest priority)
+2. `~/.claude/settings.json`
 3. `./.claude/settings.json`
-4. `~/.claude/settings.json`
-5. existing process env
+4. `./.claude/settings.local.json`
+5. `./.env` (highest priority)
 
-Supported keys:
+Full details and examples: [docs/security.md](docs/security.md).
 
-```text
-GEMINI_API_KEY
-GEMINI_IS_SDK_PRIORITY
-GEMINI_IS_RAWHTTP_PRIORITY
-GEMINI_LIVE_TESTS
-```
+## Example
 
-For repo-local CLI use:
-
-```bash
-cp .env.example .env
-```
-
-`GEMINI_API_KEY` is the only supported secret name. `GOOGLE_API_KEY` is ignored.
-
-### Use it from Claude Code
-
-The skill manifest sets `disable-model-invocation: true`, so Claude Code will not start this skill on its own. Invoke it explicitly first.
+Claude Code:
 
 ```text
 /gemini text "Explain quantum computing in three sentences"
-/gemini plan_review "Review this implementation plan for gaps and rollout risks"
 ```
 
-### Use it as a direct CLI
-
-From a checkout:
+Direct CLI:
 
 ```bash
-python3 scripts/gemini_run.py text "hi"
-python3 scripts/gemini_run.py plan_review "Review this migration plan"
+python3 scripts/gemini_run.py text "Explain quantum computing in three sentences"
+```
+
+Interactive plan-review REPL (CLI only):
+
+```bash
 python3 scripts/gemini_run.py plan_review
 ```
 
-The last command starts the interactive `plan_review` REPL when stdin is a TTY.
+## Docs
 
-## Core Workflows
-
-- `text` for one-shot prompts and multi-turn sessions
-- `plan_review` for iterative plan review, either one-turn or REPL
-- `multimodal` for PDFs, images, audio, video, and URLs
-- `structured` for schema-constrained JSON output
-- `embed`, `token_count`, `files`, `cache`, `batch`, and `file_search`
-- `image_gen`, `imagen`, `video_gen`, and `music_gen`
-- `search`, `maps`, `computer_use`, `deep_research`, and `live`
-
-## Documentation
-
-- [docs/install.md](docs/install.md) — install paths, env precedence, troubleshooting
-- [docs/usage.md](docs/usage.md) — Claude Code skill usage and direct CLI usage
-- [docs/usage-tour.md](docs/usage-tour.md) — end-to-end examples
-- [docs/commands.md](docs/commands.md) — command index by capability family
-- [reference/index.md](reference/index.md) — per-command reference pages
-- [docs/security.md](docs/security.md) — secrets handling, local data storage, privacy notes
-- [docs/how-it-works.md](docs/how-it-works.md) — launcher, dispatch, transport, and output flow
 - [docs/README.md](docs/README.md) — documentation hub
-
-## Backend Routing
-
-The launcher and adapters are backend-agnostic. The transport coordinator chooses the SDK or raw HTTP backend from the two routing flags:
-
-- `GEMINI_IS_SDK_PRIORITY=true`
-- `GEMINI_IS_RAWHTTP_PRIORITY=false`
-
-Both backends produce the same normalized response shape for callers.
+- [docs/install.md](docs/install.md) — skill install paths and verification
+- [docs/cli.md](docs/cli.md) — CLI install and usage
+- [docs/usage.md](docs/usage.md) — quickstart across both entry points
+- [docs/usage-tour.md](docs/usage-tour.md) — end-to-end examples
+- [docs/commands.md](docs/commands.md) — command families
+- [docs/architecture.md](docs/architecture.md) — module layout
+- [docs/system-design.md](docs/system-design.md) — scalability, reliability, fallbacks
+- [docs/design-patterns.md](docs/design-patterns.md) — patterns used
+- [docs/security.md](docs/security.md) — secret handling
+- [reference/index.md](reference/index.md) — per-command reference
 
 ## License
 

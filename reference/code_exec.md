@@ -37,18 +37,10 @@ The model writes Python code (visible in response) and Gemini executes it, retur
 
 Code runs in Google's sandboxed Python environment. No internet access, no file system persistence beyond the execution session, but standard library available.
 
-## Default model
-
-`gemini-2.5-flash`.
+Default model: `gemini-2.5-flash`. Override with `--model`.
 
 ## Note
 
 Code execution is non-mutating — it does not require `--execute`. The sandbox is isolated and safe.
 
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: cache](cache.md) · [Next: computer_use](computer_use.md)
+[← Back](index.md)

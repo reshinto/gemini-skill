@@ -40,18 +40,6 @@ gemini_run.py multimodal "Compare these documents" --file doc1.pdf --file doc2.p
 
 MIME type is detected automatically from file extension. Use `--mime` to override if detection fails.
 
-## Default model
+Default model: `gemini-2.5-flash`. Override with `--model`. Responses exceeding 50KB save to a file; only the path is printed. See [docs/usage.md#shared-rules](../docs/usage.md#shared-rules).
 
-`gemini-2.5-flash` (handles multimodal well).
-
-## Large responses
-
-Responses exceeding 50KB save to a file; only the path is printed.
-
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: maps](maps.md) · [Next: music_gen](music_gen.md)
+[← Back](index.md)

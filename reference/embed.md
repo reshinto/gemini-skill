@@ -39,18 +39,10 @@ gemini_run.py embed "Text sample" --task-type SEMANTIC_SIMILARITY
 }
 ```
 
-## Default model
-
-`gemini-embedding-2-preview` (set as `default_model` for the `embed` capability in [registry/capabilities.json](../registry/capabilities.json); it is the only model registered in [registry/models.json](../registry/models.json) that declares the `embed` capability). To pin a different embedding model, add it to `registry/models.json` with `"capabilities": ["embed"]` and pass `--model <id>`.
+Default model: `gemini-embedding-2-preview` (the only model in [registry/models.json](../registry/models.json) declaring the `embed` capability). To pin a different embedding model, add it to `registry/models.json` with `"capabilities": ["embed"]` and pass `--model <id>`.
 
 ## Use case
 
 Embeddings are used for semantic search, retrieval-augmented generation (RAG), and similarity comparisons. Store the returned `values` array in a vector database.
 
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: deep_research](deep_research.md) · [Next: file_search](file_search.md)
+[← Back](index.md)

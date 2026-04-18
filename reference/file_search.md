@@ -48,9 +48,7 @@ gemini_run.py file_search list
 gemini_run.py file_search delete "fileSearchStores/<store-id>" --execute
 ```
 
-## Default model
-
-`gemini-2.5-flash-lite` (set as `default_model` for the `file_search` capability in [registry/capabilities.json](../registry/capabilities.json)).
+Default model: `gemini-2.5-flash-lite`. Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface).
 
 ## Default behavior
 
@@ -60,12 +58,4 @@ Without `--execute`, mutating subcommands (`create`, `upload`, `delete`) print a
 
 File Search is Gemini's hosted RAG. Upload documents once, then run grounded queries against them without sending file content on every request.
 
----
-
-## Notes
-
-Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
-
----
-
-[← Back](index.md) · [Previous: embed](embed.md) · [Next: files](files.md)
+[← Back](index.md)

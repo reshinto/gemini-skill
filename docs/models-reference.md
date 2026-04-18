@@ -124,9 +124,9 @@ This catalog lists every model available in the skill's registry, with details o
 
 **Cost Tier:** Variable (per request)
 
-**Status:** Stable
+**Status:** Preview
 
-**Capabilities:** image_gen
+**Capabilities:** imagen
 
 **When to pick:** For photorealistic images and complex scenes. Imagen excels at realism and fine detail. Trade-off: slower and potentially more expensive than Gemini-native generation. Use when you need production-quality, photorealistic output.
 
@@ -190,7 +190,7 @@ This catalog lists every model available in the skill's registry, with details o
 
 ## Live Interaction Models
 
-### gemini-2.5-live-flash-preview
+### gemini-live-2.5-flash-preview
 
 **Family:** Gemini 2.5 Live
 
@@ -198,7 +198,7 @@ This catalog lists every model available in the skill's registry, with details o
 
 **Status:** Preview
 
-**Capabilities:** Bidirectional real-time text/audio streaming
+**Capabilities:** live
 
 **When to pick:** Real-time, low-latency conversation with audio input and output. Ideal for chatbots, voice assistants, and interactive applications. Metering is typically per minute of interaction. Preview status means the API and pricing are subject to change.
 
@@ -237,7 +237,7 @@ This catalog lists every model available in the skill's registry, with details o
 | Text embeddings | gemini-embedding-2-preview | Free; perfect for search/RAG |
 | Video generation | veo-3.1-generate-preview | Only option; use sparingly (expensive) |
 | Music generation | lyria-3-clip-preview | Only option; use for audio projects |
-| Voice chat | gemini-2.5-live-flash-preview | Real-time interaction; metered per minute |
+| Voice chat | gemini-live-2.5-flash-preview | Real-time interaction; metered per minute |
 | Screen automation | gemini-2.5-computer-use-preview-10-2025 | Only option; use for complex automation |
 
 ---

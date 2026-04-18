@@ -42,9 +42,7 @@ Search-grounded queries are slower (typically 2–5s extra) due to live search i
 
 Search adds per-request cost on top of the base model call. Check pricing.
 
-## Default model
-
-`gemini-2.5-flash`.
+Default model: `gemini-2.5-flash`. Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface).
 
 ## Flags (additional)
 
@@ -57,10 +55,4 @@ Response includes search results and the model's synthesis. Search sources may b
 Without `--show-grounding`, output includes a human-readable "Sources from Google Search:" footer.
 With `--show-grounding`, output is JSON with structured grounding metadata.
 
----
-
-Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
-
----
-
-[← Back](index.md) · [Previous: music_gen](music_gen.md) · [Next: streaming](streaming.md)
+[← Back](index.md)

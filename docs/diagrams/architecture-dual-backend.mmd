@@ -8,7 +8,7 @@ flowchart TD
     SKILL["SKILL.md<br/>(Claude Code launcher)"]
     RUN["scripts/gemini_run.py<br/>(re-execs under .venv)"]
     DISP["core/cli/dispatch.py<br/>(whitelist + policy + IS_ASYNC)"]
-    ADAPT["adapters/<br/>(21 backend-agnostic modules)"]
+    ADAPT["adapters/<br/>(20 backend-agnostic modules)"]
     FACADE["core/transport/__init__.py<br/>(facade: api_call / stream / upload)"]
     COORD["core/transport/coordinator.py<br/>(TransportCoordinator: primary / fallback)"]
     SDK["SdkTransport<br/>(google-genai)"]

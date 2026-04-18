@@ -53,3 +53,7 @@ The launcher resolves canonical Gemini env keys from the current working directo
 3. `./.claude/settings.json`
 4. `~/.claude/settings.json`
 5. existing process env
+
+## Backend note
+
+Every command produces identical output whether the SDK or raw HTTP backend handled the call. Backend selection happens in the coordinator; adapters are backend-agnostic. See [../docs/architecture-transport.md](../docs/architecture-transport.md).

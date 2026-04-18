@@ -52,10 +52,6 @@ python3 scripts/gemini_run.py imagen "portrait of a fox" \
   --output-dir ./generated --execute
 ```
 
-## Backend-agnostic
+SDK-only: Imagen has no raw HTTP path — setting `GEMINI_IS_SDK_PRIORITY=false` does not affect it, but `google-genai` must be installed in the skill venv.
 
-This command routes through the SDK backend exclusively. Imagen has no raw HTTP path in this skill — setting `GEMINI_IS_SDK_PRIORITY=false` does not affect it, but it does require `google-genai` installed in the skill venv.
-
----
-
-[← Back](index.md) · [Previous: image_gen](image_gen.md) · [Next: live](live.md)
+[← Back](index.md)

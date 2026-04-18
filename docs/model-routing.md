@@ -172,26 +172,34 @@ The model registry (`registry/models.json`) defines:
 4. **Preview flag** — which models are preview/beta
 5. **Deprecation status** — which models are sunset (phased out)
 
-Example registry entry:
+Example `registry/models.json` entry:
 
 ```json
 {
-  "models": [
-    {
-      "id": "gemini-2.5-pro",
+  "models": {
+    "gemini-2.5-pro": {
       "display_name": "Gemini 2.5 Pro",
-      "capabilities": ["text", "multimodal", "code_exec", "function_calling"],
-      "preview": false,
-      "deprecated": false,
-      "default_for": []
+      "description": "High-capability model for complex reasoning",
+      "status": "stable",
+      "api_version": "v1beta",
+      "capabilities": ["text", "multimodal", "structured", "streaming",
+                       "function_calling", "code_exec", "search", "cache", "token_count"],
+      "pricing": { "input_per_1m": 1.25, "output_per_1m": 10.00, "cached_per_1m": 0.3125 }
     }
-  ],
+  }
+}
+```
+
+Example `registry/capabilities.json` entry:
+
+```json
+{
   "capabilities": {
     "text": {
-      "default_model": "gemini-2.5-flash"
-    },
-    "embed": {
-      "default_model": "gemini-embedding-2-preview"
+      "command": "text",
+      "default_model": "gemini-2.5-flash",
+      "mutating": false,
+      "privacy_sensitive": false
     }
   }
 }

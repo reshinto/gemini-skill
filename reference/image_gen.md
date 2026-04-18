@@ -16,11 +16,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" image_gen "prompt" [--model 
 - `--output-dir DIR` — Directory for output images (default: OS temp dir, or `output_dir` from config).
 - `--execute` — Required. Image generation is mutating; without this flag the command prints a dry-run message and exits without calling the API.
 
-## Default model
-
-The router-selected default for the `image_gen` capability, set in [registry/capabilities.json](../registry/capabilities.json) (`default_model`). Currently:
-
-- **`gemini-3.1-flash-image-preview`** — Nano Banana family, preview on `v1beta`. Fast and cost-effective. This is the only model registered today with the `image_gen` capability.
+Default model: **`gemini-3.1-flash-image-preview`** — Nano Banana family, preview on `v1beta`. Fast and cost-effective. This is the only model registered today with the `image_gen` capability (set in [registry/capabilities.json](../registry/capabilities.json)).
 
 ## Examples
 
@@ -49,46 +45,24 @@ gemini_run.py image_gen "Abstract geometric art in blue and gold" \
 
 ## Using a different model
 
-`--model` accepts any model ID present in [registry/models.json](../registry/models.json) whose `capabilities` list includes `"image_gen"`. To add a new image-capable model (e.g., a future Nano Banana revision or an Imagen model):
-
-1. Add the model entry to `registry/models.json` with `"capabilities": ["image_gen", ...]`.
-2. Optionally update `default_model` for the `image_gen` capability in `registry/capabilities.json` if you want it to become the new default.
-3. Pass `--model <new-id>` on the command line to pin it.
-
-Passing a `--model` that isn't registered, or that doesn't declare `image_gen`, will fail at the router/registry layer before any API call is made.
+`--model` accepts any model ID in [registry/models.json](../registry/models.json) with `"image_gen"` in its `capabilities`. To add a new model, add it there and optionally update `default_model` in `registry/capabilities.json`. Unregistered or incapable model IDs fail at the registry layer before any API call.
 
 ## Output
 
-The adapter decodes the base64 image inline data from the API response, saves it to disk under `--output-dir` (or the temp dir), and prints a single JSON line with metadata:
-
-```json
-{
-  "path": "/path/to/image_12345.png",
-  "mime_type": "image/png",
-  "size_bytes": 245678
-}
-```
-
-Raw base64 is **never** printed to stdout — this prevents Claude Code token overflow on large images.
+Adapter saves decoded image to disk and prints one JSON line: `{"path": "...", "mime_type": "image/png", "size_bytes": N}`. Raw base64 is **never** printed to stdout.
 
 ## Default behavior (no `--execute`)
 
-Without `--execute`, the dispatcher prints `[DRY RUN] 'image_gen' is a mutating operation. Pass --execute to actually run it.` and exits with code 0. No API call is made.
+Prints a dry-run message and exits with code 0. No API call is made.
 
 ## Limits
 
 Each generation counts toward your Gemini API quota. Nano Banana is designed for fast, cost-effective image generation but every `--execute` call is billable.
-
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: function_calling](function_calling.md) · [Next: imagen](imagen.md)
 
 ## Related
 
 - Live smoke test (dry-run, no billing): [tests/integration/test_image_gen_live.py](../tests/integration/test_image_gen_live.py)
 - Live real-API test against Nano Banana 2 (billable; runs whenever `GEMINI_LIVE_TESTS=1` — filter out with `pytest -k "not nano_banana"` to skip): [tests/integration/test_image_gen_nano_banana_2_live.py](../tests/integration/test_image_gen_nano_banana_2_live.py)
 - Upstream API docs: https://ai.google.dev/gemini-api/docs/image-generation
+
+[← Back](index.md)

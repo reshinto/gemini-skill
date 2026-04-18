@@ -1,104 +1,46 @@
-# Usage
+# Usage Quickstart
 
 [← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
 
+---
+
+**Last Updated:** 2026-04-18
+
 `gemini-skill` has one command surface and two entry points.
 
-## Entry Points
-
-### Claude Code skill
+## Claude Code skill
 
 ```text
-/gemini text "What is machine learning?"
+/gemini text "hello"
 ```
 
-Because `SKILL.md` has `disable-model-invocation: true`, Claude Code will only use the skill after you invoke it or explicitly direct Claude to run it.
+`SKILL.md` sets `disable-model-invocation: true`, so Claude Code only uses the skill when you invoke it explicitly. Install paths: [install.md](install.md). Commands: [commands.md](commands.md).
 
-### Direct CLI
-
-From a checkout:
+## direct CLI
 
 ```bash
-python3 scripts/gemini_run.py text "What is machine learning?"
+python3 scripts/gemini_run.py text "hello"
 ```
 
-Installed copy:
+Install paths, session files, and health-check: [cli.md](cli.md). End-to-end examples: [usage-tour.md](usage-tour.md).
 
-```bash
-python3 ~/.claude/skills/gemini/scripts/gemini_run.py text "What is machine learning?"
-```
+## Shared rules
 
-## Common Commands
+- Mutating operations require `--execute` (image_gen, video_gen, music_gen, batch writes, file operations). Dry-run is the default.
+- Pass user input as single-quoted argv values.
+- Use `--session <id>` or `--continue` for multi-turn text.
+- Use `plan_review` with no prompt to start the interactive REPL.
+- Responses larger than 50 KB are saved to a file; stdout prints only the path.
 
-### One-shot text
+## Where state lives
 
-```bash
-python3 scripts/gemini_run.py text "Summarize the repository architecture"
-```
+- Text sessions: `~/.config/gemini-skill/sessions/<id>.json`
+- Plan-review sessions: `~/.config/gemini-skill/plan-review-sessions/<id>.json`
+- Installed skill payload: `~/.claude/skills/gemini/`
 
-### Multi-turn text session
+## Next
 
-```bash
-python3 scripts/gemini_run.py text "Start a migration checklist" --session migration
-python3 scripts/gemini_run.py text "Now focus on rollback risk" --continue
-```
-
-Text sessions are stored at `~/.config/gemini-skill/sessions/<id>.json`.
-
-### Plan review
-
-One-turn review:
-
-```bash
-python3 scripts/gemini_run.py plan_review "Review this rollout plan for gaps"
-```
-
-Interactive review loop:
-
-```bash
-python3 scripts/gemini_run.py plan_review
-```
-
-`plan_review` starts with `VERDICT: APPROVED` or `VERDICT: REVISE`. Its dedicated review sessions live under `~/.config/gemini-skill/plan-review-sessions/`.
-
-### Multimodal analysis
-
-```bash
-python3 scripts/gemini_run.py multimodal "Summarize this PDF" --file report.pdf
-```
-
-### Structured output
-
-```bash
-python3 scripts/gemini_run.py structured "Extract fields" --schema schema.json
-```
-
-### Search grounding
-
-```bash
-python3 scripts/gemini_run.py search "latest changes to the Gemini API"
-```
-
-### Media generation
-
-```bash
-python3 scripts/gemini_run.py image_gen "A technical blueprint poster" --execute
-```
-
-## Configuration Reminder
-
-The launcher resolves env from the current working directory in this order:
-
-1. `./.env`
-2. `./.claude/settings.local.json`
-3. `./.claude/settings.json`
-4. `~/.claude/settings.json`
-5. existing process env
-
-That behavior is the same for the Claude Code skill and for direct CLI use.
-
-## Where To Go Next
-
-- [usage-tour.md](usage-tour.md) for runnable examples
-- [commands.md](commands.md) for the command map
-- [reference/index.md](../reference/index.md) for per-command details
+- [commands.md](commands.md) — all 23 commands grouped by capability
+- [flags-reference.md](flags-reference.md) — every CLI flag
+- [reference/index.md](../reference/index.md) — per-command reference
+- [usage-tour.md](usage-tour.md) — runnable end-to-end examples

@@ -49,18 +49,10 @@ Tools are defined as OpenAPI 3.0 schemas:
 }
 ```
 
-## Default model
-
-`gemini-2.5-flash` (set as `default_model` for the `function_calling` capability in [registry/capabilities.json](../registry/capabilities.json)). Pin `--model gemini-2.5-pro` or `--model gemini-3.1-pro-preview` for harder tool-use reasoning.
+Default model: `gemini-2.5-flash`. Pin `--model gemini-2.5-pro` or `--model gemini-3.1-pro-preview` for harder tool-use reasoning.
 
 ## Note
 
 The model may call your functions multiple times. Tool state (including `id` and `tool_type`) must be preserved across multi-turn interactions.
 
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: files](files.md) · [Next: image_gen](image_gen.md)
+[← Back](index.md)

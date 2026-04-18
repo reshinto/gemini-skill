@@ -34,18 +34,10 @@ gemini_run.py streaming --continue "What happens next?"
 
 Output is printed as it arrives from the server. If the connection drops or no data arrives for 30s, the stream fails with a network error.
 
-## Default model
-
-`gemini-2.5-flash`.
+Default model: `gemini-2.5-flash`. Override with `--model`.
 
 ## Note
 
 Streaming is useful for long responses or interactive workflows. For one-shot requests, use the standard `text` command.
 
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: search](search.md) · [Next: structured](structured.md)
+[← Back](index.md)

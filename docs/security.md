@@ -7,13 +7,13 @@ This page covers how `gemini-skill` resolves secrets, what it stores locally, an
 ![Secrets flow](diagrams/secrets-flow.svg)
 <sub>Source: [`docs/diagrams/secrets-flow.mmd`](diagrams/secrets-flow.mmd) — regenerate with `bash scripts/render_diagrams.sh`</sub>
 
-The launcher resolves canonical Gemini env keys from the current working directory in this order:
+The launcher resolves canonical Gemini env keys from the current working directory. Later sources override earlier ones; `./.env` wins and `existing process env` is the lowest-priority fallback:
 
-1. `./.env`
-2. `./.claude/settings.local.json`
+1. existing process env (lowest priority)
+2. `~/.claude/settings.json`
 3. `./.claude/settings.json`
-4. `~/.claude/settings.json`
-5. existing process env
+4. `./.claude/settings.local.json`
+5. `./.env` (highest priority)
 
 Supported keys:
 

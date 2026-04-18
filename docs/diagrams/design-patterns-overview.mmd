@@ -16,7 +16,6 @@ classDiagram
 
     class RawHttpTransport {
         _SUPPORTED_CAPABILITIES: frozenset
-        -http_client: httpx.Client
         +api_call(request, timeout) dict
         +stream_generate_content(request) Iterator
         +upload_file(path) dict

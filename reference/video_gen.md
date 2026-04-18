@@ -11,8 +11,8 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" video_gen "prompt" [--output
 ## Flags
 
 - `--output-dir DIR` — Directory for output video (default: OS temp dir).
-- `--poll-interval SECONDS` — Polling interval (default: 5).
-- `--max-wait SECONDS` — Maximum wait time (default: 600).
+- `--poll-interval SECONDS` — Polling interval (default: 15).
+- `--max-wait SECONDS` — Maximum wait time (default: 1800).
 - `--execute` — Confirm and generate. **Mutating, required.**
 - `--model MODEL` — Override the default model.
 
@@ -54,14 +54,6 @@ Generated videos are typically 4–10 seconds. Veo is Google's video generation 
 
 Without `--execute`, prints dry-run. Use `--execute` to generate.
 
-## Default model
+Default model: Veo (Gemini's video model).
 
-Veo (Gemini's video model).
-
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: token_count](token_count.md) · [Next: (none)](video_gen.md)
+[← Back](index.md)

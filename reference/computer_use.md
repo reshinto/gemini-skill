@@ -43,9 +43,7 @@ Computer use is privacy-sensitive. The model can:
 
 Computer use is a preview feature and may change. Model behavior and API surface are subject to revision.
 
-## Default model
-
-`gemini-3-flash-preview` (set as `default_model` for the `computer_use` capability in [registry/capabilities.json](../registry/capabilities.json)). The dedicated computer-use preview model `gemini-2.5-computer-use-preview-10-2025` is also registered and can be pinned with `--model`.
+Default model: `gemini-3-flash-preview` (set in [registry/capabilities.json](../registry/capabilities.json)). The dedicated model `gemini-2.5-computer-use-preview-10-2025` is also registered and can be pinned with `--model`. Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface).
 
 ## Limitations
 
@@ -53,12 +51,4 @@ Computer use is a preview feature and may change. Model behavior and API surface
 - Input simulation is best-effort (some applications may not respond correctly)
 - Screenshot capture depends on running display server
 
----
-
-## Notes
-
-Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
-
----
-
-[← Back](index.md) · [Previous: code_exec](code_exec.md) · [Next: deep_research](deep_research.md)
+[← Back](index.md)
