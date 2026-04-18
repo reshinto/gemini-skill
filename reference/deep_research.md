@@ -11,7 +11,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" deep_research "research quer
 ## Flags
 
 - `--resume ID` — Resume a previous research session by ID.
-- `--max-wait SECONDS` — Maximum wait time for polling (default: 300).
+- `--max-wait SECONDS` — Override max polling time in seconds (default: config `deep_research_timeout_seconds`, typically 3600).
 - `--execute` — Confirm and start. **Mutating, required.**
 - `--model MODEL` — Override the default model.
 
