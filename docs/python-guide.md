@@ -440,18 +440,14 @@ def safe_print(text: str) -> None:
 
 ## Performance Considerations
 
-### No asyncio
+### asyncio (async adapters only)
 
-The skill uses synchronous I/O (urllib, no async).
+19 of 23 adapters use synchronous I/O. The `live` adapter is the exception: it declares `IS_ASYNC = True` and implements `async def run_async()`. Dispatch detects this flag and calls `asyncio.run(adapter_module.run_async(**vars(args)))`.
 
 **Rationale:**
-- Claude Code doesn't require async
-- Simpler code, fewer edge cases
-- No event loop complexity
-
-If async becomes necessary in the future, consider:
-- `asyncio` + `aiohttp` (still stdlib-compatible through 3.11+)
-- Or stick with sync (fine for most use cases)
+- The Live API requires a persistent async bidirectional stream; synchronous urllib cannot model it
+- All other adapters remain synchronous for simplicity
+- No event-loop complexity for the common case
 
 ### Caching
 
