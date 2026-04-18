@@ -4,8 +4,8 @@ This page covers how `gemini-skill` resolves secrets, what it stores locally, an
 
 ## Secret Resolution
 
-![Secrets flow](diagrams/secrets-flow.svg)
-<sub>Source: [`docs/diagrams/secrets-flow.mmd`](diagrams/secrets-flow.mmd) — regenerate with `bash scripts/render_diagrams.sh`</sub>
+![Secrets flow](/docs/diagrams/secrets-flow.svg)
+<sub>Source: [`/docs/diagrams/secrets-flow.mmd`](/docs/diagrams/secrets-flow.mmd) — regenerate with `bash scripts/render_diagrams.sh`</sub>
 
 The launcher resolves canonical Gemini env keys from the current working directory. Later sources override earlier ones; `./.env` wins and `existing process env` is the lowest-priority fallback:
 
