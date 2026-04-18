@@ -1,0 +1,49 @@
+flowchart TB
+  classDef mod fill:#eef,stroke:#335,color:#112
+  classDef ext fill:#ffeebb,stroke:#a80,color:#402
+  classDef storage fill:#efe,stroke:#383,color:#112
+
+  subgraph Clients["Clients"]
+    CC["Claude Code<br/>/gemini &lt;cmd&gt;"]:::mod
+    CLI["Direct CLI<br/>python3 scripts/gemini_run.py"]:::mod
+  end
+
+  subgraph System["gemini-skill (single-process)"]
+    direction TB
+    Launcher["Launcher<br/>scripts/gemini_run.py<br/>- Python 3.9+ guard<br/>- venv re-exec<br/>- env bootstrap"]:::mod
+    Dispatch["Dispatch<br/>core/cli/dispatch.py<br/>- whitelist<br/>- flag parse<br/>- dry-run enforce"]:::mod
+    Router["Router<br/>core/routing/router.py<br/>- model selection<br/>- capability gate"]:::mod
+    Coord["Coordinator<br/>core/transport/coordinator.py<br/>- SDK first<br/>- raw HTTP fallback"]:::mod
+    SDK["SDK Backend<br/>core/transport/sdk/"]:::mod
+    Raw["Raw HTTP Backend<br/>core/transport/raw_http/"]:::mod
+    Adapters["Adapters (per-command)<br/>adapters/generation, tools, data,<br/>media, experimental"]:::mod
+    Normalize["Normalize<br/>core/transport/normalize.py"]:::mod
+  end
+
+  subgraph State["Local state"]
+    Sessions["~/.config/gemini-skill/sessions/*.json"]:::storage
+    Plans["~/.config/gemini-skill/plan-review-sessions/*.json"]:::storage
+    Install["~/.claude/skills/gemini/<br/>(payload + venv + checksums)"]:::storage
+    Settings["Claude settings<br/>~/.claude/settings.json<br/>./.claude/settings*.json<br/>./.env"]:::storage
+  end
+
+  subgraph External["External service"]
+    Gemini["Google Gemini API<br/>(REST / SDK)"]:::ext
+  end
+
+  CC --> Launcher
+  CLI --> Launcher
+  Launcher --> Dispatch
+  Settings -. resolves env .-> Launcher
+  Dispatch --> Router
+  Router --> Adapters
+  Adapters --> Coord
+  Coord -->|primary| SDK
+  Coord -. fallback .-> Raw
+  SDK --> Gemini
+  Raw --> Gemini
+  Gemini --> Normalize
+  Normalize --> Adapters
+  Adapters -->|read/write| Sessions
+  Adapters -->|read/write| Plans
+  Launcher -. checks .-> Install
