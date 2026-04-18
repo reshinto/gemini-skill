@@ -16,8 +16,7 @@
 ## Operational Docs
 
 - [security.md](security.md) — secret handling, local storage, privacy-sensitive operations
-- [how-it-works.md](how-it-works.md) — launcher bootstrap, dispatch, transport, output flow
-- [architecture.md](architecture.md) — module layout and transport design
+- [architecture.md](architecture.md) — runtime path, module layout, and transport design
 - [model-routing.md](model-routing.md) — model selection rules
 - [models-reference.md](models-reference.md) — model catalog and selection reference
 - [capabilities.md](capabilities.md) — capability matrix

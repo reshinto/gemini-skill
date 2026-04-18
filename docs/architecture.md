@@ -67,6 +67,26 @@ For more details on how token optimization influences architecture
 ![Command dispatch flow](diagrams/command-dispatch-flow.svg)
 <sub>Source: [`docs/diagrams/command-dispatch-flow.mmd`](diagrams/command-dispatch-flow.mmd) — regenerate with `bash scripts/render_diagrams.sh`</sub>
 
+## Runtime path
+
+This is the end-to-end execution path for a single invocation — the same whether started from Claude Code (`/gemini text "hello"`) or the terminal (`python3 scripts/gemini_run.py text "hello"`).
+
+1. **Entry point** — `scripts/gemini_run.py` receives the subcommand and its arguments.
+
+2. **Env bootstrap** — Before dispatch, the launcher loads runtime configuration from the first match in this lookup order:
+   `./.env` → `./.claude/settings.local.json` → `./.claude/settings.json` → `~/.claude/settings.json` → existing process env.
+   Only canonical Gemini keys (`GEMINI_API_KEY`, `GEMINI_IS_SDK_PRIORITY`, etc.) are imported into `os.environ`.
+
+3. **Venv re-exec** — If a skill-local virtual environment exists at `.venv/`, the launcher re-execs itself under `.venv/bin/python`. This makes the pinned `google-genai` SDK available without changing the CLI surface.
+
+4. **Dispatch** — `core/cli/dispatch.py` validates the subcommand against `ALLOWED_COMMANDS`, dynamically imports the adapter module via `importlib`, builds its argument parser, applies policy checks (mutating-operation gate, privacy opt-in), then calls `adapter_module.run(**vars(args))`.
+
+5. **Adapter execution** — The adapter validates arguments, resolves a model via the router, constructs the Gemini request, and calls the shared transport facade (`core/transport/__init__.py`).
+
+6. **Transport** — `TransportCoordinator` selects SDK or raw HTTP as primary based on `GEMINI_IS_SDK_PRIORITY` / `GEMINI_IS_RAWHTTP_PRIORITY`, falls back on eligible errors, and returns a backend-agnostic `GeminiResponse` dict. Adapters never know which backend ran.
+
+7. **Output** — Text under 50 KB prints to stdout; larger responses and all media save to files (path printed). Session-enabled commands persist history under `~/.config/gemini-skill/`.
+
 ## Directory Layout
 
 ```
@@ -164,7 +184,6 @@ For more details on how token optimization influences architecture
 │   └── capabilities.json     # Feature flags, deprecations
 ├── docs/
 │   ├── architecture.md       # This file
-│   ├── how-it-works.md       # Execution trace
 │   ├── install.md            # Setup instructions
 │   ├── commands.md           # Command index
 │   ├── capabilities.md       # Feature overview
