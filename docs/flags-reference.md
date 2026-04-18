@@ -18,37 +18,7 @@ This catalog lists every CLI flag the skill accepts, grouped by category. For ea
 
 ---
 
-### --dry-run
-
-**Default:** Implied unless --execute is passed
-
-**Applies to:** All mutation commands
-
-**Rationale:** Explicit flag to opt into dry-run mode. In dry-run, the skill parses your arguments, validates them, and prints a summary of what would happen (model chosen, parameters, estimated cost) without making any API call. Useful for testing your command-line syntax.
-
----
-
-### --validate-only
-
-**Default:** Not set
-
-**Applies to:** All commands
-
-**Rationale:** Parse arguments, validate them, and exit without making any API call or I/O. Useful for shell scripts that want to validate a command before executing it in a pipeline.
-
----
-
-## Privacy & Cost
-
-### --search
-
-**Default:** Not set
-
-**Applies to:** text, multimodal, structured, function_calling
-
-**Rationale:** Enable search grounding for the request. The Gemini API will search the web for current information and ground the response in those results. Search grounding incurs extra API quota (typically 2x the token cost of the base request). Omit this flag to skip search. See `reference/search.md` for when search is worth the extra cost.
-
----
+## Grounding
 
 ### --show-grounding
 
@@ -57,26 +27,6 @@ This catalog lists every CLI flag the skill accepts, grouped by category. For ea
 **Applies to:** text, multimodal, structured, function_calling (when --search is passed)
 
 **Rationale:** In the response, include the grounding sources (URLs, snippets) that the search results provided. This helps you verify that the model used current information. Omit to see only the generated text.
-
----
-
-### --no-cache
-
-**Default:** Cache is enabled if available for the model and region**
-
-**Applies to:** All commands that support context caching
-
-**Rationale:** Disable context caching for this request, even if the model supports it. Caching is beneficial for large repetitive prompts (e.g., analyzing the same 100-page document multiple times), but adds latency on the first request. Pass `--no-cache` to opt out for one-off queries. See `reference/cache.md` for the economics of when caching is worth it.
-
----
-
-### --cost-breakdown
-
-**Default:** Not set
-
-**Applies to:** All commands that consume quota
-
-**Rationale:** After the command completes, print a detailed cost breakdown: input tokens, output tokens, cached tokens (if any), and the total cost in USD. Useful for understanding which operations are expensive. Redirect to a file if you want to log cost per request.
 
 ---
 
@@ -102,36 +52,6 @@ This catalog lists every CLI flag the skill accepts, grouped by category. For ea
 
 ---
 
-### --new-session
-
-**Default:** Not set
-
-**Applies to:** text, multimodal, structured, function_calling, code_exec
-
-**Rationale:** Explicitly start a fresh conversation, discarding any prior history even if --session would have found one. Use when you want to reset context.
-
----
-
-### --list-sessions
-
-**Default:** Not set
-
-**Applies to:** All commands (usually called alone)
-
-**Rationale:** Print a table of all stored sessions: ID, timestamp of last use, number of turns, approx. context size. Useful for housekeeping and deciding which sessions to delete.
-
----
-
-### --delete-session <id>
-
-**Default:** Not set
-
-**Applies to:** All commands (usually called alone)
-
-**Rationale:** Delete the session directory for a given ID, freeing disk space. The conversation history is lost. Useful after finishing a long project.
-
----
-
 ## Model Selection
 
 ### --model <name>
@@ -141,16 +61,6 @@ This catalog lists every CLI flag the skill accepts, grouped by category. For ea
 **Applies to:** All generation commands
 
 **Rationale:** Override the default model. Common choices: gemini-2.5-pro for complex reasoning, gemini-2.5-flash-lite for simple tasks. See `docs/models-reference.md` for a complete list of available models and when to pick each. Pass `models` command to list all options.
-
----
-
-### --list-models
-
-**Default:** Not set
-
-**Applies to:** All commands (usually called alone)
-
-**Rationale:** Print a table of all available models in the registry: name, cost (input/output per 1M tokens), capabilities, and recommended use cases. Equivalent to running the `models` command.
 
 ---
 
@@ -166,57 +76,7 @@ This catalog lists every CLI flag the skill accepts, grouped by category. For ea
 
 ---
 
-### --output <path> / -o
-
-**Default:** Not set; responses print to stdout
-
-**Applies to:** All commands that produce large responses
-
-**Rationale:** Write the response to a file instead of stdout. Useful for piping output to another tool or saving large responses (e.g., generated images, videos). If the response is large (>50KB), the skill automatically saves it to a temp file and prints the path; use --output to specify the location.
-
----
-
-### --format <type>
-
-**Default:** Depends on command (text=text, image_gen=json with image path, etc.)
-
-**Applies to:** text, structured, function_calling, batch
-
-**Rationale:** Override the output format. Common choices: `text` (raw markdown), `json` (structured JSON), `jsonl` (JSON Lines for batch), `csv` (for tabular data). Not all formats are valid for all commands; invalid combinations are rejected at parse time.
-
----
-
-### --stream / -s
-
-**Default:** Not set (buffered response)
-
-**Applies to:** text, multimodal, structured, function_calling
-
-**Rationale:** Stream the response to stdout as it's generated instead of waiting for the full response. Useful for long-running generation where you want to see output as it arrives. Cannot be combined with --output (streamed responses don't buffer to a file).
-
----
-
-### --show-metadata
-
-**Default:** Not set
-
-**Applies to:** All commands
-
-**Rationale:** Include metadata in the output: timestamp, model used, backend (SDK or raw HTTP), tokens consumed, cache stats. Useful for debugging or logging what actually happened.
-
----
-
-### --timeout <seconds>
-
-**Default:** 30 seconds
-
-**Applies to:** All commands
-
-**Rationale:** Override the default request timeout. Increase for slow network or large files; decrease if you want to fail fast on an unresponsive API. If a request exceeds the timeout, it's retried on the fallback backend if available.
-
----
-
-## Advanced / Tuning
+## Generation Tuning
 
 ### --temperature <float>
 
@@ -228,73 +88,193 @@ This catalog lists every CLI flag the skill accepts, grouped by category. For ea
 
 ---
 
-### --max-output-tokens <int>
+### --max-tokens <int>
 
-**Default:** 8192 (varies by model and region)
+**Default:** 8192
 
-**Applies to:** All generation commands
+**Applies to:** text
 
-**Rationale:** Limit the length of the response. The model stops generating once it reaches this count. Useful for keeping responses concise or bounding the cost of an expensive operation.
-
----
-
-### --top-p <float>
-
-**Default:** Varies by model (typically 0.95)
-
-**Applies to:** All generation commands
-
-**Rationale:** Alternative to temperature: limit generation to the top P% of probable tokens (nucleus sampling). Works well with low P values (0.1–0.5) to get coherent, diverse responses.
+**Rationale:** Limit the length of the response from the `text` adapter. The model stops generating when it reaches this token count. Useful for keeping responses concise or bounding cost.
 
 ---
 
-### --top-k <int>
-
-**Default:** Varies by model
-
-**Applies to:** All generation commands
-
-**Rationale:** Limit generation to the top K most probable tokens at each step. Similar to top-p but simpler and sometimes more predictable. Values like 20–100 are common.
-
----
-
-### --raw-http-only
-
-**Default:** Not set (both backends available if configured)
-
-**Applies to:** All commands
-
-**Rationale:** Force the skill to use the raw HTTP backend and skip the SDK backend, even if it's installed. Useful for debugging, avoiding SDK bugs, or running in environments where the SDK isn't compatible.
-
----
-
-### --sdk-only
-
-**Default:** Not set (both backends available if configured)
-
-**Applies to:** All commands
-
-**Rationale:** Force the skill to use the SDK backend only. Fails if the SDK is not installed or not available. Useful for testing or preferring the SDK's behavior for a particular operation.
-
----
-
-### --verbose / -v
+### --system <text>
 
 **Default:** Not set
 
-**Applies to:** All commands
+**Applies to:** text
 
-**Rationale:** Print detailed diagnostics: which backend is running, retries, policy decisions, API call details (redacted to never show secrets). Useful for debugging why a command behaves unexpectedly.
+**Rationale:** System instruction sent to the model before the user prompt. Sets tone, persona, or task constraints for the conversation. Passed as the `systemInstruction` field in the API request.
 
 ---
 
-### --quiet / -q
+### --schema <json>
+
+**Default:** Not set (required)
+
+**Applies to:** structured
+
+**Rationale:** JSON schema string the model must conform to for its output. Required by the `structured` adapter. The skill passes this schema via `responseSchema` in the API request body.
+
+---
+
+### --thinking <on|off>
+
+**Default:** `on`
+
+**Applies to:** plan_review
+
+**Rationale:** Enable or disable extended thinking for plan-review iterations. When `on`, the model includes a thinking block before producing the VERDICT line. Dispatch handles this flag via raw string checks before passing it to the adapter.
+
+---
+
+### --task-type <type>
 
 **Default:** Not set
 
-**Applies to:** All commands
+**Applies to:** embed
 
-**Rationale:** Suppress non-essential output (progress messages, metadata). Print only the result and errors. Useful for parsing output in shell scripts.
+**Rationale:** Embedding task type hint (e.g., `RETRIEVAL_DOCUMENT`, `SEMANTIC_SIMILARITY`). Controls how the embedding model weights token proximity. See the Gemini Embeddings API docs for valid values.
+
+---
+
+### --modality <modality>
+
+**Default:** `TEXT`
+
+**Applies to:** live
+
+**Rationale:** Output modality for the Live session. Use `AUDIO` to receive synthesized speech, `TEXT` for text-only output. The Live adapter is async-only (IS_ASYNC=True).
+
+---
+
+### --num-images <int>
+
+**Default:** Not set
+
+**Applies to:** imagen
+
+**Rationale:** Number of images to generate in a single Imagen request. Must be a positive integer. Higher values increase cost proportionally.
+
+---
+
+### --aspect-ratio <ratio>
+
+**Default:** Not set
+
+**Applies to:** imagen, image_gen
+
+**Rationale:** Image aspect ratio (e.g., `1:1`, `16:9`). Supported choices are defined in the adapter; unsupported values are rejected at parse time.
+
+---
+
+### --output-dir <path>
+
+**Default:** OS temp directory
+
+**Applies to:** imagen, image_gen, video_gen, music_gen
+
+**Rationale:** Directory where generated media files are written. When not set, files are saved to a temp directory and the path is printed to stdout. Specify a directory to control where output lands.
+
+---
+
+### --image-size <size>
+
+**Default:** Not set
+
+**Applies to:** image_gen
+
+**Rationale:** Output image resolution for Gemini 3 image generation (e.g., `1024x1024`). When omitted, the model's default resolution is used.
+
+---
+
+### --poll-interval <seconds>
+
+**Default:** Not set
+
+**Applies to:** video_gen
+
+**Rationale:** How frequently (in seconds) the adapter polls the long-running video generation operation for completion. Decrease for faster feedback on short jobs; increase to reduce API calls on long renders.
+
+---
+
+### --max-wait <seconds>
+
+**Default:** Not set
+
+**Applies to:** video_gen, deep_research
+
+**Rationale:** Maximum total seconds to wait for a long-running operation. If the operation has not completed by this deadline, the adapter exits with an error. Useful in CI to prevent indefinite hangs.
+
+---
+
+### --resume <token>
+
+**Default:** Not set
+
+**Applies to:** deep_research
+
+**Rationale:** Resume a previously started deep-research session using its resume token. Allows continuing a multi-step research job that was interrupted or timed out.
+
+---
+
+### --tools <json>
+
+**Default:** Not set (required)
+
+**Applies to:** function_calling
+
+**Rationale:** JSON string describing the tool(s) available to the model. Required by the `function_calling` adapter. Format follows the Gemini `tools` API field.
+
+---
+
+### --display-name <name>
+
+**Default:** Not set
+
+**Applies to:** files (upload subcommand)
+
+**Rationale:** Human-readable display name for the uploaded file in the Gemini Files API. If omitted, the API assigns a default name based on the filename.
+
+---
+
+### --ttl <duration>
+
+**Default:** `3600s`
+
+**Applies to:** cache (create subcommand)
+
+**Rationale:** Time-to-live for the cached context (e.g., `3600s`, `86400s`). After expiry the cache entry is deleted automatically. Longer TTLs reduce re-caching overhead for frequently reused prompts.
+
+---
+
+### --src <uri>
+
+**Default:** Not set (required)
+
+**Applies to:** batch (create subcommand)
+
+**Rationale:** Source file URI (JSONL) for the batch job. Must be a Gemini Files API URI pointing to the input requests.
+
+---
+
+### --dest <uri>
+
+**Default:** Not set (required)
+
+**Applies to:** batch (create subcommand)
+
+**Rationale:** Destination file URI where batch output will be written. Must be a Gemini Files API URI.
+
+---
+
+### --store <name>
+
+**Default:** Not set (required for query)
+
+**Applies to:** file_search (query subcommand)
+
+**Rationale:** File Search store resource name to query against. Required when running a RAG query via `file_search query`.
 
 ---
 
