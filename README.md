@@ -4,10 +4,10 @@
 
 # gemini-skill
 
-A Gemini API front end with two entry points:
+A Gemini API front end that runs as a Claude Code skill or as a direct CLI. Two entry points, one command surface:
 
 - **Claude Code skill:** `/gemini <command> [args]`
-- **Direct CLI:** `python3 scripts/gemini_run.py <command> [args]` or the `gemini-skill-install` launcher
+- **direct CLI:** `python3 scripts/gemini_run.py <command> [args]` or the `gemini-skill-install` launcher
 
 Same command surface in both: text, multimodal analysis, structured output, embeddings, Files API, image/video/music generation, file search, deep research, and iterative plan review.
 
