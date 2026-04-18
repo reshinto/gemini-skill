@@ -35,13 +35,13 @@ See [docs/cli.md](docs/cli.md) for full CLI setup.
 
 ## Configure
 
-Set `GEMINI_API_KEY` (the only supported key; `GOOGLE_API_KEY` is ignored). The launcher resolves keys in this order:
+Set `GEMINI_API_KEY` (the only supported key; `GOOGLE_API_KEY` is ignored). The launcher merges keys from all sources below; later entries override earlier ones, so **`./.env` wins** and `existing process env` is the fallback:
 
-1. `./.env`
-2. `./.claude/settings.local.json`
+1. existing process env (lowest priority)
+2. `~/.claude/settings.json`
 3. `./.claude/settings.json`
-4. `~/.claude/settings.json`
-5. existing process env
+4. `./.claude/settings.local.json`
+5. `./.env` (highest priority)
 
 Full details and examples: [docs/security.md](docs/security.md).
 
