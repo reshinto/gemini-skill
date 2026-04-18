@@ -44,10 +44,6 @@ python3 scripts/gemini_run.py live "hello" --model gemini-live-2.5-flash-preview
 4. The loop stops on the first message whose `server_content.turn_complete` is `True`. Any trailing messages on the channel are ignored.
 5. The session closes cleanly on context exit.
 
-## Backend-agnostic
+SDK-only: requires `google-genai` in the skill venv and `GEMINI_IS_SDK_PRIORITY=true`. There is no raw HTTP fallback.
 
-This command is **SDK-only**. It requires `google-genai` in the skill venv and `GEMINI_IS_SDK_PRIORITY=true`. There is no raw HTTP fallback.
-
----
-
-[← Back](index.md) · [Previous: imagen](imagen.md) · [Next: maps](maps.md)
+[← Back](index.md)

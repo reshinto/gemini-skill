@@ -53,16 +53,10 @@ SynthID watermark is applied to all generated audio for identification purposes.
 
 Without `--execute`, prints dry-run. Use `--execute` to generate.
 
-## Default model
-
-Lyria 3 (Gemini's music model).
+Default model: Lyria 3 (Gemini's music model). Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface).
 
 ## Notes
 
 Music generation is non-commercial in most jurisdictions. Check your terms of service before publishing generated music.
 
-Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
-
----
-
-[← Back](index.md) · [Previous: multimodal](multimodal.md) · [Next: search](search.md)
+[← Back](index.md)

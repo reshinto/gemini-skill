@@ -40,14 +40,6 @@ gemini_run.py token_count "Write a detailed research paper on AGI"
 
 Use this command to estimate API costs before calling generateContent, or to verify that your prompt fits within token limits.
 
-## Default model
+Default model: `gemini-2.5-flash`. Override with `--model`.
 
-`gemini-2.5-flash`.
-
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: text](text.md) · [Next: video_gen](video_gen.md)
+[← Back](index.md)

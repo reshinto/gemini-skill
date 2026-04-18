@@ -54,14 +54,6 @@ Generated videos are typically 4–10 seconds. Veo is Google's video generation 
 
 Without `--execute`, prints dry-run. Use `--execute` to generate.
 
-## Default model
+Default model: Veo (Gemini's video model).
 
-Veo (Gemini's video model).
-
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: token_count](token_count.md) · [Next: (none)](video_gen.md)
+[← Back](index.md)

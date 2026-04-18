@@ -36,18 +36,6 @@ gemini_run.py structured "Analyze this contract" \
 
 The model will only output JSON conforming to the provided schema. Invalid schema inputs cause an error.
 
-## Default model
+Default model: `gemini-2.5-flash`. Override with `--model`. Responses exceeding 50KB save to a file. See [docs/usage.md#shared-rules](../docs/usage.md#shared-rules).
 
-`gemini-2.5-flash` (strong at structured output).
-
-## Large responses
-
-Responses exceeding 50KB save to a file.
-
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: streaming](streaming.md) · [Next: text](text.md)
+[← Back](index.md)

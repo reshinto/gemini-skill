@@ -34,18 +34,6 @@ gemini_run.py text --session review "Analyze this code"
 gemini_run.py text --continue "Focus on the race condition"
 ```
 
-## Default model
+Default model: `gemini-2.5-flash` (medium complexity). Use `--model gemini-2.5-pro` for complex reasoning, or `--model gemini-2.5-flash-lite` for the cheapest option. Responses exceeding 50KB are saved to a file; only the path and size are printed. See [docs/usage.md#shared-rules](../docs/usage.md#shared-rules).
 
-`gemini-2.5-flash` (medium complexity). Use `--model gemini-2.5-pro` for complex reasoning, or `--model gemini-2.5-flash-lite` for the cheapest option.
-
-## Large responses
-
-Responses exceeding 50KB are saved to a file; only the path and size are printed to stdout.
-
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: structured](structured.md) · [Next: token_count](token_count.md)
+[← Back](index.md)

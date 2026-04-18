@@ -57,16 +57,6 @@ Location queries are sent to Google Maps. User location may be inferred. Use onl
 
 Maps grounding adds per-request cost. Check pricing.
 
-## Default model
+Default model: `gemini-2.5-flash`. Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface).
 
-`gemini-2.5-flash`.
-
----
-
-## Notes
-
-Currently served via the raw HTTP backend (SDK 1.33.0 does not expose this surface). Identical CLI and output.
-
----
-
-[← Back](index.md) · [Previous: live](live.md) · [Next: multimodal](multimodal.md)
+[← Back](index.md)

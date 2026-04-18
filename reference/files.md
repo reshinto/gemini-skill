@@ -54,29 +54,8 @@ gemini_run.py files delete "fileId-12345" --execute
 
 Without `--execute`, mutating subcommands (`upload`, `download`, `delete`) print a dry-run message and exit. Read-only subcommands (`list`, `get`) do not accept `--execute`.
 
-## Download details
-
-The `download` subcommand retrieves file bytes and writes them to a local path. This is a non-mutating read operation (does not require `--execute`). Useful for accessing files previously uploaded via `upload`.
-
-Example:
-```bash
-# Upload a file
-gemini_run.py files upload research.pdf --execute
-# → returns {"name": "files/abc123", ...}
-
-# Download the file bytes
-gemini_run.py files download "files/abc123" ./research-local.pdf
-# → writes to ./research-local.pdf, returns {"path": "./research-local.pdf", "size_bytes": 12345}
-```
-
 ## Output
 
 List and get return JSON metadata. Upload returns the file ID and name. Download returns a JSON summary with the output path and size.
 
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the call.
-
----
-
-[← Back](index.md) · [Previous: file_search](file_search.md) · [Next: function_calling](function_calling.md)
+[← Back](index.md)

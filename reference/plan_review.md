@@ -77,6 +77,4 @@ VERDICT: REVISE
 Call out the rollback plan, define the backfill success metric, and add a test for mixed old/new readers during deployment.
 ```
 
----
-
-Backend-agnostic: this command produces identical output whether the SDK or raw HTTP backend handled the request.
+[← Back](index.md)
