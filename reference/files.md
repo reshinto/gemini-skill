@@ -20,6 +20,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" files <subcommand> [args]
 
 - `--execute` — Confirm and execute `upload`, `download`, or `delete`.
 - `--mime TYPE` — Override MIME type for upload.
+- `--display-name NAME` — Display name for the uploaded file (upload subcommand only).
 
 ## Examples
 

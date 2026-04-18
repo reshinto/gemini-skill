@@ -32,9 +32,8 @@ gemini_run.py token_count "Write a detailed research paper on AGI"
 
 ## Output format
 
-```
-Tokens: 45
-Model: gemini-2.5-flash
+```json
+{"model": "gemini-2.5-flash", "totalTokens": 45}
 ```
 
 ## Use case

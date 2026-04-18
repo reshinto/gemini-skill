@@ -17,14 +17,14 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/gemini_run.py" cache <subcommand> [args]
 
 ## Flags
 
-- `--ttl SECONDS` — Time-to-live for the cache (e.g., 3600 for 1 hour). Default: 3600.
+- `--ttl VALUE` — Time-to-live for the cache as a duration string (e.g., `'3600s'` for 1 hour). Default: `3600s`.
 - `--execute` — Confirm and execute `create` or `delete`.
 
 ## Examples
 
 ```bash
 # Create a cache with content
-gemini_run.py cache create "System prompt text" --ttl 7200 --execute
+gemini_run.py cache create "System prompt text" --ttl 7200s --execute
 
 # List caches
 gemini_run.py cache list
