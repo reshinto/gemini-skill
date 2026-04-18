@@ -2,43 +2,67 @@
 
 [← Back to README](../README.md) · [Reference index](../reference/index.md)
 
-`gemini-skill` can be used as a Claude Code skill or as a direct CLI. This hub keeps the user-facing docs aligned around that shared command surface.
+---
+
+**Last Updated:** 2026-04-18
+
+`gemini-skill` can be used as a Claude Code skill or as a direct CLI. This hub groups every user-facing doc around that shared command surface.
 
 ## Start Here
 
-- [install.md](install.md) — install paths, env precedence, verification, troubleshooting
-- [usage.md](usage.md) — quick start for both `/gemini ...` and `python3 scripts/gemini_run.py ...`
-- [usage-tour.md](usage-tour.md) — example workflows, including `plan_review`
-- [commands.md](commands.md) — command families and quick routing guide
-- [flags-reference.md](flags-reference.md) — shared CLI flags and common invocation patterns
-- [reference/index.md](../reference/index.md) — per-command reference pages
+- [install.md](install.md) — Claude Code skill install: paths, payload, verification
+- [cli.md](cli.md) — direct CLI install and usage (pipx / uvx / clone)
+- [usage.md](usage.md) — quickstart for `/gemini` and `python3 scripts/gemini_run.py`
+- [usage-tour.md](usage-tour.md) — runnable end-to-end workflows
+- [commands.md](commands.md) — command families and quick routing
+- [flags-reference.md](flags-reference.md) — every CLI flag, grouped by topic
 
-## Operational Docs
+## Capabilities (split by category)
 
-- [security.md](security.md) — secret handling, local storage, privacy-sensitive operations
-- [architecture.md](architecture.md) — runtime path, module layout, and transport design
-- [model-routing.md](model-routing.md) — model selection rules
-- [models-reference.md](models-reference.md) — model catalog and selection reference
-- [capabilities.md](capabilities.md) — capability matrix
+- [capabilities.md](capabilities.md) — category index
+- [capabilities-generation.md](capabilities-generation.md) — text, streaming, plan_review, multimodal, structured
+- [capabilities-tools.md](capabilities-tools.md) — function_calling, code_exec, search, maps
+- [capabilities-data.md](capabilities-data.md) — embed, token_count, files, cache, batch, file_search
+- [capabilities-media.md](capabilities-media.md) — image_gen, imagen, video_gen, music_gen
+- [capabilities-experimental.md](capabilities-experimental.md) — computer_use, deep_research, live
 
-## Design Docs
+## Models
 
-- [design-patterns.md](design-patterns.md) — implementation conventions and reusable patterns
+- [models-reference.md](models-reference.md) — catalog and cost tiers
+- [model-routing.md](model-routing.md) — how the router picks a model
+
+## Architecture and Design
+
+- [architecture.md](architecture.md) — overview, runtime path, module map
+- [architecture-transport.md](architecture-transport.md) — dual-backend transport, coordinator, policy
+- [architecture-installer.md](architecture-installer.md) — installer payload, venv, checksums
+- [design-patterns.md](design-patterns.md) — implementation pattern catalog
+- [system-design.md](system-design.md) — scalability, reliability, trade-offs
+
+## Operational
+
+- [security.md](security.md) — secret handling, local storage, privacy notes
+- [update-sync.md](update-sync.md) — updating, reinstalling, release publishing
 
 ## Contributor Docs
 
-- [contributing.md](contributing.md) — contribution workflow and expectations
-- [testing.md](testing.md) — test strategy and test commands
-- [python-guide.md](python-guide.md) — Python setup and development guidance
-- [update-sync.md](update-sync.md) — keeping installed and checked-out copies aligned
+- [contributing.md](contributing.md) — contribution overview
+- [contributing-adapters.md](contributing-adapters.md) — adding a new command adapter
+- [contributing-workflow.md](contributing-workflow.md) — PR, commit, and release workflow
+- [testing.md](testing.md) — testing overview
+- [testing-unit.md](testing-unit.md) — unit tests, fixtures, coverage
+- [testing-integration.md](testing-integration.md) — live API matrix, backend parity
+- [testing-smoke.md](testing-smoke.md) — clean-install smoke, upgrade path
+- [python-guide.md](python-guide.md) — Python version and coding conventions
 
 ## Most Useful References
 
-- [reference/text.md](../reference/text.md)
-- [reference/plan_review.md](../reference/plan_review.md)
-- [reference/multimodal.md](../reference/multimodal.md)
-- [reference/image_gen.md](../reference/image_gen.md)
-- [reference/files.md](../reference/files.md)
+- [../reference/index.md](../reference/index.md) — per-command reference hub
+- [../reference/text.md](../reference/text.md)
+- [../reference/plan_review.md](../reference/plan_review.md)
+- [../reference/multimodal.md](../reference/multimodal.md)
+- [../reference/image_gen.md](../reference/image_gen.md)
+- [../reference/files.md](../reference/files.md)
 
 ## Notes
 
