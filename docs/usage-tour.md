@@ -2,108 +2,95 @@
 
 [← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
 
-This page focuses on runnable workflows. The same commands work from Claude Code and from the CLI.
+---
 
-## 1. Quick text response
+**Last Updated:** 2026-04-18
 
-Claude Code:
+Runnable workflows. The same commands work from Claude Code and the direct CLI. Each scenario shows both forms.
 
+## 1. Single-turn text
+
+**Claude Code**
 ```text
 /gemini text "Write a haiku about debugging"
 ```
 
-CLI:
-
+**direct CLI**
 ```bash
 python3 scripts/gemini_run.py text "Write a haiku about debugging"
 ```
 
-## 2. Continue a text session
+## 2. Multi-turn text session
 
 ```bash
-python3 scripts/gemini_run.py text "Plan a Japan trip" --session travel-2026
-python3 scripts/gemini_run.py text "Focus on food this time" --session travel-2026
-python3 scripts/gemini_run.py text "Now focus on accommodations" --continue
+python3 scripts/gemini_run.py text "Plan a Japan trip"        --session travel
+python3 scripts/gemini_run.py text "Focus on food this time"  --continue
+python3 scripts/gemini_run.py text "Now on accommodations"    --session travel
 ```
 
-Session files are written to `~/.config/gemini-skill/sessions/<id>.json`.
+Session files land at `~/.config/gemini-skill/sessions/travel.json`.
 
-## 3. Review an implementation plan once
+## 3. Multimodal PDF + image analysis
 
+**direct CLI**
 ```bash
-python3 scripts/gemini_run.py plan_review "Review this database migration plan for missing tests and rollback gaps"
+python3 scripts/gemini_run.py multimodal "Summarize this paper" --file ./paper.pdf
+python3 scripts/gemini_run.py multimodal "Describe the chart"   --file ./chart.png
 ```
 
-Expected shape:
-
+**Claude Code**
 ```text
-VERDICT: REVISE
-Add a rollback step for the index migration and specify how backfill failures are detected.
+/gemini multimodal "Summarize this paper" --file ./paper.pdf
 ```
 
-## 4. Run an interactive plan review conversation
+## 4. Structured JSON extraction
 
+```bash
+python3 scripts/gemini_run.py structured "Extract name, date, and total amount" \
+  --schema '{"type":"object","properties":{"name":{"type":"string"},"date":{"type":"string"},"total":{"type":"number"}}}' \
+  --file ./invoice.png
+```
+
+## 5. Plan review — one-shot and REPL
+
+**Claude Code (one-shot)**
+```text
+/gemini plan_review "Review this migration plan for rollback gaps"
+```
+
+**direct CLI (REPL when stdin is a TTY)**
 ```bash
 python3 scripts/gemini_run.py plan_review
 ```
 
-Inside the REPL:
+Every response starts with `VERDICT: APPROVED` or `VERDICT: REVISE`. See [reference/plan_review.md](../reference/plan_review.md).
 
-```text
-plan_review> Migrate auth tokens to the new table.
-VERDICT: REVISE
-...
-plan_review> Add a dual-write phase and rollback switch.
-VERDICT: APPROVED
-plan_review> /done
-```
-
-`plan_review` stores review conversations under `~/.config/gemini-skill/plan-review-sessions/`.
-
-## 5. Analyze a document
+## 6. Image generation (dry-run first, then --execute)
 
 ```bash
-python3 scripts/gemini_run.py multimodal \
-  "Summarize the key findings in this report" \
-  --file /path/to/report.pdf
+# dry-run: prints the model, parameters, estimated cost
+python3 scripts/gemini_run.py image_gen "A red apple on an oak table"
+# actually generate:
+python3 scripts/gemini_run.py image_gen "A red apple on an oak table" --execute
 ```
 
-## 6. Produce structured JSON
+## 7. Files API — upload, list, delete
 
 ```bash
-python3 scripts/gemini_run.py structured \
-  "Extract name and email from: Ada Lovelace, ada@example.com" \
-  --schema '{"type":"object","properties":{"name":{"type":"string"},"email":{"type":"string"}},"required":["name","email"]}'
-```
-
-## 7. Ground a response in current search results
-
-```bash
-python3 scripts/gemini_run.py search "latest Gemini SDK release notes"
-```
-
-Use privacy-sensitive commands only when the task actually requires them.
-
-## 8. Generate an image
-
-```bash
-python3 scripts/gemini_run.py image_gen \
-  "A diagram poster showing a dual-backend transport layer" \
-  --execute
-```
-
-The command writes the output file and prints the saved path instead of raw binary data.
-
-## 9. Manage files
-
-```bash
-python3 scripts/gemini_run.py files upload dataset.csv --execute
+python3 scripts/gemini_run.py files upload ./paper.pdf --execute
 python3 scripts/gemini_run.py files list
-python3 scripts/gemini_run.py files get files/abc123
+python3 scripts/gemini_run.py files delete files/<id> --execute
 ```
 
-## 10. Decide which entry point to use
+## 8. Search grounding
 
-- Use `/gemini ...` when you want Claude Code to orchestrate the command inside the current task.
-- Use `python3 scripts/gemini_run.py ...` when you want the same behavior directly from a terminal or during local development.
-- In both cases, configuration is resolved from the current working directory before dispatch.
+```bash
+python3 scripts/gemini_run.py search "Summarize the last week in Rust news"
+```
+
+## See also
+
+- [usage.md](usage.md) — quickstart and shared rules
+- [commands.md](commands.md) — command routing
+- [flags-reference.md](flags-reference.md) — every CLI flag
+- [reference/index.md](../reference/index.md) — per-command reference
