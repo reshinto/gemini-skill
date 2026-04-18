@@ -418,3 +418,16 @@ All 20 adapter files import from `core.infra.client`. No adapter uses `core.tran
 3. **`imagen` and `live` adapters intentionally bypass `core.infra.client`.** Both use `core.transport.sdk.client_factory.get_client()` directly. Reason documented in each adapter's module docstring: the response shapes (Imagen image bytes; Live async session) do not fit the `GeminiResponse` envelope, and both are SDK-only with no raw HTTP fallback. `live` also declares `IS_ASYNC = True` — dispatched via `asyncio.run(adapter.run_async(**kwargs))`.
 
 4. **`gemini-embedding-2-preview` pricing is $0.00** — recorded as-is from `registry/models.json`. This may be intentional (free tier) or a placeholder.
+
+---
+
+## Parity baseline (pre-edit)
+
+Ran `pytest tests/test_documentation_parity.py -v` inside `.venv` (Python 3.13.8):
+
+- `TestReadmeParity::test_readme_mentions_skill_and_cli_usage` — PASSED
+- `TestReferenceParity::test_reference_index_lists_plan_review` — PASSED
+- `TestReferenceParity::test_commands_doc_lists_plan_review` — PASSED
+- `TestReferenceParity::test_plan_review_reference_exists` — PASSED
+
+**Result:** 4 passed in 0.01s — baseline is green.
