@@ -2,30 +2,35 @@
 
 [← Back to README](../README.md) · [Docs index](README.md) · [Reference index](../reference/index.md)
 
+> **Direct CLI install?** See [docs/cli.md](cli.md) instead.
+
 ![Install flow](diagrams/install-flow.svg)
 <sub>Source: [`docs/diagrams/install-flow.mmd`](diagrams/install-flow.mmd)</sub>
 
-## Install Paths
+## Install options
 
-### Recommended: bootstrap installer
+All four paths install into `~/.claude/skills/gemini/` and merge the canonical
+env block into `~/.claude/settings.json`.
+
+**Recommended — zero-clone bootstrap:**
 
 ```bash
 uvx gemini-skill-install
 ```
 
-Fallback:
+If `uvx` defaults to an older Python:
 
 ```bash
 uvx --python 3.13 gemini-skill-install
 ```
 
-Or with `pipx`:
+**With `pipx` (from GitHub):**
 
 ```bash
 pipx run --spec git+https://github.com/reshinto/gemini-skill.git gemini-skill-install
 ```
 
-### From a clone
+**From a clone:**
 
 ```bash
 git clone https://github.com/reshinto/gemini-skill.git
@@ -33,76 +38,43 @@ cd gemini-skill
 python3 setup/install.py
 ```
 
-Both installer paths copy the runtime payload into `~/.claude/skills/gemini/`, create or reuse `~/.claude/skills/gemini/.venv`, install the pinned `google-genai` dependency, and merge the canonical env block into `~/.claude/settings.json`.
+Pass `-y` / `--yes` to skip interactive prompts in CI.
 
-## Runtime Configuration
+## What the installer does
 
-The launcher uses the current working directory for config lookup, whether the command is started from Claude Code or directly from the CLI.
+The installer copies the following payload into `${CLAUDE_SKILL_DIR}` (`~/.claude/skills/gemini/`):
 
-Per-key precedence:
+| Entry | Type |
+|---|---|
+| `SKILL.md` | root file — Claude Code skill manifest |
+| `VERSION` | root file — pinned version string |
+| `core/` | directory |
+| `adapters/` | directory |
+| `reference/` | directory |
+| `registry/` | directory |
+| `scripts/` | directory |
+| `setup/update.py` | setup file — in-place updater |
+| `setup/requirements.txt` | setup file — pinned dependencies |
 
-1. `./.env`
-2. `./.claude/settings.local.json`
-3. `./.claude/settings.json`
-4. `~/.claude/settings.json`
-5. existing process env
+After copying, the installer:
 
-Canonical keys:
+1. Writes `.checksums.json` (SHA-256 manifest) into `${CLAUDE_SKILL_DIR}`; excludes `.venv/` and `__pycache__/`.
+2. Creates or reuses `${CLAUDE_SKILL_DIR}/.venv`; pip-installs `setup/requirements.txt`.
+3. Prompts for `GEMINI_API_KEY`; merges canonical env defaults into `~/.claude/settings.json`.
 
-```text
-GEMINI_API_KEY
-GEMINI_IS_SDK_PRIORITY
-GEMINI_IS_RAWHTTP_PRIORITY
-GEMINI_LIVE_TESTS
+On overwrite, `.venv/` and `.env` are preserved.
+
+## Install location
+
+The skill installs to:
+
+```
+~/.claude/skills/gemini/
 ```
 
-### `.env` for repo-local CLI use
+Referred to as `${CLAUDE_SKILL_DIR}` throughout the docs. The installer derives this path automatically.
 
-```bash
-cp .env.example .env
-```
-
-Example:
-
-```dotenv
-GEMINI_API_KEY=
-GEMINI_IS_SDK_PRIORITY=true
-GEMINI_IS_RAWHTTP_PRIORITY=false
-GEMINI_LIVE_TESTS=0
-```
-
-### Project-local Claude settings
-
-`./.claude/settings.local.json` is appropriate for machine-local secrets in a working project:
-
-```json
-{
-  "env": {
-    "GEMINI_API_KEY": "AIzaSy..."
-  }
-}
-```
-
-`./.claude/settings.json` is lower priority and is typically shared project configuration. Do not put secrets there unless that is an intentional team decision.
-
-### Global Claude settings
-
-The installer writes the canonical defaults to `~/.claude/settings.json`:
-
-```json
-{
-  "env": {
-    "GEMINI_API_KEY": "AIzaSy...",
-    "GEMINI_IS_SDK_PRIORITY": "true",
-    "GEMINI_IS_RAWHTTP_PRIORITY": "false",
-    "GEMINI_LIVE_TESTS": "0"
-  }
-}
-```
-
-`GEMINI_API_KEY` is the only supported secret name. `GOOGLE_API_KEY` is ignored.
-
-## Verify Installation
+## Verify
 
 Inside Claude Code:
 
@@ -110,43 +82,38 @@ Inside Claude Code:
 /gemini help
 ```
 
-From a checkout:
-
-```bash
-python3 scripts/gemini_run.py help
-python3 scripts/gemini_run.py text "hi"
-```
-
-Installed health check:
+From the installed skill directory:
 
 ```bash
 python3 ~/.claude/skills/gemini/scripts/health_check.py
 ```
 
-## Common Problems
+To reinstall or update, see [update-sync.md](update-sync.md).
 
-### `No GEMINI_API_KEY found`
+## Troubleshooting
 
-Check the current directory first:
+**`No GEMINI_API_KEY found`**
 
-```bash
-pwd
-ls -a
-ls -a .claude
-```
+The launcher resolves config from the *current working directory*, not from
+`${CLAUDE_SKILL_DIR}`. Run `pwd` and check that `.env` or `.claude/settings.json`
+exists there, or set the key in `~/.claude/settings.json` for global availability.
 
-The launcher reads config from the directory you started the command in, not from the installed skill directory.
+**`venv not found` / import errors after fresh-HOME setup**
 
-### Claude Code still uses old settings
+The `.venv` inside `${CLAUDE_SKILL_DIR}` is created during install. If missing,
+re-run: `uvx gemini-skill-install --yes`.
 
-Fully restart Claude Code after editing `~/.claude/settings.json`. A window reload is not enough because Claude injects env at session start.
+**SKILL.md frontmatter rejects non-skill fields**
 
-### `plan_review` without a prompt exits immediately
+Claude Code validates SKILL.md frontmatter strictly. Do not add custom keys
+to `${CLAUDE_SKILL_DIR}/SKILL.md`; use `.claude/settings.json` env blocks for
+runtime configuration instead.
 
-That is expected when stdin is non-interactive. Use:
+## See also
 
-```bash
-python3 scripts/gemini_run.py plan_review "review this plan"
-```
-
-or run `plan_review` with no proposal from a real terminal to start the REPL.
+| Page | Purpose |
+|---|---|
+| [cli.md](cli.md) | Direct CLI install (pipx, venv, dev setup) |
+| [security.md](security.md) | Secrets and API key management |
+| [update-sync.md](update-sync.md) | Reinstalling and updating |
+| [architecture-installer.md](architecture-installer.md) | Installer internals (coming soon) |
